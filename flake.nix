@@ -48,6 +48,13 @@
         };
       });
 
+      # The family convention: every nebelhaus flake exports an overlay so a
+      # consumer writes `pkgs.holt` rather than reaching into
+      # `inputs.holt.packages.${system}`. Same shape as pounce/trill/perch.
+      overlays.default = final: _prev: {
+        holt = self.packages.${final.system}.default;
+      };
+
       devShells = forAll (pkgs: {
         default = pkgs.mkShell {
           packages = with pkgs; [
