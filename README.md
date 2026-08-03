@@ -43,7 +43,7 @@ because losing *your* work isn't *their* problem.
 is the spec for a Go rewrite of `wt`, 1295 lines of bash that has been running
 this author's machine as Claude Code's worktree hooks for months.
 
-**All 77 acceptance tests pass.** They are black-box, carried over from the bash
+**All 79 acceptance tests pass** (77 ported from `wt`, plus two for the bare-PATH hook environment). They are black-box, carried over from the bash
 implementation — they drive the binary with shim `gh`/`lsof` on `PATH` and never
 touch a real repo, so they describe the contract rather than the implementation:
 

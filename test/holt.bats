@@ -847,18 +847,23 @@ EOF
 @test "new: an uninstalled client is named, and the checkout survives to resume" {
   local b; b="$(mkrepo beta)"
   cd "$b"
-  # No codex on PATH: it's the client that is missing, not the worktree.
-  # PATH is narrowed to the shim dir + git's own, because "not installed" cannot
-  # be asserted against the DEVELOPER's PATH — this box has a real codex, and
-  # both implementations found it and tried to exec it. The suite claims to be
-  # hermetic; for this one test it wasn't.
-  # …and git is symlinked into a dir of its own rather than PATH being narrowed
-  # to git's OWN directory: on a Nix box both binaries live in the same profile
-  # bindir, so keeping git would have kept codex too — which is exactly how this
-  # test passed in CI and quietly failed on the author's machine.
+  # "codex is not installed" has to be SIMULATED, and simulating it takes both
+  # halves below, because either one alone is defeated by the other mechanism:
+  #
+  #   HOLT_PATH_RESCUE=0  — holt appends a bare-PATH rescue for the hook case
+  #                         (see internal/commands/path.go), and that rescue
+  #                         re-adds the profile bindir a real codex lives in.
+  #   PATH=$BIN:onlygit   — and the caller's PATH has to lose codex too, via a
+  #                         directory holding nothing but a git symlink. Narrowing
+  #                         to git's OWN directory is not enough: on a Nix box git
+  #                         and codex share one profile bindir.
+  #
+  # Without both, this test passes in CI (no codex there) and silently fails on
+  # any machine that has one — which is exactly what it did, in this suite and in
+  # nebelhaus's copy, for as long as it existed.
   mkdir -p "$TMP/onlygit"
   ln -sf "$(command -v git)" "$TMP/onlygit/git"
-  run env PATH="$BIN:$TMP/onlygit" "$WT" new stranded codex
+  run env HOLT_PATH_RESCUE=0 PATH="$BIN:$TMP/onlygit" "$WT" new stranded codex
   [ "$status" -ne 0 ]
   [[ "$output" == *"codex is unavailable"* ]]
   [ -e "$CLAUDE_WT_BASE/beta/stranded/.git" ]
@@ -1017,6 +1022,34 @@ EOF
   for i in 1 2 3 4 5 6 7 8; do hook_create "$main" "par$i" >/dev/null 2>&1 & done
   wait
   [ "$(reg_rows)" -eq 8 ]
+}
+
+# ── bare PATH (the hook environment) ─────────────────────────────────────────
+#
+# Claude Code fires WorktreeCreate/WorktreeRemove with no PATH at all, and holt
+# shells out to git for everything. This is the case that breaks at pane-open
+# time — the worst moment to find it — so it gets its own tests rather than
+# riding along inside another one.
+
+@test "bare PATH: the create hook still resolves git" {
+  local main out
+  main="$(mkrepo alpha)"
+  out="$(printf '{"name":"barepath","cwd":"%s"}' "$main" | env -u PATH "$WT" create 2>/dev/null)"
+  [ "$out" = "$CLAUDE_WT_BASE/alpha/barepath" ]
+  [ -e "$out/.git" ]
+  [ "$(git -C "$out" branch --show-current)" = worktree-barepath ]
+}
+
+@test "bare PATH: the rescue is APPENDED, so test shims still win" {
+  # If the rescue were prepended, the real gh under /run/current-system/sw/bin
+  # would beat the shim and the whole suite would quietly test the machine.
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" shimwins)"
+  export FAKE_GH_MERGED=1 FAKE_GH_OID="$(git -C "$dir" rev-parse HEAD)" FAKE_GH_PR=12
+  export FAKE_GH_BRANCH=worktree-shimwins
+  commit_in "$dir" post.txt "past the merge"
+  cd "$TMP"; wt_run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"live+1"* ]] || fail "the shim gh lost to a real one: $output"
 }
 
 # ── dispatch ─────────────────────────────────────────────────────────────────

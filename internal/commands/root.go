@@ -34,6 +34,10 @@ Exit codes: 0 ok · 1 usage · 2 refused for safety · 3 degraded · 4 conflict 
 
 // Run dispatches one invocation and returns the error to exit on.
 func Run(args []string) error {
+	// Before anything else: holt is invoked by hooks that supply no PATH, and it
+	// resolves git for every single operation. See rescuePATH.
+	rescuePATH()
+
 	env, err := NewEnv()
 	if err != nil {
 		return err
