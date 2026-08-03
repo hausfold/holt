@@ -28,6 +28,16 @@ setup() {
   # an older revision, a candidate rewrite — to see exactly which contracts it
   # breaks. That is how the fixes below were shown to fix something.
   WT="${WT_UNDER_TEST:-$BATS_TEST_DIRNAME/../holt}"
+  # Fail LOUDLY when there is no binary to test, instead of letting every
+  # invocation exit 127 and every fixture capture an empty path. That is not a
+  # theoretical tidiness: with $WT missing, `dir="$(hook_create …)"` yields "",
+  # `commit_in` then runs `git -C "" commit`, and `git -C ""` means THE CURRENT
+  # DIRECTORY — so the suite committed twice into the real holt checkout it was
+  # being run from. `make test` builds first; running bats directly does not.
+  [ -x "$WT" ] || {
+    printf 'no holt binary at %s — run `make test`, or set WT_UNDER_TEST\n' "$WT" >&2
+    return 1
+  }
   # macOS puts BATS_TEST_TMPDIR under /var/folders, a symlink to /private/var.
   # git resolves paths (`rev-parse --path-format=absolute`) while our fixtures
   # would carry the unresolved form, so registry rows and git's own answers
@@ -117,6 +127,11 @@ hook_remove() { # hook_remove <worktree-path>
 }
 
 commit_in() { # commit_in <checkout> <file> <msg> — give a branch real history
+  # Guard the path. `git -C ""` is not an error to git — it means the current
+  # directory — so an empty $1 here silently retargets every command below at
+  # whatever repo the suite is being RUN from. That is not hypothetical: it
+  # happened, and it left two commits in the real holt repo.
+  [ -n "$1" ] && [ -d "$1" ] || { printf 'commit_in: refusing an empty/missing checkout path\n' >&2; return 1; }
   echo "$RANDOM" >"$1/$2"
   git -C "$1" add -A
   git -C "$1" -c commit.gpgsign=false commit -qm "$3"
@@ -126,6 +141,7 @@ commit_in() { # commit_in <checkout> <file> <msg> — give a branch real history
 # and therefore survives the self-heal sweep that every `wt` listing runs.
 mkwt() { # mkwt <main> <name> — echo the checkout path
   local dir; dir="$(hook_create "$1" "$2")"
+  [ -n "$dir" ] && [ -d "$dir" ] || { printf 'mkwt: create gave no usable path (%s)\n' "$dir" >&2; return 1; }
   commit_in "$dir" work.txt "work on $2"
   printf '%s' "$dir"
 }
