@@ -1,0 +1,41 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # The suite shims `gh` and `lsof` on PATH and builds throwaway repos in a
+    # temp dir, so it needs nothing but git, Go and bats — no network, no forge
+    # auth, no real checkout. That is also why it runs on both OSes: the
+    # occupancy and reflink paths are the ones most likely to diverge.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: incubator/holt
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: false          # holt has no dependencies to cache — see go.mod
+      - name: install bats
+        run: |
+          if [ "$RUNNER_OS" = macOS ]; then brew install bats-core
+          else sudo apt-get update && sudo apt-get install -y bats; fi
+
+      - name: gofmt
+        run: test -z "$(gofmt -l ./cmd ./internal)" || { gofmt -l ./cmd ./internal; exit 1; }
+      - name: vet
+        run: go vet ./...
+
+      # The full 0.1 contract. It went green with `reship`, so this is a hard
+      # gate now rather than a score — a PR that breaks any of the 77 fails.
+      - name: acceptance suite
+        run: make test

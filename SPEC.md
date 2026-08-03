@@ -5,11 +5,15 @@
 client-agnostic Go binary — a dev-focused sister to pounce / perch / trill, with
 `nebelhaus` and `bench` demoted to consumers.
 
-This is the design doc. No code yet. The bash `wt` keeps running inside nebelhaus,
-untouched, until `holt` 0.1 exists and the hook switch flips.
+This is the design doc; it stays the authority on *what* holt is even as the code
+lands beside it. The bash `wt` keeps running inside nebelhaus, untouched, until
+`holt` 0.1 is complete and the hook switch flips.
 
-Status: seed of a repo-to-be, in the workshop incubator (same pattern as
-`incubator/flick`). It ejects to `nebelhaus/holt` when there's a binary beside it.
+Status: a repo-to-be in the workshop incubator (same pattern as
+`incubator/flick`), ejecting to `nebelhaus/holt`. Implementation progress is
+measured against the ported acceptance suite — `make score` — and reported in
+[`README.md`](README.md), not here. Any section below that the code has since
+contradicted is a bug in the code or a bug in this file; say which.
 
 ---
 
@@ -75,7 +79,7 @@ post-merge drift detection are the product.
 | Language | **Go.** Subprocess orchestrator, zero CPU-bound work — Rust/Zig buy nothing. CGo-free cross-compilation dominates for prebuilt-binary distribution. `x/sys/unix` has `Clonefileat` + `FICLONE` so reflink needs no CGo. charm (`fang`, `huh`, `lipgloss`) makes `doctor` and styled output good. Bun `--compile` measured 60 MB / 9 ms — startup fine, size not. |
 | License | **Apache-2.0.** A commercial GUI must be able to embed the substrate (that's the thesis), and the patent grant matters for that. |
 | Install CTA | `bun i -g holt` — an npm wrapper that downloads a prebuilt binary (the esbuild/biome pattern), **not** a bun-runtime tool. Also `brew install nebelhaus/tap/holt`, `curl … | sh`, and `go install`. |
-| Tests | `nebelhaus/test/wt.bats` (1026 lines) is black-box — it drives the CLI with shim `gh`/`lsof` on `PATH`. **It ports unchanged** and becomes holt's acceptance suite on day one. That's the single best de-risking asset in the extraction. |
+| Tests | `nebelhaus/test/wt.bats` (1026 lines, 77 tests) is black-box — it drives the CLI with shim `gh`/`lsof` on `PATH`, and already has a `WT_UNDER_TEST` seam for pointing it at another implementation. It becomes holt's acceptance suite on day one, and is the single best de-risking asset in the extraction. **Not quite unchanged:** four call sites drop `bash` (a Go binary isn't sourced), and three assertions on user-facing strings carry the new command name. No test *body* changes — which is the property that matters, because it means the contract is unmoved. |
 
 ---
 
@@ -656,7 +660,7 @@ removed on completion, including on failure (behind `--keep` for debugging).
 - `bench` keeps `try`, `try-batch`, `ship`, `release`. `try-batch` becomes a thin
   wrapper over `holt batch --verify "bench try"` — bench supplies the nix
   knowledge, holt supplies the queue mechanics and the bisect.
-- The zellij keybinds, pounce's "Spawn Agent" command, the `⌘C` seam.
+- The zellij keybinds, pounce's "Spawn Agent" command, the `⌘A` agent-spawn seam.
 
 ### Deletes
 
@@ -714,7 +718,7 @@ general-purpose and belong in holt 0.1, not just in nebelhaus:
 | Change | PR | Impact on this spec |
 |---|---|---|
 | `wt reship` + `+N` post-merge-ahead marker | #189 | New lifecycle state: *landed-but-moved-on*. Must be in the state machine (§0), the `--json` shape (`post_merge_ahead`, §2.2), and the merge-strategy table (§3). This is a genuinely novel state no competitor models. |
-| Client-agnostic bar / tab badge / ⌘C | #170 | Confirms the agent-adapter seam (§5.3) is the right cut. |
+| Client-agnostic bar / tab badge / agent-spawn bind | #170 | Confirms the agent-adapter seam (§5.3) is the right cut. |
 | One client list in `modules/lib/agents.nix` | #171 | Directly motivates §10's "Nix generates adapter TOML". |
 | Column sizing to pane / widest agent id | #168, 3a0d6d1 | Presentation belongs in the *consumer*; holt's job is `--json` + a good default renderer. |
 | Worktree in a repo with **no commits yet** | #166 | `git worktree add --orphan`. A real edge case with a real fix — port it, and keep the test. |
