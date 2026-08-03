@@ -9,8 +9,8 @@ This is the design doc; it stays the authority on *what* holt is even as the cod
 lands beside it. The bash `wt` keeps running inside nebelhaus, untouched, until
 `holt` 0.1 is complete and the hook switch flips.
 
-Status: a repo-to-be in the workshop incubator (same pattern as
-`incubator/flick`), ejecting to `nebelhaus/holt`. Implementation progress is
+Status: ejected from the workshop incubator to its own repo (2026-08-03), with
+its history intact. Implementation progress is
 measured against the ported acceptance suite — `make score` — and reported in
 [`README.md`](README.md), not here. Any section below that the code has since
 contradicted is a bug in the code or a bug in this file; say which.

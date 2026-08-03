@@ -39,9 +39,11 @@ because losing *your* work isn't *their* problem.
 
 ## Status
 
-**Pre-0.1, in the workshop incubator.** The design is [`SPEC.md`](SPEC.md); it
-is the spec for a Go rewrite of `wt`, 1295 lines of bash that has been running
-this author's machine as Claude Code's worktree hooks for months.
+**Pre-0.1.** The design is [`SPEC.md`](SPEC.md); it is the spec for a Go rewrite
+of `wt`, 1295 lines of bash that has been running this author's machine as
+Claude Code's worktree hooks for months. holt was extracted from the
+[nebelhaus workshop](https://github.com/nebelhaus/workshop) incubator once it
+passed that implementation's whole test suite.
 
 **All 79 acceptance tests pass** (77 ported from `wt`, plus two for the bare-PATH hook environment). They are black-box, carried over from the bash
 implementation — they drive the binary with shim `gh`/`lsof` on `PATH` and never
