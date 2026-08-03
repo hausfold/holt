@@ -18,11 +18,20 @@ import (
 
 // Run executes git in dir and returns trimmed stdout. stderr is folded into the
 // error so callers can report why something failed.
+//
+// An EMPTY dir is an error, never "use the current directory". That fallback is
+// how a path-building bug turns into git operating on whatever repo the user
+// happens to be standing in — and holt's whole job is manipulating repos other
+// than its own. `git -C ""` has exactly this behaviour, which is what let the
+// test suite commit into the real holt checkout (see test/holt.bats's fixture
+// guards). Refusing it here means the same class of bug surfaces as a loud
+// error instead of a commit in someone's tree.
 func Run(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	if dir != "" {
-		cmd.Dir = dir
+	if dir == "" {
+		return "", errors.New("git: refusing to run with no directory (this would fall through to the caller's cwd)")
 	}
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
 	var out, errb bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errb
