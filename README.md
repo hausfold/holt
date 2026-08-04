@@ -84,15 +84,33 @@ holt hook create        [hook] make a worktree — JSON on stdin, path on stdout
 holt hook remove        [hook] retire one without losing work — JSON on stdin
 ```
 
-### `park`, not `git stash`
+### `park`, not `git stash` — the shared-stash-stack footgun
 
-The stash stack is **not** per-worktree. It lives in the shared `.git` dir, so
-every worktree of a repo and the main checkout push and pop the *same* stack —
-and parallel agents routinely pop each other's entries into a tree that never
-asked for them. `holt park` commits the whole dirty tree as one `wip:` commit on
-the branch only this pane has checked out. `holt unpark` rewinds it. It refuses
-to unpark a wip commit you've already pushed, so it can never become a
-force-push.
+`git stash` looks per-checkout. It isn't. The stash is one ref — `refs/stash`,
+with its reflog as the stack — and git's short list of per-worktree refs
+(`HEAD`, `refs/bisect/*`, `refs/worktree/*`, …) does not include it. So every
+worktree of a repo **and the main checkout** push and pop the *same stack*, and
+with parallel sessions that means:
+
+- Agent A stashes in its worktree; agent B runs `git stash pop` in another and
+  receives A's changes into a tree that never asked for them — files B's
+  session has no context for, gone from the stack the moment they land.
+- The "careful" form is racy too: `stash@{1}` is positional, so it names a
+  different entry the instant any parallel session pushes or drops one.
+- A pop that conflicts leaves the entry both on the stack *and* half-applied —
+  now two sessions can each believe they own it.
+
+None of this bites a solo human, which is why nobody documents it: one popper,
+one stack, no race. It starts biting the moment worktrees make your sessions
+*parallel* — which is exactly what coding agents did.
+
+`holt park [label]` is the same "hold this thought" with nothing shared: it
+commits the whole dirty tree — untracked files included, `.gitignore`d ones
+never — as one `wip:` commit on the branch only this pane has checked out (the
+on-demand form of what the remove hook does on pane close). `holt unpark`
+rewinds it, putting the changes back uncommitted. It refuses to unpark a wip
+commit you've already pushed, so it can never become a force-push. A branch is
+per-worktree by construction; that is the entire trick.
 
 ### Workspace trust is inherited, never invented
 
