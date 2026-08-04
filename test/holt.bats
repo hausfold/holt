@@ -51,9 +51,11 @@ setup() {
   export GIT_COMMITTER_NAME=Test GIT_COMMITTER_EMAIL=t@example.com
 
   export HOME="$TMP/home"                 # wt_projdir + the WT_BASE default live here
+  export XDG_CONFIG_HOME="$TMP/config"    # Holt's persisted default lives here
+  unset HOLT_AGENT NEBELHAUS_AGENT_DEFAULT # machine choices must not leak into the fixture
   export CLAUDE_WT_BASE="$TMP/wtbase"
   REG="$CLAUDE_WT_BASE/registry.tsv"
-  mkdir -p "$HOME"
+  mkdir -p "$HOME" "$XDG_CONFIG_HOME"
 
   BIN="$TMP/bin"; mkdir -p "$BIN"
   export PATH="$BIN:$PATH"

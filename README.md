@@ -84,6 +84,18 @@ holt hook create        [hook] make a worktree — JSON on stdin, path on stdout
 holt hook remove        [hook] retire one without losing work — JSON on stdin
 ```
 
+## Default agent
+
+Set a durable default that works from Zellij, launchd, and a standalone terminal:
+
+```toml
+# ~/.config/holt/config.toml
+agent = "codex"
+```
+
+`HOLT_AGENT` overrides that file for one invocation. Older nebelhaus installs
+may supply `NEBELHAUS_AGENT_DEFAULT` as a compatibility fallback.
+
 ### `park`, not `git stash` — the shared-stash-stack footgun
 
 `git stash` looks per-checkout. It isn't. The stash is one ref — `refs/stash`,

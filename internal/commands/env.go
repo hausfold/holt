@@ -3,6 +3,7 @@ package commands
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/nebelhaus/holt/internal/registry"
 )
@@ -37,14 +38,56 @@ func baseDir() string {
 	return filepath.Join(home, ".cache", "claude-worktrees")
 }
 
-// defaultAgent is the client a new worktree opens in when nothing says
-// otherwise. NEBELHAUS_AGENT_DEFAULT is read for cutover compatibility; HOLT_AGENT
-// is the name holt documents.
-func defaultAgent() string {
-	for _, key := range []string{"HOLT_AGENT", "NEBELHAUS_AGENT_DEFAULT"} {
-		if a := os.Getenv(key); a != "" && registry.KnownAgent(a) {
-			return a
+// configuredAgent reads the one machine-wide setting Holt needs before its
+// richer config surface lands. It is deliberately small and dependency-free:
+// agent ids have no TOML syntax worth interpreting beyond `agent = "codex"`.
+// Unknown and malformed values are ignored, leaving the documented fallbacks
+// intact rather than turning every `holt new` into a hard failure.
+func configuredAgent() string {
+	configDir := os.Getenv("XDG_CONFIG_HOME")
+	if configDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			home = os.Getenv("HOME")
 		}
+		if home == "" {
+			return ""
+		}
+		// Holt's documented config is ~/.config on every platform, including
+		// macOS, rather than os.UserConfigDir's Application Support location.
+		configDir = filepath.Join(home, ".config")
+	}
+	raw, err := os.ReadFile(filepath.Join(configDir, "holt", "config.toml"))
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(raw), "\n") {
+		key, value, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(key) != "agent" {
+			continue
+		}
+		value = strings.TrimSpace(strings.SplitN(value, "#", 2)[0])
+		value = strings.Trim(value, " \t\"'")
+		if registry.KnownAgent(value) {
+			return value
+		}
+	}
+	return ""
+}
+
+// defaultAgent is the client a new worktree opens in when nothing says
+// otherwise. HOLT_AGENT is an explicit per-invocation override; the persisted
+// config works for long-running callers such as Zellij and for standalone Holt.
+// NEBELHAUS_AGENT_DEFAULT remains a cutover fallback for pre-config rice builds.
+func defaultAgent() string {
+	if a := os.Getenv("HOLT_AGENT"); registry.KnownAgent(a) {
+		return a
+	}
+	if a := configuredAgent(); a != "" {
+		return a
+	}
+	if a := os.Getenv("NEBELHAUS_AGENT_DEFAULT"); registry.KnownAgent(a) {
+		return a
 	}
 	return "claude"
 }

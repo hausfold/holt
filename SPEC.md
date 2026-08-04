@@ -444,6 +444,12 @@ a `pre-*` hook aborts the transition (exit 2 — refused).
 `~/.config/holt/config.toml` for the machine-wide defaults; `<repo>/.holt.toml`
 for the repo. **The split on repo-local config is by execution, not by file:**
 
+The machine config's implemented top-level default is `agent = "claude"` (or
+`codex` / `opencode`). Resolution is `HOLT_AGENT`, then this file, then the
+legacy `NEBELHAUS_AGENT_DEFAULT` environment fallback, then Claude. This keeps
+the default stable for long-running callers while retaining a one-invocation
+override for standalone use.
+
 | Repo-local key | Allowed? | Why |
 |---|---|---|
 | `copy`, `link`, `reflink` | ✅ | declarative paths, no execution |
