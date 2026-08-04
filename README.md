@@ -109,8 +109,9 @@ commits the whole dirty tree — untracked files included, `.gitignore`d ones
 never — as one `wip:` commit on the branch only this pane has checked out (the
 on-demand form of what the remove hook does on pane close). `holt unpark`
 rewinds it, putting the changes back uncommitted. It refuses to unpark a wip
-commit you've already pushed, so it can never become a force-push. A branch is
-per-worktree by construction; that is the entire trick.
+commit you've already pushed, so it can never become a force-push. Git lets a
+branch be checked out in only one worktree at a time; that exclusivity is the
+entire trick.
 
 ### Workspace trust is inherited, never invented
 
