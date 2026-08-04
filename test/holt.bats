@@ -1034,8 +1034,20 @@ EOF
 }
 
 @test "registry: parallel creates must not lose rows to a read-modify-write race" {
-  local main i; main="$(mkrepo alpha)"
-  for i in 1 2 3 4 5 6 7 8; do hook_create "$main" "par$i" >/dev/null 2>&1 & done
+  # One repo EACH, deliberately. The contention under test is eight processes
+  # writing one registry.tsv — but eight `git worktree add` in a single repo also
+  # race each other, inside git (`failed to read .git/worktrees/<n>/commondir`),
+  # and a checkout git dropped is indistinguishable here from a row holt lost.
+  # That made this test flaky on Linux and, worse, able to mask the regression it
+  # exists to catch. Separate repos remove git from the picture; the registry is
+  # still the one shared file all eight are fighting over.
+  local i repos=()
+  for i in 1 2 3 4 5 6 7 8; do repos+=("$(mkrepo "par$i")"); done
+  # The repos are built serially so the parallel section is nothing BUT the eight
+  # concurrent registry writes.
+  for i in 1 2 3 4 5 6 7 8; do
+    hook_create "${repos[$((i - 1))]}" "par$i" >/dev/null 2>&1 &
+  done
   wait
   [ "$(reg_rows)" -eq 8 ]
 }
