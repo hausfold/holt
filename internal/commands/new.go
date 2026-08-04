@@ -57,6 +57,7 @@ func (e *Env) New(want, agentID string) error {
 		Name: name, Main: main, Branch: "worktree-" + name,
 		Path: dir, Parent: e.Cwd, Agent: agentID,
 	})
+	trustWorktree(agentID, main, dir)
 	ui.Say("created %s worktree '%s' → %s", filepath.Base(main), name, dir)
 
 	// The client is resolved LAST, and its absence is not fatal to the worktree:
@@ -114,10 +115,12 @@ func (e *Env) Child(target, want string) error {
 	// Registered with THIS pane's cwd as parent — the same field the create hook
 	// stores — so the statusline lists the child under the session that spawned
 	// it, and queries the CHILD repo's forge for its PR state.
+	agentID := e.agentForPath(e.Cwd)
 	_ = e.Reg.Put(registry.Row{
 		Name: want, Main: main, Branch: "worktree-" + want,
-		Path: dir, Parent: e.Cwd, Agent: e.agentForPath(e.Cwd),
+		Path: dir, Parent: e.Cwd, Agent: agentID,
 	})
+	trustWorktree(agentID, main, dir)
 	ui.Say("created %s worktree '%s' → %s", filepath.Base(main), want, dir)
 	ui.Out("%s\n", dir) // ONLY the path on stdout, so: cd "$(holt child …)"
 	return nil
@@ -150,6 +153,7 @@ func (e *Env) Spawn(target, want, agentID string) error {
 		Name: name, Main: main, Branch: "worktree-" + name,
 		Path: dir, Parent: main, Agent: agentID,
 	})
+	trustWorktree(agentID, main, dir)
 	ui.Say("created %s worktree '%s' → %s", filepath.Base(main), name, dir)
 	ui.Out("%s\n", dir)
 	return nil

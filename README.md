@@ -94,6 +94,22 @@ the branch only this pane has checked out. `holt unpark` rewinds it. It refuses
 to unpark a wip commit you've already pushed, so it can never become a
 force-push.
 
+### Workspace trust is inherited, never invented
+
+Claude Code keys its "do you trust the files in this folder?" dialog on the
+**exact cwd**, in `~/.claude.json` — there is no inheritance from a parent
+directory, and none from the git common dir. Its own `--worktree` doesn't prompt
+because it seeds that key for the checkout it makes; a checkout *holt* made was
+a directory Claude had never seen, so the same worktree of the same repo greeted
+you differently depending on who ran `git worktree add`.
+
+So when the client is Claude and the parent repo is **already trusted**, holt
+copies that one boolean onto the new checkout. If the parent isn't trusted this
+does nothing — holt propagates a decision you already made, it never makes one
+for you — and it is a no-op for Codex and OpenCode, which have no such model.
+Every failure (no config, unreadable, unparseable) is silent and costs exactly
+one trust prompt, which is the behaviour it replaced.
+
 ### What "landed" means
 
 The predicate that decides whether a branch **dies** handles every merge

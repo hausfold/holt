@@ -9,7 +9,13 @@ build:
 # The acceptance suite. It is black-box — it drives the built binary with shim
 # gh/lsof on PATH — so it is the same suite the bash `wt` runs against, and
 # WT_UNDER_TEST still points it at any other implementation for comparison.
+#
+# `go test` runs first, and covers the one thing a black-box suite structurally
+# can't: code that edits a file belonging to ANOTHER tool (Claude Code's
+# ~/.claude.json), where most of the assertion is about what came through the
+# rewrite untouched.
 test: build
+	go test ./...
 	bats test/holt.bats
 
 # What fraction of the 0.1 contract holds today. Every remaining failure should

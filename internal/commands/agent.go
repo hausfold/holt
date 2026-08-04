@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -150,6 +152,101 @@ func (e *Env) agentStart(args []string) error {
 		image = ""
 	}
 	return execClient(spec.start(image, prompt))
+}
+
+// ── inheriting the parent repo's workspace trust ─────────────────────────────
+
+// trustWorktree stops a freshly-made worktree greeting its first Claude session
+// with "Do you trust the files in this folder?".
+//
+// Claude Code keys workspace trust on the EXACT cwd, in `~/.claude.json` under
+// `projects["<abs path>"].hasTrustDialogAccepted`. There is no inheritance from a
+// parent directory and none from the git common dir — so a checkout holt just
+// made is, correctly, a directory Claude has never seen. Claude's own
+// `--worktree` doesn't prompt because it seeds that key for the worktree it
+// creates; every checkout holt makes instead (the palette's `holt spawn`,
+// `holt new` on a claude machine, `holt child`) got the dialog. Same worktree,
+// same repo, different answer depending on who ran `git worktree add` — which
+// reads as a bug in the spawn, because it is one.
+//
+// Deliberately narrow, in three ways:
+//
+//   - It only ever COPIES a decision the user already made. If the parent repo
+//     isn't trusted, this is a no-op — holt never grants trust on the user's
+//     behalf, it propagates it to a checkout of the same code.
+//   - Every failure is silent and harmless. A missing/unreadable/unparseable
+//     `~/.claude.json` costs one trust prompt, which is exactly the status quo;
+//     nothing here is worth failing a spawn over.
+//   - It is a no-op for every other client. Codex and OpenCode have no
+//     equivalent, and holt must not invent one.
+//
+// The write is read-modify-write on a file Claude Code also owns and rewrites
+// wholesale, with no lock either side — so a Claude instance writing in the same
+// instant can drop this key. The blast radius is one trust prompt, because
+// everything else in that file is Claude's own telemetry which it is in the
+// middle of rewriting anyway. Marshalling through a map also reorders the file's
+// keys once (Go maps have no order); numbers are decoded as json.Number so the
+// re-encode can't turn `1778838900185` into `1.778838900185e+12`.
+func trustWorktree(agentID, main, dir string) {
+	if agentID != "claude" {
+		return
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = os.Getenv("HOME")
+	}
+	path := filepath.Join(home, ".claude.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var doc map[string]any
+	if err := dec.Decode(&doc); err != nil {
+		return
+	}
+	projects, _ := doc["projects"].(map[string]any)
+	if projects == nil {
+		return
+	}
+	parent, _ := projects[main].(map[string]any)
+	if trusted, _ := parent["hasTrustDialogAccepted"].(bool); !trusted {
+		return
+	}
+	entry, _ := projects[dir].(map[string]any)
+	if entry == nil {
+		entry = map[string]any{}
+	}
+	if already, _ := entry["hasTrustDialogAccepted"].(bool); already {
+		return // nothing to write; don't churn a 180KB file for nothing
+	}
+	entry["hasTrustDialogAccepted"] = true
+	projects[dir] = entry
+
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false) // a path or prompt with < > & stays readable
+	enc.SetIndent("", "  ")  // what Claude Code itself writes
+	if err := enc.Encode(doc); err != nil {
+		return
+	}
+	// Temp file in the same directory + rename, so a crash mid-write can never
+	// leave Claude with a truncated config. 0600 because this file holds
+	// credentials, and CreateTemp's own 0600 is what we keep.
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".claude.json.holt-*")
+	if err != nil {
+		return
+	}
+	defer os.Remove(tmp.Name()) // no-op once the rename succeeds
+	if _, err := tmp.Write(buf.Bytes()); err != nil {
+		tmp.Close()
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		return
+	}
+	_ = os.Rename(tmp.Name(), path)
 }
 
 // ── where a worktree's conversation lives ────────────────────────────────────
