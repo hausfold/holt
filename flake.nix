@@ -51,8 +51,11 @@
       # The family convention: every nebelhaus flake exports an overlay so a
       # consumer writes `pkgs.holt` rather than reaching into
       # `inputs.holt.packages.${system}`. Same shape as pounce/trill/perch.
+      # `final.system` is a deprecated nixpkgs alias — reading it makes every
+      # downstream eval print "'system' has been renamed to/replaced by
+      # 'stdenv.hostPlatform.system'". Use the real attribute.
       overlays.default = final: _prev: {
-        holt = self.packages.${final.system}.default;
+        holt = self.packages.${final.stdenv.hostPlatform.system}.default;
       };
 
       devShells = forAll (pkgs: {
