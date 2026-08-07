@@ -17,9 +17,12 @@ distributions).
 
 ## Install
 
-Not published yet — for now, reference it from within this repo
-(`pip install -e sdk/python`) or copy `sdk/python` out. Once published:
-`pip install hausfold-holt` / `uv add hausfold-holt`.
+```
+pip install hausfold-holt
+# or: uv add hausfold-holt
+```
+
+For local development against this repo instead: `pip install -e sdk/python`.
 
 `holt` itself must be on `PATH`, or pass `HoltClientOptions(bin="/path/to/holt")`.
 
