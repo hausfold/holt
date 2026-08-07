@@ -64,16 +64,6 @@ const (
 	// patch-equivalence.
 	HookLanded = "landed"
 
-	// HookReapable answers "may this worktree be swept now?" — the whole
-	// question, not just its landed rung. A hook that answers yes overrides
-	// holt's dirty and occupancy checks too, which is the point: "reapable"
-	// means something different on a machine that knows its own panes. Two
-	// floors survive any answer, because they are about holt not sawing off
-	// the branch it is sitting on rather than about policy: holt never reaps
-	// the checkout it is being run from, and never reaps a stray.
-	// Built-in: not occupied, not dirty, and landed.
-	HookReapable = "reapable"
-
 	// HookPreserve answers "does this dirty tree need a wip commit before the
 	// checkout goes away?". Built-in: yes, unless the only changes are
 	// untracked files on an already-landed branch (build scratch).

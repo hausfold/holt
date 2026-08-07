@@ -604,27 +604,22 @@ landed   = ["/nix/store/…-holt-landed", "--release-train"] # or an argv
 |---|---|---|---|
 | `agent` | predicate | which client a new worktree opens in | the `agent` key, then `HOLT_AGENT`, then claude |
 | `landed` | predicate | has this branch's work reached the default branch? | the §3 ladder |
-| `reapable` | predicate | may this worktree be swept **now**? | not occupied, not dirty, landed |
 | `preserve` | predicate | does this dirty tree need a wip commit before removal? | yes, unless it's untracked scratch on a landed branch |
 | `resume` | action | reopen this worktree's session | chdir + exec the client's resume |
 | `open` | action | open a session in a freshly-created worktree | chdir + exec the client |
 
-`reapable` is deliberately the **whole** question, not just its landed rung —
-occupancy and dirtiness included. That breadth is the point: a machine that can
-enumerate its own panes knows better than an `lsof` heuristic, and a repo whose
-worktrees are disposable may not care about a dirty tree at all. A machine with
-a `reapable` hook is therefore *not* degraded when `lsof` is missing.
+Two things are **not** seams and will not become them, because they are about
+holt not sawing off the branch it is sitting on rather than about policy: the
+checkout holt is being **run from** is never swept, and a **stray** is never
+swept, only reported.
 
-Two floors survive any answer, because they are about holt not sawing off the
-branch it is sitting on rather than about policy:
-
-1. the checkout holt is being **run from** is never swept;
-2. a **stray** is never swept, only reported.
-
-Everything else is negotiable — including discarding a dirty tree. The hook is
-handed `dirty` in its payload and answers yes anyway, so that is an informed
-decision, not one holt inferred; it still leaves a sentence behind naming who
-authorised it, because work that goes away should always say who said it could.
+**`reapable` is deliberately absent.** It is the obvious next seam and it was
+built, tested and pulled back out: reapability reaches through *three* of holt's
+inherited opinions at once — occupancy, dirtiness, landedness — and a seam over
+the lot of them is a bigger commitment than the five above, because a `yes` on a
+dirty tree is the one answer that destroys work. It waits for the architecture
+those three settle into. Overriding `landed` already moves the rung that matters
+most; the rest stays holt's until the shape is known.
 
 #### Still hardcoded — the roadmap
 
@@ -636,7 +631,8 @@ holt's inherited opinions, in the order they are worth prising out:
 | the `worktree-` branch prefix | `create.go`, `new.go`, `park.go` | a `branch` seam, or a config template |
 | how each client is started / resumed | `agent.go` | adapter TOML (§5.3) — already specced |
 | `gh`, and GitHub's argv | `landed.go` | forge adapter (§5.4) — already specced |
-| occupancy = `lsof` cwd prefix | `sweep.go` | a provider list (§9), with `reapable` as the escape hatch today |
+| what makes a worktree **reapable** | `sweep.go` | a `reapable` seam — see above; blocked on the three opinions it spans |
+| occupancy = `lsof` cwd prefix | `sweep.go` | a provider list (§9) |
 | `$BASE/<bucket>/<name>` layout | `new.go` | a `path` seam |
 | the `wip:` commit message and park semantics | `park.go`, `remove.go` | a `park` seam |
 | Claude's trust-file seeding | `agent.go` | `post-create` (§6.1) |

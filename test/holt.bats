@@ -1174,102 +1174,6 @@ landed = "/nonexistent/holt-landed"'
   [[ "$output" == *"reaped broken (alpha)"* ]] || fail "a dead hook must not cost the sweep: $output"
 }
 
-@test "hooks: reapable — it owns occupancy and dirtiness too, not just landedness" {
-  local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" mine)"
-  # Everything holt would refuse on at once: unmerged, dirty, and a pane in it.
-  echo edit >"$dir/README.md"
-  export FAKE_LSOF_CWDS="$dir"
-  hook="$(mkhook reapable 'exit 0')"
-  setcfg "[hooks]
-reapable = \"$hook\""
-  cd "$TMP"; wt_run reap
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"reaped mine (alpha)"* ]] || fail "the reapable hook did not decide: $output"
-  [ ! -e "$dir" ]
-  run git -C "$main" show-ref -q --verify refs/heads/worktree-mine
-  [ "$status" -ne 0 ]
-}
-
-@test "hooks: reapable — discarding a dirty tree leaves a sentence saying who said so" {
-  # The hook is handed `dirty` and answers yes anyway, so this is informed. It
-  # is also the one thing holt otherwise refuses outright, which is exactly why
-  # it must never happen quietly.
-  local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" scorched)"
-  echo edit >"$dir/README.md"
-  hook="$(mkhook reapable 'exit 0')"
-  setcfg "[hooks]
-reapable = \"$hook\""
-  cd "$TMP"; wt_run reap
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"uncommitted changes — they are gone"* ]] || fail "silent data loss: $output"
-  [ ! -e "$dir" ]
-}
-
-@test "hooks: reapable — a no is reported in the hook's own words" {
-  local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" nope)"
-  git -C "$main" merge -q --no-edit worktree-nope
-  hook="$(mkhook reapable 'echo "{\"why\": \"the release train has not left\"}"; exit 1')"
-  setcfg "[hooks]
-reapable = \"$hook\""
-  cd "$TMP"; wt_run reap
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"the release train has not left"* ]] || fail "the hook's reason was swallowed: $output"
-  [ -e "$dir/.git" ]
-}
-
-@test "hooks: reapable — the checkout holt is run from survives any answer" {
-  local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" selfhook)"
-  hook="$(mkhook reapable 'exit 0')"
-  setcfg "[hooks]
-reapable = \"$hook\""
-  cd "$dir"; wt_run reap
-  [ -e "$dir/.git" ]
-  git -C "$main" show-ref -q --verify refs/heads/worktree-selfhook
-}
-
-@test "hooks: reapable — a stray is still reported, never swept, whatever the hook says" {
-  local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" strayhook)"
-  rm -rf "$main/.git/worktrees"          # git disowns the checkout: a husk
-  hook="$(mkhook reapable 'exit 0')"
-  setcfg "[hooks]
-reapable = \"$hook\""
-  cd "$TMP"; wt_run reap
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"dangling checkout"* ]] || fail "a husk must be reported: $output"
-  [ -d "$dir" ]
-}
-
-@test "hooks: reapable — a hook makes the sweep independent of lsof" {
-  local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" nolsof)"
-  git -C "$main" merge -q --no-edit worktree-nolsof
-  export FAKE_LSOF_BROKEN=1
-  hook="$(mkhook reapable 'exit 0')"
-  setcfg "[hooks]
-reapable = \"$hook\""
-  cd "$TMP"; wt_run reap
-  [ "$status" -eq 0 ]
-  [[ "$output" != *"no lsof"* ]] || fail "a machine that answers for itself is not degraded: $output"
-  [[ "$output" == *"reaped nolsof (alpha)"* ]]
-}
-
-@test "hooks: reapable — it is given holt's own findings to lean on" {
-  local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" facts)"
-  git -C "$main" merge -q --no-edit worktree-facts
-  echo edit >"$dir/README.md"
-  export FAKE_LSOF_CWDS="$dir"
-  hook="$(mkhook reapable '
-    printf "state=%s landed=%s dirty=%s occupied=%s branch=%s repo=%s base=%s\n" \
-      "$HOLT_STATE" "$HOLT_LANDED" "$HOLT_DIRTY" "$HOLT_OCCUPIED" \
-      "$HOLT_BRANCH" "$HOLT_REPO" "$HOLT_BASE_BRANCH" >"'"$TMP"'/seen"
-    exit 1')"
-  setcfg "[hooks]
-reapable = \"$hook\""
-  cd "$TMP"; wt_run reap
-  run cat "$TMP/seen"
-  [ "$output" = "state=live landed=true dirty=true occupied=true branch=worktree-facts repo=acme/alpha base=main" ] \
-    || fail "the payload is wrong: $output"
-}
-
 @test "hooks: preserve — it decides whether a closing pane's dirt becomes a wip commit" {
   local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" noswap)"
   echo edit >"$dir/README.md"            # a TRACKED edit: holt would always preserve
@@ -1292,6 +1196,29 @@ preserve = \"$hook\""
   hook_remove "$dir" 2>/dev/null
   run git -C "$main" log -1 --format=%s worktree-keepall
   [[ "$output" == wip:* ]] || fail "the hook said preserve and holt dropped it: $output"
+}
+
+@test "hooks: a predicate is handed the situation as HOLT_* vars AND as JSON" {
+  # Both channels carry the same table, because a seam may be a program with a
+  # JSON parser or three lines of shell, and neither should have to become the
+  # other. HOLT_BASE_BRANCH is the one that needs pinning: HOLT_BASE is already
+  # the worktree base DIRECTORY, so the default branch had to be spelled apart.
+  local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" payload)"
+  echo edit >"$dir/README.md"
+  hook="$(mkhook preserve '
+    read -r body
+    printf "hook=%s name=%s branch=%s repo=%s base=%s main=%s json=%s\n" \
+      "$HOLT_HOOK" "$HOLT_NAME" "$HOLT_BRANCH" "$HOLT_REPO" \
+      "$HOLT_BASE_BRANCH" "$HOLT_MAIN" \
+      "$(case "$body" in *\"branch\":\"worktree-payload\"*) echo yes ;; *) echo "$body" ;; esac)" \
+      >"'"$TMP"'/seen"
+    exit 3')"
+  setcfg "[hooks]
+preserve = \"$hook\""
+  hook_remove "$dir" 2>/dev/null
+  run cat "$TMP/seen"
+  [ "$output" = "hook=preserve name=payload branch=worktree-payload repo=acme/alpha base=main main=$main json=yes" ] \
+    || fail "the payload is wrong: $output"
 }
 
 @test "hooks: resume — the hook reopens the session instead of holt exec'ing a client" {

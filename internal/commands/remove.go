@@ -83,27 +83,10 @@ func (e *Env) HookRemove(stdin io.Reader) error {
 		}
 	}
 
-	// The branch is how unmerged work survives; only reap it once landed — or
-	// once the `reapable` hook has said this one may go. Keep the registry row
-	// in lockstep: gone when reaped, kept while resumable.
-	if branch != "" {
-		cleared := false
-		if e.Cfg.Defined(config.HookReapable) {
-			payload := e.hookPayload(main, branch, dir, e.agentForPath(dir))
-			payload["state"] = "closing"
-			payload["occupied"] = "false" // the pane that held it is going away
-			payload["dirty"] = "false"    // whatever was dirty is committed above
-			payload["landed"] = boolString(e.Landed(main, branch).Landed)
-			res := e.Cfg.Ask(config.HookReapable, payload)
-			e.noteHook(res)
-			if res.Answer == config.No {
-				return nil // the hook is keeping this branch; say nothing more
-			}
-			cleared = res.Answer == config.Yes
-		}
-		if e.reapBranch(main, branch, cleared) {
-			_ = e.Reg.Delete(dir)
-		}
+	// The branch is how unmerged work survives; only reap it once landed. Keep
+	// the registry row in lockstep: gone when reaped, kept while resumable.
+	if branch != "" && e.reapBranch(main, branch) {
+		_ = e.Reg.Delete(dir)
 	}
 	return nil
 }

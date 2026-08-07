@@ -39,7 +39,7 @@ agent = "codex"   # trailing comment
 [hooks]
 resume   = "/usr/local/bin/holt-resume"
 landed   = ["/usr/local/bin/holt-landed", "--strict", "a,b"]
-reapable = '/usr/local/bin/holt-reapable'
+preserve = '/usr/local/bin/holt-preserve'
 `)
 	if len(warnings) != 0 {
 		t.Fatalf("clean config produced warnings: %v", warnings)
@@ -54,7 +54,7 @@ reapable = '/usr/local/bin/holt-reapable'
 	if got := cfg.Hooks["landed"]; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Hooks[landed] = %q, want %q (a comma inside quotes is data)", got, want)
 	}
-	if !cfg.Defined(HookReapable) {
+	if !cfg.Defined(HookPreserve) {
 		t.Fatal("single-quoted hook value was dropped")
 	}
 }

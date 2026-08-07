@@ -1,4 +1,4 @@
-# holt
+# 🦦 holt
 
 **The worktree-lifecycle substrate for parallel coding agents.**
 
@@ -45,9 +45,11 @@ Claude Code's worktree hooks for months. holt was extracted from the
 [nebelhaus workshop](https://github.com/nebelhaus/workshop) incubator once it
 passed that implementation's whole test suite.
 
-**All 79 acceptance tests pass** (77 ported from `wt`, plus two for the bare-PATH hook environment). They are black-box, carried over from the bash
-implementation — they drive the binary with shim `gh`/`lsof` on `PATH` and never
-touch a real repo, so they describe the contract rather than the implementation:
+**All 93 acceptance tests pass** (77 ported from `wt`, two for the bare-PATH hook
+environment, and 14 for the policy seams). They are black-box, carried over from
+the bash implementation — they drive the binary with shim `gh`/`lsof` on `PATH`
+and never touch a real repo, so they describe the contract rather than the
+implementation:
 
 ```
 make test
@@ -116,7 +118,6 @@ landed   = ["/usr/local/bin/my-landed", "--release-train"] # or an argv
 |---|---|---|
 | `agent` | which client a new worktree opens in | the `agent` key above |
 | `landed` | has this branch's work reached the default branch? | ancestry → merged PR → patch-equivalence |
-| `reapable` | may this worktree be swept **now**? | not occupied, not dirty, landed |
 | `preserve` | does a closing pane's dirty tree become a `wip:` commit? | yes, unless it's untracked scratch on a landed branch |
 | `resume` | reopen this worktree's session | `cd`, then exec the client |
 | `open` | open a session in a brand-new worktree | `cd`, then exec the client |
@@ -148,9 +149,12 @@ JSON object on stdout to say more than yes/no: `{"via": "release-train"}` from a
 
 Two things no seam can override, because they are about holt not sawing off the
 branch it is sitting on: the checkout holt is being **run from** is never swept,
-and a **stray** is never swept, only reported. Everything else is yours —
-including discarding a dirty tree, which holt will do on a `reapable` hook's say
-so (the hook is told `dirty` and answers anyway) and always name in the output.
+and a **stray** is never swept, only reported.
+
+No `reapable` seam yet — it spans three of holt's opinions at once (occupancy,
+dirtiness, landedness) and a `yes` on a dirty tree is the one answer that
+destroys work, so it waits for the architecture those settle into. Overriding
+`landed` already moves the rung that matters most.
 
 `SPEC.md` §6.5 has the full contract and the list of facts still hardcoded.
 
