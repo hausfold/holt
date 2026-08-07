@@ -204,7 +204,7 @@ programmatic-vs-interactive split (`new`/`resume` vs `newInteractive`/
 </details>
 
 <details>
-<summary><strong>Python</strong> — <code>hausfold-holt</code> (not published yet)</summary>
+<summary><strong>Python</strong> — <code>hausfold-holt</code></summary>
 
 [`sdk/python`](sdk/python) is the same thin client, async-first
 (`asyncio.create_subprocess_exec`): `list()`, `watch()` as an async
@@ -212,9 +212,10 @@ iterator, `child`/`spawn`, `park`/`unpark`/`reap`/`reship`, and occupancy
 leases (a throwing `async` factory here, unlike the TS SDK's constructor-
 based one). Drops into a FastAPI/asyncio backend or a plain script equally.
 
-The PyPI package name is decided (`hausfold-holt`, importing as `holt`)
-but nothing is published yet — for now, `pip install -e sdk/python` or
-copy `sdk/python` out.
+```
+pip install hausfold-holt
+# or: uv add hausfold-holt
+```
 
 ```python
 import asyncio
@@ -235,7 +236,7 @@ See [`sdk/python/README.md`](sdk/python/README.md) for the full API.
 </details>
 
 <details>
-<summary><strong>Swift</strong> — <code>Holt</code> (not published yet)</summary>
+<summary><strong>Swift</strong> — <code>Holt</code></summary>
 
 [`sdk/swift`](sdk/swift) is the same thin client over
 `Foundation.Process`: `list()`, `watch()`/`watchLane(path:)` as
@@ -244,11 +245,15 @@ and occupancy leases (an `actor Lease`, taken via a throwing `async`
 factory). macOS + Linux — not iOS/tvOS/watchOS, since `Process` can't
 spawn a subprocess there.
 
-Not published — Swift Package Manager has no monorepo-subdirectory story
-for a remote git dependency, so shipping this for real needs either a
-standalone mirror repo or tagging releases directly off this one; see the
-SDK's own README for the tradeoff. For now, reference it as a local
-package (`.package(path: "…/holt/sdk/swift")`) or copy `sdk/swift` out.
+Swift Package Manager has no monorepo-subdirectory story for a remote git
+dependency, so this ships from a generated mirror,
+[`nebelhaus/holt-swift`](https://github.com/nebelhaus/holt-swift)
+(`git subtree split --prefix=sdk/swift`, tagged to match) — send changes
+to `sdk/swift` here, never to the mirror directly.
+
+```swift
+.package(url: "https://github.com/nebelhaus/holt-swift", from: "0.1.0")
+```
 
 ```swift
 import Holt
