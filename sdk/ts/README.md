@@ -1,4 +1,4 @@
-# holt-sdk (TypeScript)
+# @hausfold/holt (TypeScript SDK)
 
 A thin TypeScript client over the [`holt`](../../README.md) binary — the
 worktree-lifecycle substrate for parallel coding agents. holt stays a
@@ -13,7 +13,7 @@ just the `types` for a browser bundle.
 ## Install
 
 Not published yet — for now, reference it from within this repo or copy
-`sdk/ts` out. Once published: `bun add holt-sdk` / `npm i holt-sdk`.
+`sdk/ts` out. Once published: `bun add @hausfold/holt` / `npm i @hausfold/holt`.
 
 `holt` itself must be on `PATH`, or pass `{ bin: "/path/to/holt" }`.
 
@@ -24,7 +24,7 @@ method except the two ending in `Interactive` captures the child's stdout
 and returns — safe to call from a server with many concurrent sessions.
 
 ```ts
-import { HoltClient } from "holt-sdk";
+import { HoltClient } from "@hausfold/holt";
 
 const holt = new HoltClient();
 
@@ -94,7 +94,7 @@ and the frontend needs `WatchEvent`/`HoltLane` to type the messages it
 receives):
 
 ```ts
-import type { HoltLane, WatchEvent } from "holt-sdk";
+import type { HoltLane, WatchEvent } from "@hausfold/holt";
 ```
 
 ## What's NOT here yet
