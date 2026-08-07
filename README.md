@@ -266,6 +266,45 @@ See [`sdk/swift/README.md`](sdk/swift/README.md) for the full API.
 
 </details>
 
+<details>
+<summary><strong>Go</strong> — <code>github.com/nebelhaus/holt/sdk/go</code></summary>
+
+[`sdk/go`](sdk/go) is the same thin client over `os/exec`: `List`,
+`Watch`/`WatchLane` as Go 1.23 range-over-func iterators (`iter.Seq2`, no
+channel or goroutine bridging needed — the generator body runs
+synchronously on the caller's own loop), `Child`/`Spawn`, `Park`/
+`Unpark`/`Reap`/`Reship`, and occupancy leases (`*Lease`, taken via
+`Client.Lease`, refreshed on a background goroutine until `Release`).
+Every method takes a `context.Context` first, Go's own idiom for what the
+other SDKs do with generator `.return()`/`break`.
+
+It's the one SDK that installs with zero setup: `sdk/go` carries its own
+nested `go.mod` (`github.com/nebelhaus/holt/sdk/go`), so `go get` resolves
+it straight from this repo via the module proxy — no npm/PyPI-style
+publish step, no package-manager account, and no separate mirror repo
+(unlike Swift's SwiftPM problem above). A pushed `sdk/go/vX.Y.Z` tag is
+all a real release needs; none exist yet, so `go get
+github.com/nebelhaus/holt/sdk/go@<commit-sha>` for now.
+
+```go
+import (
+	"context"
+	holt "github.com/nebelhaus/holt/sdk/go"
+)
+
+c := &holt.Client{}
+envelope, err := c.List(context.Background())
+for line, err := range c.Watch(context.Background()) {
+	if err == nil && line.Kind == holt.WatchCreated {
+		fmt.Println("new lane:", line.Lane.Name)
+	}
+}
+```
+
+See [`sdk/go/README.md`](sdk/go/README.md) for the full API.
+
+</details>
+
 ## Default agent
 
 Set a durable default that works from Zellij, launchd, and a standalone terminal:

@@ -1079,8 +1079,12 @@ item to the thing the SDKs are built on.
    `bootstrap.agent_instructions` step (§14.5) — ship alongside the TS SDK, so
    "an embedder's only worktree logic is holt" (§12's 0.4 exit bar) is true of
    the *agent's* knowledge too, not just the UI's.
-5. Python, Swift — mechanical once TS has proven the wire schema. *shipped*
-   (`sdk/python`, `sdk/swift`).
+5. Python, Swift, Go — mechanical once TS has proven the wire schema. *shipped*
+   (`sdk/python`, `sdk/swift`, `sdk/go`). Go is the one language where this
+   repo's own toolchain is already present, so its SDK is a nested module
+   (`sdk/go`'s own `go.mod`) rather than a copy-out — `go get` resolves it
+   straight from this git repo, no publish step or package-manager account
+   needed at all, unlike npm/PyPI/SwiftPM.
 6. Remote transport, as an HTTP server speaking the same protocol. Only here does
    the machine-local-rows problem above need solving, and by then a server knows
    which client each row came from, which is most of the answer.
