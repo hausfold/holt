@@ -1,13 +1,14 @@
 # holt — design spec
 
-**The worktree-lifecycle substrate.** A rewrite of the nebelhaus rice's `wt`
-(`nebelhaus/modules/den/wt.sh`, 1295 lines of bash) as a standalone, repo-agnostic,
-client-agnostic Go binary — a dev-focused sister to pounce / perch / trill, with
-`nebelhaus` and `bench` demoted to consumers.
+**The worktree-lifecycle substrate.** A rewrite of the nebelhaus rice's old
+worktree tool (`nebelhaus/modules/den/wt.sh`, 1295 lines of bash) as a
+standalone, repo-agnostic, client-agnostic Go binary — a dev-focused sister to
+pounce / perch / trill, with `nebelhaus` and `bench` demoted to consumers.
 
 This is the design doc; it stays the authority on *what* holt is even as the code
-lands beside it. The bash `wt` keeps running inside nebelhaus, untouched, until
-`holt` 0.1 is complete and the hook switch flips.
+lands beside it. **Update, post-cutover:** the bash predecessor has since been
+retired entirely (nebelhaus#245) — every caller this doc describes as
+transitional now points at `holt` alone, with no fallback to roll back to.
 
 Status: ejected from the workshop incubator to its own repo (2026-08-03), with
 its history intact. Implementation progress is
@@ -63,7 +64,7 @@ conflict *resolution*. No opinion about which agent you should run.
 
 Against first-party worktree support: vendors will never ship cross-client (no
 one is going to support codex **and** opencode **and** claude in one registry),
-never ship cross-repo parentage (`wt child` has no equivalent anywhere), and
+never ship cross-repo parentage (`holt child` has no equivalent anywhere), and
 treat the lifecycle invariants as an afterthought because losing *your* work
 isn't *their* problem. Park, PR-verified reap, occupancy detection, and
 post-merge drift detection are the product.
@@ -97,7 +98,7 @@ that is exactly what `occupied` reports.
 | Language | **Go.** Subprocess orchestrator, zero CPU-bound work — Rust/Zig buy nothing. CGo-free cross-compilation dominates for prebuilt-binary distribution. `x/sys/unix` has `Clonefileat` + `FICLONE` so reflink needs no CGo. charm (`fang`, `huh`, `lipgloss`) makes `doctor` and styled output good. Bun `--compile` measured 60 MB / 9 ms — startup fine, size not. |
 | License | **Apache-2.0.** A commercial GUI must be able to embed the substrate (that's the thesis), and the patent grant matters for that. |
 | Install CTA | `bun i -g holt` — an npm wrapper that downloads a prebuilt binary (the esbuild/biome pattern), **not** a bun-runtime tool. Also `brew install nebelhaus/tap/holt`, `curl … | sh`, and `go install`. |
-| Tests | `nebelhaus/test/wt.bats` (1026 lines, 77 tests) is black-box — it drives the CLI with shim `gh`/`lsof` on `PATH`, and already has a `WT_UNDER_TEST` seam for pointing it at another implementation. It becomes holt's acceptance suite on day one, and is the single best de-risking asset in the extraction. **Not quite unchanged:** four call sites drop `bash` (a Go binary isn't sourced), and three assertions on user-facing strings carry the new command name. No test *body* changes — which is the property that matters, because it means the contract is unmoved. |
+| Tests | The bash predecessor's `nebelhaus/test/wt.bats` (1026 lines, 77 tests) is black-box — it drives the CLI with shim `gh`/`lsof` on `PATH`, and already has a `WT_UNDER_TEST` seam for pointing it at another implementation. It becomes holt's acceptance suite on day one, and is the single best de-risking asset in the extraction. **Not quite unchanged:** four call sites drop `bash` (a Go binary isn't sourced), and three assertions on user-facing strings carry the new command name. No test *body* changes — which is the property that matters, because it means the contract is unmoved. |
 
 ---
 
@@ -120,9 +121,9 @@ Field 4 (checkout path) is the primary key. Field 6 is the client id
 that's the already-shipped v0 migration case and it must survive.
 
 **Rule for 0.1: read the existing file unchanged.** No format migration on
-cutover day. Julien's machine has live rows written by bash `wt`; holt reads
-them, writes them back byte-compatibly, and only *then* earns the right to
-propose v1.
+cutover day. Julien's machine had live rows written by the bash predecessor;
+holt reads them, writes them back byte-compatibly, and only *then* earns the
+right to propose v1.
 
 Proposed v1 (post-cutover, opt-in, `holt migrate`):
 
@@ -320,7 +321,7 @@ Silent degradation is how a user learns to distrust the tool.
 ## 4. Repo identity: the remote slug, not the directory basename
 
 Today the bucket under `$WT_BASE` is `basename "$main"`, with one special case in
-`wt child` that falls back to the owner-repo slug **only** when the child's
+the bash predecessor's `child` command that falls back to the owner-repo slug **only** when the child's
 basename collides with the spawning pane's. That's a patch on a specific collision
 (workshop `nebelhaus` vs rice `nebelhaus/nebelhaus`), and the original "fix" was
 renaming a directory on one machine — which does not survive contact with
@@ -873,16 +874,19 @@ provider set is already the right shape to receive it.
 
 ### Deletes
 
-- `modules/den/wt.sh` (1295 lines) in its entirety.
+- `modules/den/wt.sh` (1295 lines) in its entirety. **Done** — deleted in
+  nebelhaus#245, along with its test suite and the nix package that put it on
+  `PATH`.
 - `test/wt.bats` moves *out* of nebelhaus and into holt (it's holt's acceptance
   suite now; nebelhaus keeps only integration smoke tests for the hook wiring).
 - The hand-maintained shell-side client list.
 
 ### `modules/lib/agents.nix` stops being a duplicate
 
-Today `agents.nix` is the Nix-side list and `agent_known()` in `wt.sh` is a
-hand-maintained shell-side copy of the same set — its own comment admits a fourth
-client means editing both, because a shell script can't read Nix.
+Before the rewrite, `agents.nix` was the Nix-side list and `agent_known()` in
+the bash predecessor was a hand-maintained shell-side copy of the same set —
+its own comment admitted a fourth client meant editing both, because a shell
+script can't read Nix.
 
 Fix: **Nix generates adapter TOML into a directory holt reads.**
 
@@ -904,29 +908,38 @@ another directory on the adapter path — see §5.1, extended to
 
 ### Cutover safety on Julien's machine
 
-bash `wt` is load-bearing right now: two Claude Code hooks, the statusline
-refresher, pounce's Spawn Agent command, and `bench`. So:
+At the time this section was written, the bash predecessor was load-bearing:
+two Claude Code hooks, the statusline refresher, pounce's Spawn Agent command,
+and `bench`. The plan was:
 
 1. **holt reads the existing `registry.tsv` unchanged.** No format migration on
    cutover day (§2.1). This is the hard requirement.
 2. The hook switch is **one nebelhaus option** —
    `nebelhaus.agents.worktreeBackend = "wt" | "holt"` — so the revert is
    `haus rollback`, not a code change.
-3. Run both for a week: `holt` installed, option still `"wt"`, and a `holt list
-   --json` vs `wt` diff check in `bench status`. Flip when they agree.
+3. Run both for a week: `holt` installed, option still on the bash predecessor,
+   and a `holt list --json` diff check in `bench status`. Flip when they agree.
 4. Only after the flip does `holt migrate` (registry v1) become available, and it
    backs up the TSV first.
 
+**What actually happened:** the cutover skipped the dual-run option entirely —
+every caller (hearth's `⌘A`, pounce's Spawn Agent, the Claude Code hooks) was
+repointed straight at `holt` in nebelhaus#201, with the bash predecessor left
+on `PATH` as an unused rollback. That rollback was never needed and the bash
+predecessor has since been deleted outright (nebelhaus#245); there is no
+`worktreeBackend` option and no fallback to revert to.
+
 ---
 
-## 11. Delta since the passoff — what landed in `wt` in the last few days
+## 11. Delta since the passoff — what landed in the bash predecessor in the last few days
 
-The passoff describes a 1092-line `wt`. It's **1295** now. These changes are all
-general-purpose and belong in holt 0.1, not just in nebelhaus:
+The passoff describes a 1092-line bash predecessor. It's **1295** now (and,
+since retired, frozen at that count). These changes were all general-purpose
+and belong in holt 0.1, not just in nebelhaus:
 
 | Change | PR | Impact on this spec |
 |---|---|---|
-| `wt reship` + `+N` post-merge-ahead marker | #189 | New lifecycle state: *landed-but-moved-on*. Must be in the state machine (§0), the `--json` shape (`post_merge_ahead`, §2.2), and the merge-strategy table (§3). This is a genuinely novel state no competitor models. |
+| `reship` + `+N` post-merge-ahead marker | #189 | New lifecycle state: *landed-but-moved-on*. Must be in the state machine (§0), the `--json` shape (`post_merge_ahead`, §2.2), and the merge-strategy table (§3). This is a genuinely novel state no competitor models. |
 | Client-agnostic bar / tab badge / agent-spawn bind | #170 | Confirms the agent-adapter seam (§5.3) is the right cut. |
 | One client list in `modules/lib/agents.nix` | #171 | Directly motivates §10's "Nix generates adapter TOML". |
 | Column sizing to pane / widest agent id | #168, 3a0d6d1 | Presentation belongs in the *consumer*; holt's job is `--json` + a good default renderer. |
@@ -934,16 +947,13 @@ general-purpose and belong in holt 0.1, not just in nebelhaus:
 | Codex + OpenCode support | #162 | Ditto §5.3. |
 | Registry field 6 (`agent`), v0 rows = claude | #162 | The migration case that §2.1 must preserve forever. |
 
-Anything landing in `wt` between now and holt 0.1 should be triaged against this
-table: general ⇒ port it; rice-specific ⇒ it belongs in the consumer.
-
 ---
 
 ## 12. Milestones
 
 | | Scope | Done when |
 |---|---|---|
-| **0.1** | Everything in §2 (contracts), §3 (landed, incl. patch-equivalence), §4 (slug identity), §5 (adapters), §10 (cutover). Commands: `list`, `new`, `child`, `spawn`, `resume`, `park`, `unpark`, `reap`, `reship`, `hook create/remove`, `doctor`. | `wt.bats` passes unmodified against `holt`; the nebelhaus option flips; a week of dual-running agrees. |
+| **0.1** | Everything in §2 (contracts), §3 (landed, incl. patch-equivalence), §4 (slug identity), §5 (adapters), §10 (cutover). Commands: `list`, `new`, `child`, `spawn`, `resume`, `park`, `unpark`, `reap`, `reship`, `hook create/remove`, `doctor`. | The ported acceptance suite passes unmodified against `holt`; every nebelhaus caller is repointed at it (done, nebelhaus#201/#245) with no bash predecessor left to fall back to. |
 | **0.2** | §6 bootstrap (reflink, ports, secrets, trust), §7 `overlap`. | `holt doctor --write` produces a usable `.holt.toml` on a stranger's Node repo; `overlap` sees parked branches. |
 | **0.3** | §8 `batch` with queue bisection; `bench try-batch` becomes a wrapper. | It names a culprit *pair* on a real red queue. |
 | **0.4** | §14 SDKs: `holt watch --json`, then TS, then Python/Swift. holt stays a binary — SDKs shell out. | A third party ships an agent UI whose only worktree logic is `holt`. |

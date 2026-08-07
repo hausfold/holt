@@ -46,16 +46,17 @@ because losing *your* work isn't *their* problem.
 ## Status
 
 **Pre-0.1.** The design is [`SPEC.md`](SPEC.md); it is the spec for a Go rewrite
-of `wt`, 1295 lines of bash that has been running this author's machine as
-Claude Code's worktree hooks for months. holt was extracted from the
+of a 1295-line bash predecessor that had been running this author's machine as
+Claude Code's worktree hooks for months, since retired entirely. holt was
+extracted from the
 [nebelhaus workshop](https://github.com/nebelhaus/workshop) incubator once it
 passed that implementation's whole test suite.
 
-**All 102 acceptance tests pass** (77 ported from `wt`, two for the bare-PATH hook
-environment, 14 for the policy seams, and nine for occupancy leases). They are
-black-box, carried over from the bash implementation — they drive the binary with
-shim `gh`/`lsof` on `PATH` and never touch a real repo, so they describe the
-contract rather than the implementation:
+**All 102 acceptance tests pass** (77 ported from that bash predecessor, two for
+the bare-PATH hook environment, 14 for the policy seams, and nine for occupancy
+leases). They are black-box, carried over from the bash implementation — they
+drive the binary with shim `gh`/`lsof` on `PATH` and never touch a real repo, so
+they describe the contract rather than the implementation:
 
 ```
 make test
