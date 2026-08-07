@@ -153,8 +153,10 @@ close simultaneously; it's rare enough that it hasn't bitten, and that's luck.
 
 ### 2.2 `--json` output
 
-Every listing/state command takes `--json`. One envelope, so consumers can
-version-check without sniffing:
+Every listing/state command takes `--json`, and because bare `holt` IS the
+listing, **`holt --json` is a synonym for `holt list --json`** — byte-identical
+output, pinned by the suite. Consumers should not have to know that `list` is
+the implied verb. One envelope, so they can version-check without sniffing:
 
 ```json
 {

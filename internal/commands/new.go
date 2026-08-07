@@ -135,7 +135,7 @@ func (e *Env) Child(target, want string) error {
 	return nil
 }
 
-// Spawn makes a NAMED worktree for a spawner that has no pane of its own.
+// Spawn opens a NAMED lane for a spawner that has no pane of its own.
 func (e *Env) Spawn(target, want, agentID string) error {
 	if target == "" || want == "" {
 		return exitcode.Usagef("usage: holt spawn <repo-path> <name>")
@@ -163,7 +163,7 @@ func (e *Env) Spawn(target, want, agentID string) error {
 		Path: dir, Parent: main, Agent: agentID,
 	})
 	trustWorktree(agentID, main, dir)
-	ui.Say("created %s worktree '%s' → %s", filepath.Base(main), name, dir)
+	ui.Say("created %s lane '%s' → %s", filepath.Base(main), name, dir)
 	ui.Out("%s\n", dir)
 	return nil
 }
