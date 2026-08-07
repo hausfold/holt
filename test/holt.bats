@@ -1098,6 +1098,26 @@ EOF
   [[ "$output" == *"no lane named 'gibberish'"* ]]
 }
 
+# Bare `holt` IS the listing, so `holt --json` must be the machine-readable
+# listing — not "unknown flag", which is what every consumer that reached for
+# the obvious spelling used to get. It has to be the SAME envelope as the
+# explicit form, or the two spellings drift and consumers pick the wrong one.
+@test "dispatch: bare --json is the listing, byte-identical to 'list --json'" {
+  local main; main="$(mkrepo alpha)"
+  mkwt "$main" sparkle >/dev/null
+
+  wt_run --json
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"unknown flag"* ]]
+  [[ "$output" == *'"lanes"'* ]]
+  [[ "$output" == *'"name": "sparkle"'* ]]
+
+  local bare="$output"
+  wt_run list --json
+  [ "$status" -eq 0 ]
+  [ "$output" = "$bare" ] || fail "the two spellings disagree"
+}
+
 # ── policy seams ─────────────────────────────────────────────────────────────
 #
 # Every one of these asserts the same two halves of the same contract, on a

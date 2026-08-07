@@ -27,7 +27,7 @@ A LANE is one agent's branch, checkout and pane, from create to reaped.
   holt hook create        [hook] open a lane — JSON on stdin, path on stdout
   holt hook remove        [hook] retire one without losing work — JSON on stdin
 
-  --json                  machine-readable output (list, status)
+  --json                  machine-readable listing: holt --json, holt list --json
   --version               print the version
 
 Exit codes: 0 ok · 1 usage · 2 refused for safety · 3 degraded · 4 conflict found
@@ -66,6 +66,13 @@ func Run(args []string) error {
 
 	case "list":
 		return env.List(hasFlag(args, "--json"))
+
+	// `holt --json` is `holt list --json`. Bare `holt` IS the listing, so its
+	// machine-readable form has to be spellable without naming the implied verb
+	// — the statusline runs it several times a minute and every consumer that
+	// reached for the obvious spelling got "unknown flag" instead.
+	case "--json":
+		return env.List(true)
 
 	case "reap":
 		return env.Reap()
