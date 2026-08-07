@@ -209,6 +209,36 @@ See [`sdk/go/README.md`](sdk/go/README.md) for the full API.
 
 </details>
 
+<details>
+<summary><strong>Rust</strong> — <code>hausfold-holt</code></summary>
+
+[`sdk/rust`](sdk/rust) — the same client, async (tokio): `list()`,
+`watch()`/`watch_lane()` as a `Stream` of typed lines, `child`/`spawn`,
+`park`/`unpark`/`reap`/`reship`, and occupancy leases via `HoltClient::lease`.
+Drops into an axum/tonic backend or a plain async binary equally.
+
+```sh
+cargo add hausfold-holt
+```
+
+```rust
+use futures_util::StreamExt;
+use holt::HoltClient;
+
+let client = HoltClient::default();
+let envelope = client.list().await?;
+let mut lines = Box::pin(client.watch());
+while let Some(line) = lines.next().await {
+    if line?.kind == holt::watch_kind::CREATED {
+        println!("new lane created");
+    }
+}
+```
+
+See [`sdk/rust/README.md`](sdk/rust/README.md) for the full API.
+
+</details>
+
 ---
 
 <p align="center"><a href="https://hausfold.co">⌂ hausfold</a></p>

@@ -1,0 +1,27 @@
+[package]
+name = "hausfold-holt"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Rust SDK for holt, the worktree-lifecycle substrate. Shells out to the holt binary; async (tokio) so it drops into an axum/tonic backend or an orchestrator equally."
+readme = "README.md"
+license = "Apache-2.0"
+repository = "https://github.com/nebelhaus/holt"
+keywords = ["holt", "worktree", "git", "agents"]
+categories = ["development-tools", "asynchronous"]
+
+[lib]
+name = "holt"
+path = "src/lib.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["process", "io-util", "time", "rt", "sync", "macros"] }
+tokio-stream = { version = "0.1", features = ["io-util"] }
+async-stream = "0.3"
+futures-core = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "time", "io-util", "sync"] }
+futures-util = "0.3"
