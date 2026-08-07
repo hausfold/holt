@@ -21,9 +21,9 @@ if [[ "$branch" != "main" ]]; then
 fi
 
 tmp="sync-mirror-tmp-$$"
+trap 'git branch -D "$tmp" 2>/dev/null || true' EXIT
 git subtree split --prefix=sdk/swift -b "$tmp"
 git push "$MIRROR_URL" "$tmp:main"
-git branch -D "$tmp"
 
 echo "pushed sdk/swift -> $MIRROR_URL main. Tag a release there when ready:"
 echo "    git clone $MIRROR_URL /tmp/holt-swift-tag && cd /tmp/holt-swift-tag && git tag -a X.Y.Z -m X.Y.Z && git push origin X.Y.Z"
