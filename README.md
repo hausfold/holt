@@ -203,7 +203,68 @@ programmatic-vs-interactive split (`new`/`resume` vs `newInteractive`/
 
 </details>
 
-Python and Swift are next (SPEC.md §14).
+<details>
+<summary><strong>Python</strong> — <code>hausfold-holt</code> (not published yet)</summary>
+
+[`sdk/python`](sdk/python) is the same thin client, async-first
+(`asyncio.create_subprocess_exec`): `list()`, `watch()` as an async
+iterator, `child`/`spawn`, `park`/`unpark`/`reap`/`reship`, and occupancy
+leases (a throwing `async` factory here, unlike the TS SDK's constructor-
+based one). Drops into a FastAPI/asyncio backend or a plain script equally.
+
+The PyPI package name is decided (`hausfold-holt`, importing as `holt`)
+but nothing is published yet — for now, `pip install -e sdk/python` or
+copy `sdk/python` out.
+
+```python
+import asyncio
+from holt import HoltClient
+
+async def main() -> None:
+    holt = HoltClient()
+    envelope = await holt.list()
+    async for line in holt.watch():
+        if line.kind == "created" and line.lane is not None:
+            print("new lane:", line.lane.name)
+
+asyncio.run(main())
+```
+
+See [`sdk/python/README.md`](sdk/python/README.md) for the full API.
+
+</details>
+
+<details>
+<summary><strong>Swift</strong> — <code>Holt</code> (not published yet)</summary>
+
+[`sdk/swift`](sdk/swift) is the same thin client over
+`Foundation.Process`: `list()`, `watch()`/`watchLane(path:)` as
+`AsyncThrowingStream`, `child`/`spawn`, `park`/`unpark`/`reap`/`reship`,
+and occupancy leases (an `actor Lease`, taken via a throwing `async`
+factory). macOS + Linux — not iOS/tvOS/watchOS, since `Process` can't
+spawn a subprocess there.
+
+Not published — Swift Package Manager has no monorepo-subdirectory story
+for a remote git dependency, so shipping this for real needs either a
+standalone mirror repo or tagging releases directly off this one; see the
+SDK's own README for the tradeoff. For now, reference it as a local
+package (`.package(path: "…/holt/sdk/swift")`) or copy `sdk/swift` out.
+
+```swift
+import Holt
+
+let holt = HoltClient()
+let envelope = try await holt.list()
+for try await line in holt.watch() {
+    if case .event(let event) = line, event.kind == .created {
+        print("new lane:", event.lane?.name ?? "?")
+    }
+}
+```
+
+See [`sdk/swift/README.md`](sdk/swift/README.md) for the full API.
+
+</details>
 
 ## Default agent
 
