@@ -89,7 +89,18 @@ func (e *Env) rows() []listRow {
 		// Empty for an unborn branch (a lane opened in a repo with no
 		// commits yet) — say so rather than printing a blank cell that reads
 		// like a broken row.
-		last, err := gitx.Run(entry.Main, "log", "-1", "--format=%cr — %s", entry.Branch)
+		//
+		// The subject alone, NOT git's relative date (`%cr`, "3 minutes
+		// ago"): this value is also `--json`'s `last_commit` (json.go), a
+		// frozen contract two spellings of the same listing must answer
+		// byte-identically (SPEC.md §2.2) and `watch` diffs verbatim to
+		// decide whether a lane actually changed (watch.go's `changed`
+		// kind). A relative date drifts every second on its own, which
+		// broke both: two `holt --json` calls a heartbeat apart could
+		// legitimately disagree, and a `watch` consumer would see a
+		// `changed` event on every rescan tick even when nothing about the
+		// lane had moved.
+		last, err := gitx.Run(entry.Main, "log", "-1", "--format=%s", entry.Branch)
 		if err != nil || last == "" {
 			last = "no commits yet"
 		}

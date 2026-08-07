@@ -172,6 +172,39 @@ family is additive later (`source: "forge"`, new `kind` values) without a
 schema bump, and `capabilities` on `hello` is how a consumer will be able to
 tell which families a given `holt` can ever send.
 
+### SDKs
+
+<details>
+<summary><strong>TypeScript</strong> — <code>@hausfold/holt</code> (not published yet)</summary>
+
+[`sdk/ts`](sdk/ts) is a thin client over the binary — `list()`, `watch()` as
+an async iterator over the NDJSON stream, `child`/`spawn` to create a lane
+without attaching an agent, `park`/`unpark`/`reap`/`reship`, and occupancy
+leases. Works from a Bun/Node TUI or a web backend; its types are safe to
+import into a browser bundle for the frontend.
+
+The npm package name is decided (`@hausfold/holt`) but nothing is published
+yet — for now, reference it from within this repo or copy `sdk/ts` out. This
+section moves to a proper docs page once it ships.
+
+```ts
+import { HoltClient } from "@hausfold/holt";
+
+const holt = new HoltClient();
+const envelope = await holt.list();
+for await (const line of holt.watch()) {
+  if (line.kind === "created") console.log("new lane:", line.lane?.name);
+}
+```
+
+See [`sdk/ts/README.md`](sdk/ts/README.md) for the full API, the
+programmatic-vs-interactive split (`new`/`resume` vs `newInteractive`/
+`resumeInteractive`), and leases.
+
+</details>
+
+Python and Swift are next (SPEC.md §14).
+
 ## Default agent
 
 Set a durable default that works from Zellij, launchd, and a standalone terminal:
