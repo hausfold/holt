@@ -310,6 +310,42 @@ See [`sdk/go/README.md`](sdk/go/README.md) for the full API.
 
 </details>
 
+<details>
+<summary><strong>Rust</strong> — <code>hausfold-holt</code> (not published yet)</summary>
+
+[`sdk/rust`](sdk/rust) is the same thin client, async (tokio) like the
+Python SDK's stance: `list()`, `watch()`/`watch_lane()` as a `Stream` of
+typed lines (dropping it kills the underlying process — no channel or
+callback plumbing needed beyond that), `child`/`spawn`, `park`/`unpark`/
+`reap`/`reship`, and occupancy leases (`Lease`, taken via `HoltClient::lease`,
+refreshed on a background `tokio` task until `release()`). Drops into an
+axum/tonic backend or a plain async binary equally.
+
+The crate name is decided (`hausfold-holt` — plain `holt` is already taken
+by an unrelated crate) but nothing is published yet — for now, reference it
+from within this repo or a `path`/`git` dependency. This section moves to a
+proper docs page once it ships.
+
+```rust
+use futures_util::StreamExt;
+use holt::HoltClient;
+
+let client = HoltClient::default();
+let envelope = client.list().await?;
+let mut lines = Box::pin(client.watch());
+while let Some(line) = lines.next().await {
+    if line?.kind == holt::watch_kind::CREATED {
+        println!("new lane created");
+    }
+}
+```
+
+See [`sdk/rust/README.md`](sdk/rust/README.md) for the full API, leases,
+and why the open-set fields (`state`, `landed.verdict`, `kind`) stay plain
+`String` rather than a Rust `enum`.
+
+</details>
+
 ## Default agent
 
 Set a durable default that works from Zellij, launchd, and a standalone terminal:
