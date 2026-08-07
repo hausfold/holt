@@ -16,7 +16,7 @@ import (
 )
 
 // This is the ONE client-specific seam in holt, and it is deliberately narrow.
-// Every worktree records its client in the registry, so changing the machine's
+// Every lane records its client in the registry, so changing the machine's
 // default later never makes a parked Codex branch reopen in Claude.
 //
 // In 0.2 this whole file collapses into adapter TOML (SPEC.md §5.3) — which is
@@ -85,7 +85,7 @@ func resolveAgent(id string) (agentSpec, error) {
 // A real exec, not a child: holt IS the pane's process, so closing the client
 // closes the pane — and under the rice's binds that fires the same remove hook
 // Claude's own exit does. A child process would leave holt sitting in the middle,
-// and the pane would outlive the session.
+// and the pane would outlive the client.
 func execClient(argv []string) error {
 	path, err := exec.LookPath(argv[0])
 	if err != nil {
@@ -249,7 +249,7 @@ func trustWorktree(agentID, main, dir string) {
 	_ = os.Rename(tmp.Name(), path)
 }
 
-// ── where a worktree's conversation lives ────────────────────────────────────
+// ── where a lane's conversation lives ────────────────────────────────────────
 
 // projDir is Claude Code's transcript directory for a cwd: it encodes the
 // project by path, replacing every '/' and '.' with '-'.
@@ -282,19 +282,19 @@ func agentHasChat(agent, cwd string) bool {
 	return err == nil && fi.IsDir()
 }
 
-// chatHome is the cwd whose client picker should be opened for a worktree.
+// chatHome is the cwd whose client picker should be opened for a lane.
 //
-// A SPAWNED worktree never hosts an independent conversation: its chat lives in
-// the pane that made it. Two signatures for that, both requiring the parent to
-// be a genuinely different context than this worktree's own repo:
+// A SPAWNED lane never hosts an independent conversation: its chat lives in the
+// pane that made it. Two signatures for that, both requiring the parent to be a
+// genuinely different context than this lane's own repo:
 //
-//  1. the parent is itself an agent worktree — a nested spawn;
+//  1. the parent is itself a lane — a nested spawn;
 //  2. the parent is a checkout of a DIFFERENT repo — a `holt child`, e.g. a
-//     workshop pane that spawned this sub-repo worktree.
+//     workshop pane that spawned this sub-repo lane.
 //
-// A plain same-repo worktree's parent is its OWN main checkout, whose
-// transcripts are the user's unrelated on-main work. Never hijack resume to
-// that — it falls through and the worktree keeps its own chat.
+// A plain same-repo lane's parent is its OWN main checkout, whose transcripts
+// are the user's unrelated on-main work. Never hijack resume to that — it falls
+// through and the lane keeps its own chat.
 func (e *Env) chatHome(agent, wt string) string {
 	if agentHasChat(agent, wt) {
 		return wt
@@ -320,7 +320,7 @@ func (e *Env) chatHome(agent, wt string) string {
 	return wt
 }
 
-// agentForPath is the recorded client for a worktree, resolved BEFORE a parked
+// agentForPath is the recorded client for a lane, resolved BEFORE a parked
 // checkout is re-registered: a five-column registry row predates the client
 // field and is therefore Claude forever, even if the machine's default changed.
 func (e *Env) agentForPath(path string) string {

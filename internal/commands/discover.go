@@ -8,7 +8,7 @@ import (
 	"github.com/nebelhaus/holt/internal/gitx"
 )
 
-// State is what a worktree's checkout is doing on disk.
+// State is what a lane's checkout is doing on disk.
 type State string
 
 const (
@@ -43,7 +43,7 @@ func checkoutState(path string) State {
 	return Stray
 }
 
-// Entry is one discovered worktree, before any forge question is asked.
+// Entry is one discovered lane, before any forge question is asked.
 type Entry struct {
 	Main   string
 	Branch string
@@ -51,18 +51,18 @@ type Entry struct {
 	State  State
 }
 
-// Name is the worktree name — the branch minus the agent-branch prefix.
+// Name is the lane name — the branch minus the agent-branch prefix.
 func (e Entry) Name() string { return strings.TrimPrefix(e.Branch, "worktree-") }
 
-// discover returns every resumable or live agent worktree, deduped.
+// discover returns every resumable or live lane, deduped.
 //
 // Fully generic: the set of repos is discovered, never configured. Three
 // sources, because no one of them is complete:
 //
 //  1. the registry — authoritative paths, and the only source that survives the
-//     checkout being deleted (a parked worktree exists nowhere else);
+//     checkout being deleted (a parked lane exists nowhere else);
 //  2. every live checkout under the base directory — this is what makes "all
-//     repos with an open worktree" work without being told about any repo;
+//     repos with an open lane" work without being told about any repo;
 //  3. orphan worktree-* branches in any main checkout the first two reached —
 //     a branch whose registry row was lost still has work on it.
 //

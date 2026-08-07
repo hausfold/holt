@@ -13,7 +13,7 @@ import (
 	"github.com/nebelhaus/holt/internal/ui"
 )
 
-// Resume rebuilds a worktree's checkout and reopens the agent chat that made it.
+// Resume rebuilds a lane's checkout and reopens the agent chat that made it.
 //
 // `want` is a name, or `<repo>/<name>` when the same name exists in two repos.
 func (e *Env) Resume(want string) error {
@@ -37,7 +37,7 @@ func (e *Env) Resume(want string) error {
 	}
 	switch len(matches) {
 	case 0:
-		return exitcode.Usagef("no agent worktree named '%s' — run: holt", want)
+		return exitcode.Usagef("no lane named '%s' — run: holt", want)
 	case 1:
 	default:
 		return exitcode.Usagef("'%s' exists in more than one repo — qualify it: holt <repo>/%s", name, name)
@@ -76,13 +76,13 @@ func (e *Env) Resume(want string) error {
 		}
 	}
 
-	// A spawned worktree (`holt child`, or a nested spawn) has no chat of its
-	// own — reopen the session that spawned it. The checkout above is still
+	// A spawned lane (`holt child`, or a nested spawn) has no chat of its own —
+	// reopen the client session that spawned it. The checkout above is still
 	// rebuilt either way, so the branch's files are on disk; this only decides
 	// which directory the client's picker opens in.
 	chat := e.chatHome(agent, entry.Path)
 	if chat != entry.Path {
-		ui.Say("no chat in this worktree — it was spawned from a session in %s", chat)
+		ui.Say("no chat in this lane — it was spawned from a pane in %s", chat)
 		// A shared parent checkout (a workshop pane that spawned several
 		// children) lists many sessions in its picker — point at the right one.
 		ui.Say("in the picker, pick the session for '%s' — last commit:", entry.Branch)

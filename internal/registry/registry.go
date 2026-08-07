@@ -1,16 +1,21 @@
 // Package registry is holt's source of truth.
 //
 // Not the filesystem, and not `git worktree list` — both are derived and both
-// lie. A parked worktree has no checkout on disk at all (the branch IS the
-// work), and a half-finished `git worktree remove` leaves a directory git has
-// already disowned. Only the registry knows the whole set.
+// lie. A parked lane has no checkout on disk at all (the branch IS the work),
+// and a half-finished `git worktree remove` leaves a directory git has already
+// disowned. Only the registry knows the whole set.
+//
+// A LANE is holt's unit: one agent's branch, checkout and pane, across the whole
+// create → live → parked → landed → reaped life. Note the word is NOT "agent" —
+// that is the CLIENT (field 6, claude | codex | opencode) — and NOT "session",
+// which belongs to zellij and to the clients' own transcript stores.
 //
 // # Format
 //
 // 0.1 reads and writes the EXISTING bash-`wt` TSV byte-compatibly (SPEC.md
 // §2.1). This is the hard requirement of the cutover: Julien's machine has live
 // rows written by the shell version, and cutover day must not migrate anything.
-// One tab-separated line per worktree, keyed on field 4 (the checkout path):
+// One tab-separated line per lane, keyed on field 4 (the checkout path):
 //
 //	name <TAB> main <TAB> branch <TAB> path <TAB> parent <TAB> agent
 //
@@ -25,9 +30,9 @@ import (
 	"strings"
 )
 
-// Row is one worktree's registry entry.
+// Row is one lane's registry entry.
 type Row struct {
-	Name   string // worktree name — the branch minus the "worktree-" prefix
+	Name   string // lane name — the branch minus the "worktree-" prefix
 	Main   string // the repo's main checkout
 	Branch string // full branch name
 	Path   string // checkout path — the primary key
