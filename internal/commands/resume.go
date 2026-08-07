@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nebelhaus/holt/internal/config"
 	"github.com/nebelhaus/holt/internal/exitcode"
 	"github.com/nebelhaus/holt/internal/gitx"
 	"github.com/nebelhaus/holt/internal/registry"
@@ -94,9 +95,18 @@ func (e *Env) Resume(want string) error {
 		_ = os.MkdirAll(chat, 0o755)
 	}
 
+	// The checkout is on disk and the chat's home is known; what "reopen this
+	// session" MEANS is the machine's business from here. holt's own answer —
+	// chdir, then become the client — is right for a tool invoked from the pane
+	// that will host it, and wrong for every machine that would rather open a
+	// pane of its own. That is the `resume` hook.
+	if res := e.openSession(config.HookResume, entry, agent, chat); res.Answer != config.Defer {
+		return hookOutcome(config.HookResume, res)
+	}
+
 	spec, known := specFor(agent)
 	if !known {
-		return exitcode.Usagef("unknown agent %q recorded for this worktree", agent)
+		return exitcode.Usagef("unknown agent %q recorded for this lane", agent)
 	}
 	if ui.IsTTY(os.Stdout) && clientInstalled(agent) {
 		ui.Say("reopening the %s chat …", agent)
@@ -130,6 +140,39 @@ func (e *Env) rebuild(entry Entry, agent string) error {
 		Path: entry.Path, Agent: agent,
 	})
 	return nil
+}
+
+// openSession puts an action seam — `resume` or `open` — the question holt was
+// about to answer by exec'ing a client.
+//
+// `chat` is the seam's whole reason for existing beyond `path`: a spawned
+// lane's conversation lives in the pane that made it, so a hook opening a
+// pane must be told to cd somewhere that is NOT the checkout it just rebuilt.
+// Getting that wrong is how a resumed child lane opens an empty session.
+func (e *Env) openSession(hook string, entry Entry, agent, chat string) config.Result {
+	if !e.Cfg.Defined(hook) {
+		return config.Result{Answer: config.Defer}
+	}
+	payload := e.hookPayload(entry.Main, entry.Branch, entry.Path, agent)
+	payload["chat"] = chat
+	payload["state"] = string(entry.State)
+	res := e.Cfg.Do(hook, payload)
+	e.noteHook(res)
+	return res
+}
+
+// hookOutcome turns an action hook's answer into holt's exit code. A hook that
+// handled the work is a success; one that refused keeps its refusal's meaning,
+// because a wrapper script has to tell "you asked wrong" from "I declined".
+func hookOutcome(hook string, res config.Result) error {
+	switch {
+	case res.Answer == config.Yes:
+		return nil
+	case res.Refused:
+		return exitcode.Refusedf("the %s hook declined", hook)
+	default:
+		return exitcode.Usagef("the %s hook failed", hook)
+	}
 }
 
 func clientInstalled(id string) bool {

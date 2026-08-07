@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nebelhaus/holt/internal/config"
 	"github.com/nebelhaus/holt/internal/exitcode"
 	"github.com/nebelhaus/holt/internal/gitx"
 	"github.com/nebelhaus/holt/internal/ui"
@@ -92,15 +93,29 @@ func (e *Env) HookRemove(stdin io.Reader) error {
 
 // mustPreserve decides whether a dirty tree needs a wip commit before removal.
 //
-// One exception, and it matters: a branch whose PR has ALREADY merged, whose
-// only remaining changes are UNTRACKED files, is holding build scratch (a
-// target/, a .venv/) — not history. Wip-committing it moves the tip one commit
-// past the merged PR's SHA, so the branch no longer matches its merge and the
-// lane gets falsely PARKED instead of reaped. That is how merged lanes piled
-// up. Tracked edits, or an unmerged branch, are real work → always kept.
+// The `preserve` hook owns this when it is configured. It is the cheapest seam
+// to want: "always wip-commit, I'll sort it out later" and "never, my lanes are
+// disposable" are both one line, and both are wrong for the other person.
+//
+// holt's own rule has one exception, and it matters: a branch whose PR has
+// ALREADY merged, whose only remaining changes are UNTRACKED files, is holding
+// build scratch (a target/, a .venv/) — not history. Wip-committing it moves the
+// tip one commit past the merged PR's SHA, so the branch no longer matches its
+// merge and the lane gets falsely PARKED instead of reaped. That is how merged
+// lanes piled up. Tracked edits, or an unmerged branch, are real work → always
+// kept.
 func (e *Env) mustPreserve(main, branch, porcelain string) bool {
 	if branch == "" {
 		return true
+	}
+	if e.Cfg.Defined(config.HookPreserve) {
+		payload := e.hookPayload(main, branch, "", "")
+		payload["porcelain"] = porcelain
+		res := e.Cfg.Ask(config.HookPreserve, payload)
+		e.noteHook(res)
+		if res.Answer != config.Defer {
+			return res.Answer == config.Yes
+		}
 	}
 	for _, line := range gitx.Lines(porcelain) {
 		if !strings.HasPrefix(line, "??") {

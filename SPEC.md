@@ -456,9 +456,17 @@ the dev server wants port 3000 that four other worktrees already want.
 
 ### 6.1 Hook points
 
+Two kinds, and the difference is what they are allowed to change.
+
+**Lifecycle hooks** run *around* a transition holt is going to make anyway:
 `pre-create`, `post-create`, `pre-park`, `post-unpark`, `pre-reap`, `post-reap`.
 Each runs argv-slices (no shell), with the §5.2 variables, and a non-zero exit on
 a `pre-*` hook aborts the transition (exit 2 — refused).
+
+**Policy seams** (§6.5) run *instead of* a decision holt would have made. They
+are the answer to the question the lifecycle hooks can't reach: not "do
+something extra when a branch is reaped", but "no — *this* is what reapable
+means here."
 
 ### 6.2 Config file
 
@@ -466,10 +474,12 @@ a `pre-*` hook aborts the transition (exit 2 — refused).
 for the repo. **The split on repo-local config is by execution, not by file:**
 
 The machine config's implemented top-level default is `agent = "claude"` (or
-`codex` / `opencode`). Resolution is `HOLT_AGENT`, then this file, then the
-legacy `NEBELHAUS_AGENT_DEFAULT` environment fallback, then Claude. This keeps
-the default stable for long-running callers while retaining a one-invocation
-override for standalone use.
+`codex` / `opencode`), plus the `[hooks]` table of §6.5. Agent resolution is
+`HOLT_AGENT`, then the `agent` **hook**, then this key, then the legacy
+`NEBELHAUS_AGENT_DEFAULT` environment fallback, then Claude. This keeps the
+default stable for long-running callers while retaining a one-invocation
+override for standalone use — and the hook rung exists because "which client"
+is a decision on some machines and a constant on most.
 
 | Repo-local key | Allowed? | Why |
 |---|---|---|
@@ -541,6 +551,119 @@ filesystem supports reflink; whether a forge CLI is authenticated; whether `lsof
 or a heartbeat is available; submodules / LFS / sparse-checkout (§8); and the
 default branch resolution. It also *diagnoses* — stale registry rows, stray
 checkouts, orphan branches, disk used per repo.
+
+### 6.5 Policy seams — the hardcoded facts, and how to disagree with them
+
+holt grew out of one machine's rice, and it inherited that machine's answers to
+questions that only *look* universal. "Landed" means merged into the default
+branch. "Reapable" means landed, clean and unoccupied. "Resume" means become the
+client process. Every one of those is a house rule wearing a universal name, and
+every one of them is wrong somewhere: a shop that merges into a release train, a
+machine that can enumerate its own panes better than `lsof` can, a multiplexer
+user who wants a new pane rather than a hijacked one.
+
+The fix is not more configuration keys. It is to name each decision, ship holt's
+answer as the *default* rather than the *mechanism*, and let a consumer replace
+it. That is the difference between a tool and a substrate: nebelhaus should be
+able to say "here is what resuming means on my machine" without holt having ever
+heard of zellij.
+
+#### The protocol
+
+A seam is a program, not an expression language. holt execs the hook's argv and
+reads the answer off the exit code.
+
+| exit | predicate seam | action seam |
+|---|---|---|
+| `0` | yes | handled — holt does nothing further |
+| `1` | no | failed |
+| `2` | no, **refused for safety** | refused — propagates as holt's exit 2 |
+| `3` | **no opinion — run the built-in** | **declined — run the built-in** |
+| anything else, or wouldn't exec | defer, **and warn** | defer, **and warn** |
+
+0/1/2 mean what they mean in holt's own exit-code table (§2.4), so a hook and a
+wrapper script speak one language. `3` is the only addition, and it is
+deliberately not 0/1/2 so that the ways a script dies by accident — `1` from
+`set -e`, `126` from a lost `+x` bit, `127` from a typo — can never be mistaken
+for an opinion. **Every failure mode defers**: a broken hook costs you the
+override, never the operation, because holt is in the path of every pane open
+and a stale store path must not be able to close that door. It costs you the
+override *loudly* — a policy that silently stopped applying is worse than one
+that never existed, because the operator still believes it is in force.
+
+The situation arrives twice, so a seam can be a program with a JSON parser or
+three lines of shell without either having to become the other:
+
+- **stdin** — a JSON object, for predicates. (Action seams inherit stdin; they
+  may be interactive.)
+- **environment** — `HOLT_HOOK`, plus `HOLT_<FIELD>` for every §5.2 variable:
+  `HOLT_PATH`, `HOLT_MAIN`, `HOLT_REPO`, `HOLT_NAME`, `HOLT_BRANCH`,
+  `HOLT_AGENT`, `HOLT_PARENT`, `HOLT_CWD`. One collision to know about:
+  `HOLT_BASE` is already the lane base *directory*, so the repo's default
+  branch is **`HOLT_BASE_BRANCH`**.
+
+A predicate may print a JSON object on stdout to enrich its yes/no — a `landed`
+hook naming its own rule, so a reap stays attributable in `--json` (`via:
+"release-train"` beats `via: "hook"` when you are working out why a branch went
+away). Prose on stdout is not an error; the exit code already answered.
+
+Action seams get the terminal, but their **stdout is redirected to stderr**.
+Both are the same tty for an interactive hook, so a TUI still draws — and holt's
+stdout carries data under a contract other programs parse (§2.3), which a hook
+must not be able to break.
+
+```toml
+# ~/.config/holt/config.toml
+[hooks]
+resume   = "/nix/store/…-holt-on-resume"                  # a bare program
+landed   = ["/nix/store/…-holt-landed", "--release-train"] # or an argv
+```
+
+#### Shipped seams
+
+| Seam | Kind | Answers | Built-in |
+|---|---|---|---|
+| `agent` | predicate | which client a new lane opens in | the `agent` key, then `HOLT_AGENT`, then claude |
+| `landed` | predicate | has this branch's work reached the default branch? | the §3 ladder |
+| `preserve` | predicate | does this dirty tree need a wip commit before removal? | yes, unless it's untracked scratch on a landed branch |
+| `resume` | action | reopen this lane's session | chdir + exec the client's resume |
+| `open` | action | open a session in a freshly-created lane | chdir + exec the client |
+
+Two things are **not** seams and will not become them, because they are about
+holt not sawing off the branch it is sitting on rather than about policy: the
+checkout holt is being **run from** is never swept, and a **stray** is never
+swept, only reported.
+
+**`reapable` is deliberately absent.** It is the obvious next seam and it was
+built, tested and pulled back out: reapability reaches through *three* of holt's
+inherited opinions at once — occupancy, dirtiness, landedness — and a seam over
+the lot of them is a bigger commitment than the five above, because a `yes` on a
+dirty tree is the one answer that destroys work. It waits for the architecture
+those three settle into. Overriding `landed` already moves the rung that matters
+most; the rest stays holt's until the shape is known.
+
+#### Still hardcoded — the roadmap
+
+The seams above are the ones with a consumer waiting. These are the rest of
+holt's inherited opinions, in the order they are worth prising out:
+
+| Fact | Where | Shape |
+|---|---|---|
+| the `worktree-` branch prefix | `create.go`, `new.go`, `park.go` | a `branch` seam, or a config template |
+| how each client is started / resumed | `agent.go` | adapter TOML (§5.3) — already specced |
+| `gh`, and GitHub's argv | `landed.go` | forge adapter (§5.4) — already specced |
+| what makes a lane **reapable** | `sweep.go` | a `reapable` seam — see above; blocked on the three opinions it spans |
+| occupancy = `lsof` cwd prefix | `sweep.go` | a provider list (§9) |
+| `$BASE/<bucket>/<name>` layout | `new.go` | a `path` seam |
+| the `wip:` commit message and park semantics | `park.go`, `remove.go` | a `park` seam |
+| Claude's trust-file seeding | `agent.go` | `post-create` (§6.1) |
+| transcript-directory layout | `agent.go` | adapter `has_chat` (§5.3) |
+| the two-word random name | `new.go` | a `name` seam |
+
+The test for whether one belongs here: would a *reasonable* machine answer it
+differently? "Never delete a branch that isn't landed" is holt's product and
+stays a floor. "Landed means merged into `main`" is a guess, and guesses get
+seams.
 
 ---
 

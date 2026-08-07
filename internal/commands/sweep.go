@@ -35,6 +35,11 @@ type SweepResult struct {
 // failure direction is always "a branch lingers": a branch that outlives its
 // usefulness is a nuisance, a branch reaped with work still on it is the thing
 // holt exists to never do.
+//
+// What makes a lane reapable is not yet a policy seam (SPEC.md §6.5). It is
+// the one decision here that reaches through THREE of holt's inherited
+// opinions at once — occupancy, dirtiness and landedness — and a seam over the
+// lot of them has to wait for the shape those settle into.
 func (e *Env) reapSweep(mode sweepMode) SweepResult {
 	var res SweepResult
 	occupied, occKnown := occupancy()
@@ -44,7 +49,7 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 		// parked-only rather than guess.
 		mode = sweepParked
 		res.Degraded = true
-		e.Warn("couldn't determine which checkouts are occupied — swept parked lanes only")
+		e.Warn("no lsof — can't tell which checkouts have a pane open, so only PARKED lanes were swept")
 	}
 	selfTop, _ := gitx.Toplevel(e.Cwd)
 
