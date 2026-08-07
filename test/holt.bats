@@ -1445,3 +1445,147 @@ agent = \"$hook\""
   [ "$status" -eq 0 ]
   [ "$output" = codex ] || fail "the agent hook lost to the static key: $output"
 }
+
+# ── watch ────────────────────────────────────────────────────────────────────
+#
+# `holt watch --json` runs forever, so the suite's usual `run` — which waits
+# for the process to exit before making $output/$status available — can't
+# drive it. These helpers stand in: start it in the background, poll its
+# output file until at least N lines have landed or a timeout passes, then
+# always stop it in `teardown` — including when an assertion fails partway,
+# so one red test never leaves a `holt watch` running loose past the suite.
+#
+# WATCH_TIMEOUT is generous on purpose: fsnotify's underlying primitive
+# (kqueue on macOS, inotify on Linux) is normally sub-second, but a loaded CI
+# runner is not the machine that number was measured on, and a slow pass
+# beats a flaky one. watch_wait_lines returns the moment the line count is
+# met, so this only costs real time on a genuine failure.
+WATCH_TIMEOUT=8
+
+watch_start() { # watch_start [more args...] — background `holt watch --json`; sets $WATCH_OUT
+  WATCH_OUT="$TMP/watch-$BATS_TEST_NUMBER.out"
+  : >"$WATCH_OUT"
+  "$WT" watch --json "$@" >"$WATCH_OUT" 2>"$TMP/watch-$BATS_TEST_NUMBER.err" &
+  WATCH_PID="$!"
+}
+
+watch_wait_lines() { # watch_wait_lines <n> <timeout-seconds> — block until $WATCH_OUT has n lines
+  local n="$1" deadline=$((SECONDS + $2))
+  while [ "$(wc -l <"$WATCH_OUT" 2>/dev/null | tr -d ' ')" -lt "$n" ]; do
+    [ "$SECONDS" -lt "$deadline" ] || return 1
+    sleep 0.05
+  done
+  return 0
+}
+
+watch_line() { sed -n "${1}p" "$WATCH_OUT"; }                                    # watch_line <n>
+watch_kind() { watch_line "$1" | sed -n 's/.*"kind":"\([^"]*\)".*/\1/p'; }        # watch_kind <n>
+
+# bats allows exactly one teardown per file; every other test in this suite
+# needs nothing beyond $TMP going away with it, so this only ever has watch's
+# background process to reap.
+teardown() {
+  if [ -n "${WATCH_PID:-}" ]; then
+    kill "$WATCH_PID" 2>/dev/null
+    wait "$WATCH_PID" 2>/dev/null
+    WATCH_PID=""
+  fi
+}
+
+@test "watch: an unknown flag refuses instead of starting a stream" {
+  run "$WT" watch --bogus
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"unknown flag"* ]]
+}
+
+@test "watch: hello carries holt+schema+capabilities, then syncs the existing lane, then ready" {
+  local main; main="$(mkrepo alpha)"; mkwt "$main" sparkle >/dev/null
+  cd "$TMP"; watch_start
+  watch_wait_lines 3 "$WATCH_TIMEOUT" || fail "stream never reached 3 lines: $(cat "$WATCH_OUT")"
+
+  [ "$(watch_kind 1)" = hello ] || fail "line 1 wasn't hello: $(watch_line 1)"
+  [[ "$(watch_line 1)" == *'"schema":1'* ]] || fail "hello carries no schema: $(watch_line 1)"
+  [[ "$(watch_line 1)" == *'"capabilities":["registry"]'* ]] \
+    || fail "hello carries no capabilities: $(watch_line 1)"
+
+  [ "$(watch_kind 2)" = sync ] || fail "line 2 wasn't sync: $(watch_line 2)"
+  [[ "$(watch_line 2)" == *'"source":"registry"'* ]] || fail "sync names no source: $(watch_line 2)"
+  [[ "$(watch_line 2)" == *'"name":"sparkle"'* ]] \
+    || fail "sync's lane isn't the --json envelope's shape: $(watch_line 2)"
+
+  [ "$(watch_kind 3)" = ready ] || fail "line 3 wasn't ready: $(watch_line 3)"
+}
+
+@test "watch: an empty registry goes straight from hello to ready — no phantom lane" {
+  cd "$TMP"; watch_start
+  watch_wait_lines 2 "$WATCH_TIMEOUT" || fail "hello/ready never landed: $(cat "$WATCH_OUT")"
+  [ "$(watch_kind 1)" = hello ]
+  [ "$(watch_kind 2)" = ready ]
+  sleep 0.5   # give a false-positive sync every chance to show up before asserting its absence
+  [ "$(wc -l <"$WATCH_OUT" | tr -d ' ')" -eq 2 ] \
+    || fail "an empty registry produced a line beyond hello/ready: $(cat "$WATCH_OUT")"
+}
+
+@test "watch: a new lane appears as created" {
+  local main; main="$(mkrepo alpha)"
+  cd "$TMP"; watch_start
+  watch_wait_lines 2 "$WATCH_TIMEOUT" || fail "hello/ready never landed"
+
+  mkwt "$main" fresh >/dev/null
+
+  watch_wait_lines 3 "$WATCH_TIMEOUT" || fail "the new lane never reached the stream: $(cat "$WATCH_OUT")"
+  [ "$(watch_kind 3)" = created ] || fail "line 3 wasn't created: $(watch_line 3)"
+  [[ "$(watch_line 3)" == *'"name":"fresh"'* ]]
+  [[ "$(watch_line 3)" == *'"state":"live"'* ]]
+}
+
+@test "watch: a pane closing on an unlanded branch appears as parked" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" closing)"
+  cd "$TMP"; watch_start
+  watch_wait_lines 3 "$WATCH_TIMEOUT" || fail "sync of the pre-existing lane never landed"
+
+  hook_remove "$dir" 2>/dev/null
+
+  watch_wait_lines 4 "$WATCH_TIMEOUT" || fail "the park never reached the stream: $(cat "$WATCH_OUT")"
+  [ "$(watch_kind 4)" = parked ] || fail "line 4 wasn't parked: $(watch_line 4)"
+  [[ "$(watch_line 4)" == *'"state":"parked"'* ]]
+}
+
+@test "watch: holt <name> on a parked lane appears as resumed" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" comeback)"
+  hook_remove "$dir" 2>/dev/null      # park it before the stream even starts
+  cd "$TMP"; watch_start
+  watch_wait_lines 3 "$WATCH_TIMEOUT" || fail "sync of the already-parked lane never landed"
+  [ "$(watch_kind 2)" = sync ]
+  [[ "$(watch_line 2)" == *'"state":"parked"'* ]] || fail "the baseline wasn't parked: $(watch_line 2)"
+
+  wt_run comeback
+  [ "$status" -eq 0 ] || fail "resume itself failed: $output"
+
+  watch_wait_lines 4 "$WATCH_TIMEOUT" || fail "the resume never reached the stream: $(cat "$WATCH_OUT")"
+  [ "$(watch_kind 4)" = resumed ] || fail "line 4 wasn't resumed: $(watch_line 4)"
+  [[ "$(watch_line 4)" == *'"state":"live"'* ]]
+}
+
+@test "watch: a landed branch swept by reap appears as reaped" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" done)"
+  cd "$TMP"; watch_start
+  watch_wait_lines 3 "$WATCH_TIMEOUT" || fail "sync of the pre-existing lane never landed"
+
+  git -C "$main" merge -q --no-edit worktree-done
+  wt_run reap
+  [ "$status" -eq 0 ] || fail "reap itself failed: $output"
+
+  watch_wait_lines 4 "$WATCH_TIMEOUT" || fail "the reap never reached the stream: $(cat "$WATCH_OUT")"
+  [ "$(watch_kind 4)" = reaped ] || fail "line 4 wasn't reaped: $(watch_line 4)"
+  [[ "$(watch_line 4)" == *'"name":"done"'* ]]
+}
+
+@test "watch: stdout is NDJSON only — every line stands alone as one JSON object" {
+  local main; main="$(mkrepo alpha)"; mkwt "$main" clean >/dev/null
+  cd "$TMP"; watch_start
+  watch_wait_lines 3 "$WATCH_TIMEOUT" || fail "stream never settled"
+  while IFS= read -r line; do
+    [[ "$line" == \{*\} ]] || fail "a stdout line wasn't a bare JSON object: $line"
+  done <"$WATCH_OUT"
+}

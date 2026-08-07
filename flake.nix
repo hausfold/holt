@@ -21,9 +21,9 @@
           pname = "holt";
           inherit version;
           src = ./.;
-          # holt is dependency-free through 0.1 — see go.mod. When that stops
-          # being true this becomes a real hash.
-          vendorHash = null;
+          # holt picked up its first dependency (fsnotify, for `holt watch`) —
+          # see go.mod.
+          vendorHash = "sha256-SAZpfeTKHC/OEgMUWScXYwx7RY6LrSHkHXLg4vArX+g=";
           ldflags = [ "-X github.com/nebelhaus/holt/internal/commands.Version=${version}" ];
 
           # The suite is black-box: it drives the built binary with shim gh/lsof

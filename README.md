@@ -52,11 +52,12 @@ extracted from the
 [nebelhaus workshop](https://github.com/nebelhaus/workshop) incubator once it
 passed that implementation's whole test suite.
 
-**All 102 acceptance tests pass** (77 ported from that bash predecessor, two for
-the bare-PATH hook environment, 14 for the policy seams, and nine for occupancy
-leases). They are black-box, carried over from the bash implementation — they
-drive the binary with shim `gh`/`lsof` on `PATH` and never touch a real repo, so
-they describe the contract rather than the implementation:
+**All 110 acceptance tests pass** (77 ported from that bash predecessor, two for
+the bare-PATH hook environment, 14 for the policy seams, nine for occupancy
+leases, and eight for `watch`). They are black-box, carried over from the bash
+implementation — they drive the binary with shim `gh`/`lsof` on `PATH` and
+never touch a real repo, so they describe the contract rather than the
+implementation:
 
 ```
 make test
@@ -89,6 +90,7 @@ holt park [label]       set the working tree aside as a wip: commit on this bran
 holt unpark             put the last parked commit's changes back, uncommitted
 holt reap               sweep every LANDED lane that nobody is standing in
 holt heartbeat [path]   hold the occupancy lease on a lane, so reap spares it
+holt watch --json       lifecycle events on stdout, one NDJSON object per line
 holt reship [name]      push a branch that outran its merged PR, open the follow-up
 holt hook create        [hook] open a lane — JSON on stdin, path on stdout
 holt hook remove        [hook] retire one without losing work — JSON on stdin
@@ -120,6 +122,55 @@ unleased lane does count as free.
 A lease is a client reporting on *itself*. The complementary case — a machine
 that can enumerate everyone's sessions better than `lsof` can, and wants to
 replace it outright — is a policy seam, and it's the next one to land.
+
+## `holt watch` — embedding holt in something else
+
+holt stays a binary; there is no daemon, no port, no socket to authenticate.
+An embedder — an agent UI, a web server holding one session per lane — shells
+out, same as a human at a terminal, and `watch` is the piece that makes that
+enough: a long-running process emitting one NDJSON object per line on stdout
+for as long as it runs.
+
+```console
+$ holt watch --json
+{"kind":"hello","seq":0,"holt":"0.1.0","schema":1,"capabilities":["registry"]}
+{"kind":"sync","seq":1,"ts":"2026-08-07T02:11:04Z","source":"registry","lane":{"name":"sparkle", …}}
+{"kind":"ready","seq":2,"ts":"2026-08-07T02:11:04Z"}
+{"kind":"created","seq":3,"ts":"2026-08-07T02:12:40Z","source":"registry","lane":{"name":"fresh", …}}
+```
+
+Every line after `hello` is one `kind`, at most one `lane`, and a `seq` that
+counts the whole stream — hello included — so a consumer fanning this out over
+its own transport (websockets, for a server holding many sessions on one
+`watch`) can tell whether it dropped a line, without holt knowing anything
+about that transport. `lane` is the exact shape `--json` uses for one entry in
+`lanes[]` — one schema, whether you're reading a snapshot or a stream.
+
+`sync` reports every lane already alive when the stream opened (your
+baseline), then `ready` marks the end of that burst — everything after is a
+live change: `created`, `parked`, `resumed`, `reaped`, or a catch-all
+`changed` for anything else about a lane that differs from what this stream
+last said (agent, dirty, landed, post-merge-ahead, last commit).
+
+Most of that is a registry mutation — `created`/`resumed`/`reaped` all are —
+so fsnotify on the registry file catches them instantly. `parked` usually
+isn't: `holt park` only commits, and the pane actually closing (`git worktree
+remove`) touches the registry only when the branch is already landed. An
+unlanded pane closing changes nothing but the filesystem, which the registry
+watch can't see — so `watch` also re-scans every few seconds as a backstop,
+the same cost as one `holt list`.
+
+**What it doesn't cover, on purpose:** `landed` and `post_merge_ahead` change
+at the *forge*, with nothing local — not the registry, not the filesystem —
+to fire on. Surfacing those here would mean polling `gh` on its own timer for
+as long as `watch` runs, and the one process this is built for holds leases
+across many lanes and many repos at once, which turns a timer into a
+rate-limit generator. So v1 emits registry- and filesystem-derived events
+only; a consumer that cares about landedness polls `holt --json`, same as
+today. `source` is on every event for exactly this reason — a forge-derived
+family is additive later (`source: "forge"`, new `kind` values) without a
+schema bump, and `capabilities` on `hello` is how a consumer will be able to
+tell which families a given `holt` can ever send.
 
 ## Default agent
 

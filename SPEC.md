@@ -956,7 +956,7 @@ and belong in holt 0.1, not just in nebelhaus:
 | **0.1** | Everything in §2 (contracts), §3 (landed, incl. patch-equivalence), §4 (slug identity), §5 (adapters), §10 (cutover). Commands: `list`, `new`, `child`, `spawn`, `resume`, `park`, `unpark`, `reap`, `reship`, `hook create/remove`, `doctor`. | The ported acceptance suite passes unmodified against `holt`; every nebelhaus caller is repointed at it (done, nebelhaus#201/#245) with no bash predecessor left to fall back to. |
 | **0.2** | §6 bootstrap (reflink, ports, secrets, trust), §7 `overlap`. | `holt doctor --write` produces a usable `.holt.toml` on a stranger's Node repo; `overlap` sees parked branches. |
 | **0.3** | §8 `batch` with queue bisection; `bench try-batch` becomes a wrapper. | It names a culprit *pair* on a real red queue. |
-| **0.4** | §14 SDKs: `holt watch --json`, then TS, then Python/Swift, plus §14.4's `holt docs agent` + adapter `instructions_file` + `bootstrap.agent_instructions`. holt stays a binary — SDKs shell out. | A third party ships an agent UI whose only worktree logic is `holt` — and whose spawned agent knows `holt child`/`holt park` without a hand-written CLAUDE.md stanza. |
+| **0.4** | §14 SDKs: `holt watch --json`, then TS, then Python/Swift, plus §14.5's `holt docs agent` + adapter `instructions_file` + `bootstrap.agent_instructions`. holt stays a binary — SDKs shell out. | A third party ships an agent UI whose only worktree logic is `holt` — and whose spawned agent knows `holt child`/`holt park` without a hand-written CLAUDE.md stanza. |
 | later | Runtime backends, GUI-embeddable library split, §14.3 step 5 (remote transport). | — |
 
 ---
@@ -1053,11 +1053,26 @@ item to the thing the SDKs are built on.
 
 1. **Occupancy provider seam + lease/heartbeat** (§9.1) — *shipped*. Unblocks the
    SDKs and closes the container/Linux portability hole at the same time.
-2. `holt watch --json` — fsnotify on the registry, NDJSON out. This is `onOpen`.
+2. **`holt watch --json`** — *shipped*. fsnotify on the registry, NDJSON out on
+   stdout: a `hello` header (`holt`, `schema`, `capabilities`), then `sync` for
+   every lane already alive, `ready`, then `created` / `parked` / `resumed` /
+   `reaped` / `changed` as things change. This is `onOpen`.
+   `created`/`resumed`/`reaped` are registry mutations, caught instantly.
+   `parked` mostly isn't — an unlanded pane closing only touches the
+   filesystem (`park.go` commits; the WorktreeRemove hook drops the registry
+   row only when landed) — so `watch` also re-scans on a plain local timer
+   (3s) as a backstop; still no forge call beyond the existing 120s disk
+   cache. `landed` / `post_merge_ahead` are the one family deliberately NOT
+   in v1 — they change at the forge, and folding a `gh` poll into a stream
+   meant to run for hours, across however many lanes and repos one embedder
+   holds leases on, is a rate-limit generator waiting to happen (see §14.4's
+   fork). A consumer that wants landedness still polls `--json`. `source` on
+   every event and `capabilities` on `hello` exist so a forge-derived family
+   can be added later without a schema bump — see §14.4.
 3. **TS SDK** — subprocess + the two above. Ship it and let it find what the
    schema is missing, before three more languages pin the gaps.
 4. `holt docs agent` + the adapter `instructions_file` field + the
-   `bootstrap.agent_instructions` step (§14.4) — ship alongside the TS SDK, so
+   `bootstrap.agent_instructions` step (§14.5) — ship alongside the TS SDK, so
    "an embedder's only worktree logic is holt" (§12's 0.4 exit bar) is true of
    the *agent's* knowledge too, not just the UI's.
 5. Python, Swift — mechanical once TS has proven the wire schema.
@@ -1065,7 +1080,45 @@ item to the thing the SDKs are built on.
    the machine-local-rows problem above need solving, and by then a server knows
    which client each row came from, which is most of the answer.
 
-### 14.4 Teaching the agent holt exists — embedders with no CLAUDE.md
+### 14.4 Why `watch` doesn't poll the forge, and the schema headroom that decision bought
+
+The design question step 2 actually had to answer: fsnotify on the registry
+gives `created` / `resumed` / `reaped` for free — those are registry
+mutations, so the file changing is a complete signal. `parked` turned out to
+need its own backstop (a plain local re-scan timer, still v1's "registry and
+filesystem only" scope — see the note on step 2 above) because the common
+case, an unlanded pane closing, never touches the registry at all. `landed`
+and `post_merge_ahead` are the harder gap: they change at the forge, and
+nothing LOCAL — registry or filesystem — fires when a PR merges. Three shapes
+were on the table for that one —
+
+- **(a) registry-derived only.** A consumer that cares about landedness polls
+  `holt --json` itself, at whatever cadence it can afford.
+- **(b) a forge poll on a TTL, folded into the same stream.**
+- **(c) both, with an event `kind` distinguishing which produced it.**
+
+**(a).** The first real consumer (§14, the web-server case) is ONE long-running
+`watch` per box, holding leases across however many lanes and repos it's
+serving. A poll baked into `watch` itself — option (b), or the half of (c) that
+does the polling — multiplies by every one of those for as long as the process
+runs, which is indefinitely. That turns a lifecycle stream into a background
+`gh` rate-limit generator, silently, on a schedule nobody chose per-repo. (a)
+has a real cost — landedness is stale between polls — but it's a cost the
+CONSUMER chooses and can tune, rather than one `watch` imposes on every forge
+it happens to be watching.
+
+The schema is built so (b)/(c) are additive whenever they're worth it, not
+foreclosed: every event carries `source` (`"registry"` today, `"forge"`
+reserved), and `hello` carries `capabilities` so an SDK can ask "will this
+stream ever emit a forge-derived event?" instead of guessing from which kinds
+happen to have shown up. Adding a `landed` kind with `source: "forge"` later
+costs zero consumers a rewrite. That headroom — a couple of fields that do
+nothing in v1 — is deliberate: the whole point of freezing a wire schema this
+early (§14.1) is not needing a v2 of it for a long time, and the fields that
+save that are far cheaper to ship now, unused, than to retrofit once three
+languages have generated types against their absence.
+
+### 14.5 Teaching the agent holt exists — embedders with no CLAUDE.md
 
 §14.1–14.3 make holt *reachable* from any language. They say nothing about
 whether the **agent** an embedder spawns knows to use it. On Julien's machine

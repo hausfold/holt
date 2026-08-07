@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/nebelhaus/holt/internal/gitx"
+	"github.com/nebelhaus/holt/internal/occupancy"
 )
 
 // The --json envelope is a frozen public contract (SPEC.md §2.2): `bench`, the
@@ -66,56 +67,68 @@ func (e *Env) listJSON(rows []listRow) error {
 		Warnings: []string{},
 	}
 	for _, r := range rows {
-		entry := r.Entry
-		slug, err := gitx.RemoteSlug(entry.Main)
-		if err != nil {
-			slug = "local/" + filepath.Base(entry.Main)
-		}
-		w := jsonLane{
-			Name:           r.Name,
-			Repo:           slug,
-			Main:           entry.Main,
-			Branch:         entry.Branch,
-			Path:           entry.Path,
-			Agent:          r.Agent,
-			State:          string(entry.State),
-			Last:           r.Last,
-			PostMergeAhead: jsonPostMerge{Commits: r.Ahead, PR: r.AheadPR},
-		}
-		if row, ok := e.Reg.Find(entry.Path); ok {
-			w.Parent = row.Parent
-		}
-		// true / false / null, and the three are genuinely different answers.
-		// A lease asserts presence even when nothing on this machine can vouch
-		// for absence, so "held" outranks "unknowable" — but the reverse never
-		// happens, and an unvouched miss stays null rather than becoming false.
-		switch {
-		case occ.Occupied(entry.Path):
-			held := true
-			w.Occupied = &held
-		case occ.Known():
-			held := false
-			w.Occupied = &held
-		}
-		if entry.State == Live {
-			dirty := gitx.Dirty(entry.Path)
-			w.Dirty = &dirty
-		}
-		v := e.Landed(entry.Main, entry.Branch)
-		w.Landed = jsonLanded{Verdict: "no", Via: v.Via, Confidence: v.Confidence}
-		switch {
-		case v.Landed:
-			w.Landed.Verdict = "yes"
-		case v.Via == "merge-tree-empty":
-			// Advisory only: this cannot tell a squash merge from a branch that
-			// never did anything, so `reap` ignores it without --contained.
-			w.Landed.Verdict = "contained"
-		}
-		out.Lanes = append(out.Lanes, w)
+		out.Lanes = append(out.Lanes, e.toJSONLane(r, occ))
 	}
 	out.Warnings = append(out.Warnings, e.Warnings...)
 
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(out)
+}
+
+// toJSONLane builds one lane's --json payload.
+//
+// `holt watch` (SPEC.md §14.3 step 2) calls this too, and that reuse is load-
+// bearing, not incidental: the constraint on that command is that event
+// payloads carry this exact shape, not a parallel one an SDK would have to
+// learn twice. occ is threaded in rather than recomputed here because a sweep
+// scans it once and shares it across every lane — watch does the same on
+// every rescan.
+func (e *Env) toJSONLane(r listRow, occ occupancy.Report) jsonLane {
+	entry := r.Entry
+	slug, err := gitx.RemoteSlug(entry.Main)
+	if err != nil {
+		slug = "local/" + filepath.Base(entry.Main)
+	}
+	w := jsonLane{
+		Name:           r.Name,
+		Repo:           slug,
+		Main:           entry.Main,
+		Branch:         entry.Branch,
+		Path:           entry.Path,
+		Agent:          r.Agent,
+		State:          string(entry.State),
+		Last:           r.Last,
+		PostMergeAhead: jsonPostMerge{Commits: r.Ahead, PR: r.AheadPR},
+	}
+	if row, ok := e.Reg.Find(entry.Path); ok {
+		w.Parent = row.Parent
+	}
+	// true / false / null, and the three are genuinely different answers.
+	// A lease asserts presence even when nothing on this machine can vouch
+	// for absence, so "held" outranks "unknowable" — but the reverse never
+	// happens, and an unvouched miss stays null rather than becoming false.
+	switch {
+	case occ.Occupied(entry.Path):
+		held := true
+		w.Occupied = &held
+	case occ.Known():
+		held := false
+		w.Occupied = &held
+	}
+	if entry.State == Live {
+		dirty := gitx.Dirty(entry.Path)
+		w.Dirty = &dirty
+	}
+	v := e.Landed(entry.Main, entry.Branch)
+	w.Landed = jsonLanded{Verdict: "no", Via: v.Via, Confidence: v.Confidence}
+	switch {
+	case v.Landed:
+		w.Landed.Verdict = "yes"
+	case v.Via == "merge-tree-empty":
+		// Advisory only: this cannot tell a squash merge from a branch that
+		// never did anything, so `reap` ignores it without --contained.
+		w.Landed.Verdict = "contained"
+	}
+	return w
 }
