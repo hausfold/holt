@@ -789,7 +789,7 @@ removed on completion, including on failure (behind `--keep` for debugging).
 
 | Gap | Today | 0.1 |
 |---|---|---|
-| **Occupancy** | one `lsof -d cwd` dump (~0.2 s), macOS/BSD-shaped, and unavailable in most containers | keep `lsof` as one *provider*; add a **heartbeat**: each `holt`-spawned client writes `$HOLT_STATE/live/<hash>.pid` with pid + mtime, refreshed by the wrapper; stale after 90 s. `occupied` becomes `true`/`false`/`null`, and `null` still means *keep*. On Linux, `/proc/*/cwd` is a third provider. |
+| **Occupancy** | ~~one `lsof -d cwd` dump~~ — **done**, see §9.1 | `lsof` is one provider among several; leases cover the rest. Still open: `/proc/*/cwd` as a third provider on Linux. |
 | **Forge** | `gh` hardcoded, GitHub-shaped | §5.4 forge adapters; git-only merge-base fallback when none is present |
 | **Submodules** | not initialised in a new worktree — `git worktree add` doesn't recurse | detect `.gitmodules`; `bootstrap.submodules = "recursive" \| "none"`; default `none` with a `doctor` warning, because recursing can be minutes |
 | **LFS** | pointers, not files, unless a smudge runs | detect `.gitattributes` filter=lfs; offer `git lfs pull` as a bootstrap step; warn loudly rather than silently handing over pointer files |
@@ -798,6 +798,63 @@ removed on completion, including on failure (behind `--keep` for debugging).
 | **`python3` dependency** | `hook_field` shells out to python3 to parse hook JSON | gone — Go has `encoding/json` |
 | **Registry race** | whole-table temp-file rewrite | per-row files + `flock` (§2.1) |
 | **Windows** | not attempted | out of scope for 0.1; state it. Path handling should not gratuitously preclude it. |
+
+### 9.1 Occupancy is a provider set — and only some providers may say "empty"
+
+Shipped. `internal/occupancy` folds N providers into one `Report`, under a single
+rule that is worth stating as an invariant in its own right:
+
+> **A provider may always assert PRESENCE. Only a provider that can enumerate
+> every possible occupant may assert ABSENCE.**
+
+`lsof` dumps every process's cwd, so a path missing from that dump is real
+evidence nobody is there — it vouches for absence. A **lease** is the opposite:
+it is written only by clients that opted in, so "no lease" means "nobody told
+me", never "nobody is here". A lease can therefore save a checkout from `reap`
+and can never condemn one. Reading an unleased checkout as free would reap the
+worktree of anyone who simply `cd`'d in without telling holt — invariant 2,
+broken by the tool whose entire purpose is invariant 2.
+
+`Report.Known()` is true only when *some* provider vouched for absence, and
+unknown still resolves to **keep**, exactly as when `lsof` was the only answer.
+
+**The lease.** `$HOLT_STATE/live/<sha256(path)[:12]>`, containing `pid<TAB>path`.
+`$HOLT_STATE` is `$XDG_STATE_HOME/holt` (default `~/.local/state/holt`) — pointedly
+*not* `$BASE`, which is globbed for checkouts, and pointedly not where the
+registry lives, because no state-dir knob may be able to relocate the file
+cutover day has to read (§10).
+
+```
+holt heartbeat [path]            take or refresh; held by the CALLING process
+holt heartbeat [path] --pid N    held by pid N instead (0 = no watchable process)
+holt heartbeat [path] --release  drop it
+```
+
+A named pid settles liveness outright, in both directions: the kernel is a
+better witness than any timestamp, it answers the instant a client is killed
+rather than TTL-later, and a client holding a lease across an eight-hour session
+never has to prove it is still there. The 90 s TTL exists only for `--pid 0` —
+a holder on the far side of a container or a socket, where freshness is the only
+evidence on offer. Dead leases are unlinked on sight.
+
+The default pid is the **calling** process, not holt's: an embedder exec's holt,
+holt exits immediately, and a lease watching an exited process is a lease that
+was never taken.
+
+**`HOLT_OCCUPANCY=lease`** is the one deployment entitled to let leases answer
+for absence too — an orchestrator that owns every session it serves, where a
+lane nobody leased genuinely is a lane nobody is in. Opt-in by explicit env
+var, never inferred from (say) the absence of `lsof`.
+
+**How this relates to §6.5's seams.** §6.5 names "a machine that can enumerate
+its own panes better than `lsof` can" as a motivating case, so an `occupied`
+hook is clearly coming. These are not two competing inversions: a hook is **one
+more `occupancy.Provider`** — the one that shells out — and it folds through
+`Collect` under exactly the rule above. Which means the hook contract has to
+answer *two* questions, not one: "is this lane held?" and "can you see every
+possible occupant?". A seam that answers only the first is positive-only, like a
+lease. Getting that second answer into the protocol is the design work; the
+provider set is already the right shape to receive it.
 
 ---
 
@@ -889,7 +946,8 @@ table: general ⇒ port it; rice-specific ⇒ it belongs in the consumer.
 | **0.1** | Everything in §2 (contracts), §3 (landed, incl. patch-equivalence), §4 (slug identity), §5 (adapters), §10 (cutover). Commands: `list`, `new`, `child`, `spawn`, `resume`, `park`, `unpark`, `reap`, `reship`, `hook create/remove`, `doctor`. | `wt.bats` passes unmodified against `holt`; the nebelhaus option flips; a week of dual-running agrees. |
 | **0.2** | §6 bootstrap (reflink, ports, secrets, trust), §7 `overlap`. | `holt doctor --write` produces a usable `.holt.toml` on a stranger's Node repo; `overlap` sees parked branches. |
 | **0.3** | §8 `batch` with queue bisection; `bench try-batch` becomes a wrapper. | It names a culprit *pair* on a real red queue. |
-| later | Runtime backends, `watch`, GUI-embeddable library split. | — |
+| **0.4** | §14 SDKs: `holt watch --json`, then TS, then Python/Swift. holt stays a binary — SDKs shell out. | A third party ships an agent UI whose only worktree logic is `holt`. |
+| later | Runtime backends, GUI-embeddable library split, §14.3 step 5 (remote transport). | — |
 
 ---
 
@@ -897,3 +955,98 @@ table: general ⇒ port it; rice-specific ⇒ it belongs in the consumer.
 
 None blocking. The one thing to get right in the README's opening paragraph is the
 positioning against first-party worktree support — see §0's "moat, stated plainly".
+
+---
+
+## 14. Embedding: SDKs, and why the registry does not go on a URL
+
+The thesis (§0) is that holt is a *substrate* — something other people's UIs and
+orchestrators are built on. That means SDKs in TS, Python, Swift and whatever
+else, and it settles a question that looks unrelated: whether the registry can
+live at a URL instead of a file.
+
+**It cannot, and it shouldn't.** The question was "can `$HOLT_REGISTRY` be an
+https:// address", and the answer is that a URL should address *holt*, not the
+registry file. Object storage holds a blob. It cannot run an occupancy provider,
+cannot emit a lifecycle event, and cannot enforce a single one of the three
+invariants. SDKs written against a shared blob would each reimplement park,
+landed-detection and reap — four copies of the logic that *is* the product, and
+four copies of its bugs. The blob path also fails on its own terms:
+
+| | Why a bare blob breaks |
+|---|---|
+| **Machine-local rows** | `path`/`main`/`parent` are absolute paths on one machine. Machine B's `pruneRegistry` runs `branchAlive` against a `main` that does not exist locally, gets false, and deletes machine A's rows. Invariant 1, violated silently. |
+| **No `flock` over HTTP** | Mutation is read-modify-write. Remote needs compare-and-swap (`If-Match`, `ifGenerationMatch`, non-fast-forward reject); a plain `PUT` loses an update every time two panes close at once — precisely the race the Go rewrite exists to kill (§2.1). |
+| **Hot path** | The statusline shells `holt list --json` on every bar refresh and both hooks touch it on pane open/close. A network RTT per redraw is not a cost, it's a defect. |
+| **Offline** | Invariant 2 says uncertainty resolves to *keep*. Pane close must not fail because wifi dropped. |
+
+Note also that a remote registry wants the **v1 one-object-per-row layout**
+(§2.1), not the TSV: one object per checkout gives per-key CAS for free and
+retires whole-table lost-update entirely. Building it on the TSV would mean
+inventing a distributed lock for a format that is already scheduled for
+replacement. So remote is a post-v1 question, gated behind the same
+`holt migrate`.
+
+### 14.1 The shape SDKs actually take
+
+**holt stays a binary.** SDKs shell out; there is no daemon, no port, no auth,
+no supervisor, and no socket semantics to pin before a single consumer exists.
+Adding `holt serve` later is purely additive, because the protocol is the same
+either way.
+
+```
+holt-core (Go)        invariants, git, registry. Knows nothing about lsof or zellij.
+  providers           occupancy: lsof | leases | /proc     forge: gh | glab
+                      adapter: claude | codex | opencode
+  transports          exec + --json  ·  watch/NDJSON  ·  (later) unix socket · HTTP
+SDKs (ts/py/swift)    thin. Speak the wire schema. Hold a lease. That is all.
+```
+
+A connection string selects a **transport**, not a file format — `holt("<path
+or url>")` means "exec the local binary" or "speak to a holt over HTTP", with
+one schema behind both, so an SDK written against local works remote unchanged.
+
+The frozen contract is therefore **§2.2's `--json` envelope**, not the registry
+file. Generate SDK types from it. The single most important thing to carry into
+every language is the nullable discipline: `occupied`/`dirty`/`pr` are
+three-state, and every consumer bug in the shell statusline came from collapsing
+`null` into `false`. TS and Swift optionals make that easy to get right; do not
+let a generator flatten them.
+
+### 14.2 Callbacks invert into leases
+
+The obvious SDK shape has holt calling back into the host program —
+`isStillActiveInPane: () => boolean`, consulted mid-sweep. That needs
+bidirectional RPC in every language, and it makes the sweep's correctness depend
+on a stranger's event loop being responsive.
+
+Invert it. The client *reports*; holt consumes. That is exactly §9.1's lease,
+and it dissolves the problem: a lease is a file, every language can write one,
+and a lease naming a live pid is self-maintaining. It also generalises past the
+zellij case that `lsof` was built around — an embedder's "session" is a
+connection, not a cwd, and only the embedder can see it.
+
+The callback shape does have a legitimate home, though: as a §6.5 **seam**, an
+`occupied` hook holt execs, which is a program rather than an in-process
+closure and therefore works identically from every language. See §9.1 — a hook
+is one more provider, and it inherits the presence/absence asymmetry along with
+everything else. Leases are for a client reporting on *itself*, per session, at
+connection speed; a hook is for a machine that can answer for *everyone* at once
+and wants to replace `lsof` outright. An SDK wants both, for different things.
+
+`onOpen` and friends do **not** require a daemon either. They require a stream:
+`holt watch --json` emitting NDJSON on stdout is a lifecycle feed any language
+can consume over a subprocess pipe. That promotes `watch` from a §12 "later"
+item to the thing the SDKs are built on.
+
+### 14.3 Order
+
+1. **Occupancy provider seam + lease/heartbeat** (§9.1) — *shipped*. Unblocks the
+   SDKs and closes the container/Linux portability hole at the same time.
+2. `holt watch --json` — fsnotify on the registry, NDJSON out. This is `onOpen`.
+3. **TS SDK** — subprocess + the two above. Ship it and let it find what the
+   schema is missing, before three more languages pin the gaps.
+4. Python, Swift — mechanical once TS has proven the wire schema.
+5. Remote transport, as an HTTP server speaking the same protocol. Only here does
+   the machine-local-rows problem above need solving, and by then a server knows
+   which client each row came from, which is most of the answer.

@@ -51,11 +51,11 @@ Claude Code's worktree hooks for months. holt was extracted from the
 [nebelhaus workshop](https://github.com/nebelhaus/workshop) incubator once it
 passed that implementation's whole test suite.
 
-**All 93 acceptance tests pass** (77 ported from `wt`, two for the bare-PATH hook
-environment, and 14 for the policy seams). They are black-box, carried over from
-the bash implementation — they drive the binary with shim `gh`/`lsof` on `PATH`
-and never touch a real repo, so they describe the contract rather than the
-implementation:
+**All 102 acceptance tests pass** (77 ported from `wt`, two for the bare-PATH hook
+environment, 14 for the policy seams, and nine for occupancy leases). They are
+black-box, carried over from the bash implementation — they drive the binary with
+shim `gh`/`lsof` on `PATH` and never touch a real repo, so they describe the
+contract rather than the implementation:
 
 ```
 make test
@@ -87,10 +87,38 @@ holt spawn <repo> <name>
 holt park [label]       set the working tree aside as a wip: commit on this branch
 holt unpark             put the last parked commit's changes back, uncommitted
 holt reap               sweep every LANDED lane that nobody is standing in
+holt heartbeat [path]   hold the occupancy lease on a lane, so reap spares it
 holt reship [name]      push a branch that outran its merged PR, open the follow-up
 holt hook create        [hook] open a lane — JSON on stdin, path on stdout
 holt hook remove        [hook] retire one without losing work — JSON on stdin
 ```
+
+## Occupancy — telling holt a checkout is in use
+
+`reap` never removes a lane somebody is standing in, which means it has to know
+who is standing where. On a developer machine one `lsof` dump answers that:
+a zellij pane has a shell cwd'd into the checkout. Anything else — a container,
+a CI runner, a program embedding holt whose "sessions" are connections rather
+than directories — has to say so itself:
+
+```
+holt heartbeat            # this checkout is in use while the calling process lives
+holt heartbeat --release  # done with it
+```
+
+A lease naming a live pid is self-maintaining: the kernel releases it the moment
+the holder dies, with no TTL to wait out and no refresh loop to write. Use
+`--pid 0` when there is no local process to watch, and refresh within 90s.
+
+One asymmetry is deliberate and load-bearing: **a lease can save a lane from the
+sweep, never condemn one.** "Nobody leased it" is not evidence that nobody is
+there — somebody may have just `cd`'d in. An orchestrator that genuinely owns
+every session it serves can opt out with `HOLT_OCCUPANCY=lease`, and then an
+unleased lane does count as free.
+
+A lease is a client reporting on *itself*. The complementary case — a machine
+that can enumerate everyone's sessions better than `lsof` can, and wants to
+replace it outright — is a policy seam, and it's the next one to land.
 
 ## Default agent
 

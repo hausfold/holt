@@ -52,10 +52,15 @@ setup() {
 
   export HOME="$TMP/home"                 # wt_projdir + the WT_BASE default live here
   export XDG_CONFIG_HOME="$TMP/config"    # Holt's persisted default lives here
+  # Occupancy leases live under here. NOT $TMP/state — the hook tests use that
+  # path as a scratch FILE to record that they ran, and a directory of the same
+  # name makes their `cat` fail in a way that reads as a hook bug.
+  export XDG_STATE_HOME="$TMP/xdg-state"
   unset HOLT_AGENT NEBELHAUS_AGENT_DEFAULT # machine choices must not leak into the fixture
+  unset HOLT_STATE HOLT_OCCUPANCY          # ditto — the lease dir and its sole-provider switch
   export CLAUDE_WT_BASE="$TMP/wtbase"
   REG="$CLAUDE_WT_BASE/registry.tsv"
-  mkdir -p "$HOME" "$XDG_CONFIG_HOME"
+  mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_STATE_HOME"
 
   BIN="$TMP/bin"; mkdir -p "$BIN"
   export PATH="$BIN:$PATH"
@@ -1080,6 +1085,120 @@ EOF
   cd "$TMP"; wt_run
   [ "$status" -eq 0 ]
   [[ "$output" == *"live+1"* ]] || fail "the shim gh lost to a real one: $output"
+}
+
+# ── heartbeat / occupancy leases ─────────────────────────────────────────────
+#
+# `lsof` answers "is a process cwd'd in here?", which is the right question for
+# a zellij pane and the wrong one for everything else. A lease is how a client
+# that knows its own sessions says so directly. The asymmetry below is the whole
+# point and is worth stating twice: a lease may SAVE a checkout from the sweep,
+# never condemn one, because "nobody leased it" is not evidence that nobody is
+# there. HOLT_OCCUPANCY=lease is the one deployment entitled to say otherwise.
+#
+# Every test here passes `--pid $$` explicitly. The default — the CALLING
+# process — is right for the embedder that exec's holt and stays alive, and
+# wrong under bats, where `run` forks a subshell that exits the moment holt
+# does. Naming the test shell keeps the lease alive across the later `reap`,
+# which is the situation being tested.
+
+@test "heartbeat: a lease keeps a landed checkout from being reaped" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" leased)"
+  git -C "$main" merge -q --no-edit worktree-leased
+  wt_run heartbeat "$dir" --pid $$
+  [ "$status" -eq 0 ]
+  cd "$TMP"; wt_run reap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"kept leased (alpha) — a pane is open in it"* ]]
+  [ -e "$dir/.git" ]
+}
+
+@test "heartbeat: the default holder is the calling process, which bats then reaps" {
+  # The complement of the tests above: with no --pid, the lease dies with the
+  # short-lived shell `run` forked for it. That is the contract working — a
+  # client that exits stops vouching for its worktree the instant it does.
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" ephemeral)"
+  git -C "$main" merge -q --no-edit worktree-ephemeral
+  wt_run heartbeat "$dir"
+  [ "$status" -eq 0 ]
+  cd "$TMP"; wt_run reap
+  [[ "$output" == *"reaped ephemeral (alpha)"* ]]
+}
+
+@test "heartbeat: --release drops the lease and the checkout reaps" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" transient)"
+  git -C "$main" merge -q --no-edit worktree-transient
+  wt_run heartbeat "$dir" --pid $$
+  wt_run heartbeat "$dir" --release
+  [ "$status" -eq 0 ]
+  cd "$TMP"; wt_run reap
+  [[ "$output" == *"reaped transient (alpha)"* ]]
+  [ ! -e "$dir" ]
+}
+
+@test "heartbeat: a lease whose holder is gone protects nothing" {
+  local main dir dead; main="$(mkrepo alpha)"; dir="$(mkwt "$main" ghost)"
+  git -C "$main" merge -q --no-edit worktree-ghost
+  # A pid we can prove is finished. The kernel is the witness here, not the
+  # 90s TTL: a killed client must not hold its worktree hostage for a minute
+  # and a half.
+  sh -c 'exit 0' & dead=$!
+  wait "$dead" 2>/dev/null || true
+  wt_run heartbeat "$dir" --pid "$dead"
+  [ "$status" -eq 0 ]
+  cd "$TMP"; wt_run reap
+  [[ "$output" == *"reaped ghost (alpha)"* ]]
+}
+
+@test "heartbeat: leases never vouch for an EMPTY checkout — no lsof still degrades" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" cautious)"
+  git -C "$main" merge -q --no-edit worktree-cautious
+  # A populated lease directory that says nothing about THIS worktree. The
+  # temptation is to read that as "so it's free"; taking it would reap the
+  # checkout of anyone who simply cd'd in without telling holt.
+  local other; other="$(mkwt "$(mkrepo beta)" elsewhere)"
+  wt_run heartbeat "$other" --pid $$
+  export FAKE_LSOF_BROKEN=1
+  cd "$TMP"; wt_run reap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no lsof"* ]]
+  [ -e "$dir/.git" ]
+}
+
+@test "heartbeat: HOLT_OCCUPANCY=lease lets an embedder answer for absence" {
+  # Two repos, not two worktrees of one: mkwt commits the same work.txt in each,
+  # so landing both branches into a single main is an add/add conflict rather
+  # than the fixture this test wants.
+  local alpha beta held free
+  alpha="$(mkrepo alpha)"; beta="$(mkrepo beta)"
+  held="$(mkwt "$alpha" held)"; free="$(mkwt "$beta" free)"
+  git -C "$alpha" merge -q --no-edit worktree-held
+  git -C "$beta" merge -q --no-edit worktree-free
+  wt_run heartbeat "$held" --pid $$
+  # No lsof at all — the deployment this models has no processes to scan. The
+  # embedder owns every session, so its leases are the whole truth.
+  export FAKE_LSOF_BROKEN=1 HOLT_OCCUPANCY=lease
+  cd "$TMP"; wt_run reap
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"no lsof"* ]] || fail "leases should have answered: $output"
+  [[ "$output" == *"reaped free (beta)"* ]]
+  [[ "$output" == *"kept held (alpha) — a pane is open in it"* ]]
+  [ -e "$held/.git" ]
+}
+
+@test "heartbeat: a leased checkout reads as occupied in --json" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" watched)"
+  wt_run heartbeat "$dir" --pid $$
+  export FAKE_LSOF_BROKEN=1     # the lease is the ONLY signal left
+  cd "$TMP"; wt_run list --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"occupied": true'* ]] || fail "$output"
+}
+
+@test "heartbeat: refusing a path that does not exist beats inventing a lease" {
+  wt_run heartbeat "$TMP/nowhere"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no such path"* ]]
 }
 
 # ── dispatch ─────────────────────────────────────────────────────────────────
