@@ -1069,8 +1069,12 @@ item to the thing the SDKs are built on.
    fork). A consumer that wants landedness still polls `--json`. `source` on
    every event and `capabilities` on `hello` exist so a forge-derived family
    can be added later without a schema bump — see §14.4.
-3. **TS SDK** — subprocess + the two above. Ship it and let it find what the
-   schema is missing, before three more languages pin the gaps.
+3. **TS SDK** — *shipped* (`sdk/ts`). Subprocess + the two above: `list()`,
+   `watch()`, `child`/`spawn` (create a lane without attaching an agent —
+   the orchestrator primitive), leases, and `newInteractive`/
+   `resumeInteractive` for a terminal app that wants to hand off the screen.
+   Let it find what the schema is missing before three more languages pin
+   the gaps.
 4. `holt docs agent` + the adapter `instructions_file` field + the
    `bootstrap.agent_instructions` step (§14.5) — ship alongside the TS SDK, so
    "an embedder's only worktree logic is holt" (§12's 0.4 exit bar) is true of

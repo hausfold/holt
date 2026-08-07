@@ -172,6 +172,14 @@ family is additive later (`source: "forge"`, new `kind` values) without a
 schema bump, and `capabilities` on `hello` is how a consumer will be able to
 tell which families a given `holt` can ever send.
 
+### SDKs
+
+[`sdk/ts`](sdk/ts) is a TypeScript client over the binary — `list()`,
+`watch()` as an async iterator, `child`/`spawn` to create a lane without
+attaching an agent, and occupancy leases. Works from a Bun/Node TUI or a web
+backend; its types are safe to import into a browser bundle for the
+frontend. Python and Swift are next (SPEC.md §14).
+
 ## Default agent
 
 Set a durable default that works from Zellij, launchd, and a standalone terminal:
