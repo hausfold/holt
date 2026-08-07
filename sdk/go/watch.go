@@ -43,9 +43,12 @@ func (c *Client) Watch(ctx context.Context) iter.Seq2[WatchLine, error] {
 			yield(WatchLine{}, err)
 			return
 		}
+		waited := false
 		defer func() {
 			_ = cmd.Process.Kill() // no-op if already exited
-			_ = cmd.Wait()
+			if !waited {
+				_ = cmd.Wait()
+			}
 		}()
 
 		scanner := bufio.NewScanner(stdout)
@@ -77,6 +80,7 @@ func (c *Client) Watch(ctx context.Context) iter.Seq2[WatchLine, error] {
 			yield(WatchLine{}, err)
 			return
 		}
+		waited = true
 		if err := cmd.Wait(); err != nil {
 			code := ExitUsage
 			var exitErr *exec.ExitError
@@ -89,11 +93,13 @@ func (c *Client) Watch(ctx context.Context) iter.Seq2[WatchLine, error] {
 }
 
 // WatchLane is Watch, filtered to events about one lane (Lane.Path) and
-// stripped of hello/ready/sync framing — the shape an embedder holding
-// one session per lane usually wants: "tell me when THIS lane's state
-// changes." Compare full paths, not names: names aren't unique across
-// repos, but a checkout path is the registry's own primary key (SPEC.md
-// §2.1).
+// stripped of the hello/ready framing that names no lane — the shape an
+// embedder holding one session per lane usually wants: "tell me when THIS
+// lane's state changes." A sync event for the lane still passes through:
+// it's how a caller that started watching after the lane went live learns
+// it exists at all. Compare full paths, not names: names aren't unique
+// across repos, but a checkout path is the registry's own primary key
+// (SPEC.md §2.1).
 func (c *Client) WatchLane(ctx context.Context, path string) iter.Seq2[WatchLine, error] {
 	return func(yield func(WatchLine, error) bool) {
 		for line, err := range c.Watch(ctx) {
