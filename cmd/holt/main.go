@@ -1,9 +1,14 @@
-// Command holt manages coding-agent worktrees for any git repo.
+// Command holt manages LANES — one coding agent's branch, checkout and pane —
+// for any git repo.
 //
-// See SPEC.md for the design. The short version: holt owns the LIFECYCLE
+// See SPEC.md for the design. The short version: holt owns a lane's LIFECYCLE
 // (create → live → parked → landed → reaped) and its safety invariants — never
 // lose work, never reap something in use, keep the registry locked. What you do
 // at each transition is yours.
+//
+// "lane" is deliberate, and the vocabulary is closed: `worktree` is git's
+// checkout (a parked lane has none), `agent` is the CLIENT a lane runs, and
+// `session` belongs to the multiplexer and to the clients. See SPEC.md §0.
 package main
 
 import (

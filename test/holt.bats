@@ -385,7 +385,7 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
   git -C "$main" worktree remove --force "$dir"
   wt_run list
   [ "$status" -eq 0 ]
-  [[ "$output" == *"swept 1 merged worktree"* ]]
+  [[ "$output" == *"swept 1 merged lane"* ]]
   run git -C "$main" show-ref -q --verify refs/heads/worktree-landed
   [ "$status" -ne 0 ]
 }
@@ -423,7 +423,7 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
 @test "resume: an unknown name dies pointing at the listing" {
   wt_run resume nope
   [ "$status" -ne 0 ]
-  [[ "$output" == *"no agent worktree named 'nope'"* ]]
+  [[ "$output" == *"no lane named 'nope'"* ]]
 }
 
 @test "resume: a branch checked out OUTSIDE the base is reported live, not re-added" {
@@ -687,7 +687,7 @@ mkremote() { # mkremote <main> — give a repo a bare origin it can actually pus
   mkrepo alpha >/dev/null
   cd "$TMP"; wt_run reship nosuch
   [ "$status" -ne 0 ]
-  [[ "$output" == *"no agent worktree named 'nosuch'"* ]]
+  [[ "$output" == *"no lane named 'nosuch'"* ]]
 }
 
 # ── child ────────────────────────────────────────────────────────────────────
@@ -739,7 +739,7 @@ mkremote() { # mkremote <main> — give a repo a bare origin it can actually pus
   git -C "$b" worktree remove --force "$cdir"
   wt_run resume beta/par
   [ "$status" -eq 0 ]
-  [[ "$output" == *"spawned from a session in $dir"* ]]
+  [[ "$output" == *"spawned from a pane in $dir"* ]]
 }
 
 # ── spawn ────────────────────────────────────────────────────────────────────
@@ -1092,10 +1092,10 @@ EOF
   [[ "$output" != *"#!/usr/bin/env"* ]]
 }
 
-@test "dispatch: a bare unknown token is treated as a worktree name" {
+@test "dispatch: a bare unknown token is treated as a lane name" {
   wt_run gibberish
   [ "$status" -ne 0 ]
-  [[ "$output" == *"no agent worktree named 'gibberish'"* ]]
+  [[ "$output" == *"no lane named 'gibberish'"* ]]
 }
 
 # ── policy seams ─────────────────────────────────────────────────────────────
@@ -1105,7 +1105,7 @@ EOF
 # before hooks existed (the whole rest of this suite is that half); with a hook
 # configured, the hook's answer is the answer, including when it contradicts
 # holt's own. The second half is the product — a machine has to be able to be
-# right about its own worktrees when holt is wrong.
+# right about its own lanes when holt is wrong.
 
 mkhook() { # mkhook <name> <body> — an executable hook, echo its path
   local path="$TMP/hooks/$1"
@@ -1246,7 +1246,7 @@ resume = \"$hook\""
   [ "$(cat "$TMP/state" 2>/dev/null)" = rebuilt ] || fail "the hook was handed a checkout that isn't there"
 }
 
-@test "hooks: resume — a spawned worktree tells the hook where the CHAT lives" {
+@test "hooks: resume — a spawned lane tells the hook where the CHAT lives" {
   local main sub parent child hook
   main="$(mkrepo alpha)"; sub="$(mkrepo beta)"
   parent="$(mkwt "$main" workshop)"
@@ -1270,7 +1270,7 @@ resume = \"$hook\""
   [ "$status" -eq 2 ] || fail "a safety refusal must stay distinguishable from a usage error: $status"
 }
 
-@test "hooks: open — a fresh worktree's session is the machine's business too" {
+@test "hooks: open — a fresh lane's session is the machine's business too" {
   local main hook; main="$(mkrepo alpha)"
   hook="$(mkhook open 'printf "%s %s\n" "$HOLT_NAME" "$HOLT_AGENT" >"'"$TMP"'/opened"; exit 0')"
   setcfg "[hooks]

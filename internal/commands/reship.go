@@ -13,10 +13,10 @@ import (
 // Reship pushes a branch that outran its merged PR, and opens the follow-up.
 //
 // The other half of the +N story. After a squash merge the forge deletes the
-// head branch, so the commits a session makes afterwards have no remote and no
+// head branch, so the commits a lane makes afterwards have no remote and no
 // PR — `git push` alone re-creates the branch but leaves the work unreviewed and
 // invisible. This does both, from the MAIN checkout, so it works whether the
-// worktree is live, parked, or long gone.
+// lane is live, parked, or long gone.
 func (e *Env) Reship(want string) error {
 	main, branch, err := e.reshipTarget(want)
 	if err != nil {
@@ -68,13 +68,13 @@ func (e *Env) Reship(want string) error {
 	return nil
 }
 
-// reshipTarget resolves which (main, branch) to reship: a named worktree, or —
-// with no name — the branch of the checkout we are standing in.
+// reshipTarget resolves which (main, branch) to reship: a named lane, or — with
+// no name — the branch of the checkout we are standing in.
 func (e *Env) reshipTarget(want string) (main, branch string, err error) {
 	if want == "" {
 		main, err = gitx.MainCheckout(e.Cwd)
 		if err != nil {
-			return "", "", exitcode.Usagef("not in a git repo — name a worktree instead: holt reship <name>")
+			return "", "", exitcode.Usagef("not in a git repo — name a lane instead: holt reship <name>")
 		}
 		branch = gitx.CurrentBranch(e.Cwd)
 		if branch == "" {
@@ -99,7 +99,7 @@ func (e *Env) reshipTarget(want string) (main, branch string, err error) {
 	}
 	switch len(matches) {
 	case 0:
-		return "", "", exitcode.Usagef("no agent worktree named '%s' — run: holt", want)
+		return "", "", exitcode.Usagef("no lane named '%s' — run: holt", want)
 	case 1:
 		return matches[0].Main, matches[0].Branch, nil
 	default:

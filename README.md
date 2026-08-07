@@ -17,6 +17,12 @@ create ──▶ live ──▶ parked ──▶ live ──▶ landed ──▶
              └────────┴────────────────────┘
 ```
 
+The thing moving through those states is a **lane**: one agent's branch,
+checkout and pane. Not a "worktree" — a parked lane has no checkout on disk at
+all, and the branch is what survives. Not an "agent" either: that word is
+reserved for the *client* a lane runs (`claude`, `codex`, `opencode`), and not
+"session", which belongs to your multiplexer and to the clients' own transcripts.
+
 Three invariants, in priority order — they are the product:
 
 1. **Never lose work.** Every destructive path parks first. The failure
@@ -72,17 +78,17 @@ conflict *resolution*. No opinion about which agent you should run.
 ## Commands
 
 ```
-holt                    list every live/parked agent worktree, across all repos
+holt                    list every live/parked lane, across all repos
 holt <name>             resume one: rebuild its checkout, reopen its agent
-holt new [name]         worktree of THIS repo, then open the default agent in it
-holt child <repo>       worktree of ANOTHER repo, as a child of this pane
+holt new [name]         a lane on THIS repo, then open the default agent in it
+holt child <repo>       a lane on ANOTHER repo, as a child of this pane
 holt spawn <repo> <name>
-                        a named worktree for a spawner with no pane of its own
+                        a named lane for a spawner with no pane of its own
 holt park [label]       set the working tree aside as a wip: commit on this branch
 holt unpark             put the last parked commit's changes back, uncommitted
-holt reap               sweep every LANDED worktree that nobody is standing in
+holt reap               sweep every LANDED lane that nobody is standing in
 holt reship [name]      push a branch that outran its merged PR, open the follow-up
-holt hook create        [hook] make a worktree — JSON on stdin, path on stdout
+holt hook create        [hook] open a lane — JSON on stdin, path on stdout
 holt hook remove        [hook] retire one without losing work — JSON on stdin
 ```
 
@@ -103,7 +109,7 @@ may supply `NEBELHAUS_AGENT_DEFAULT` as a compatibility fallback.
 holt grew out of one machine's setup, and it inherited that machine's answers to
 questions that only *look* universal. "Landed" means merged into the default
 branch. "Reapable" means landed, clean and unoccupied. "Resume" means become the
-agent process. Each of those is right somewhere and wrong somewhere else, so
+client process. Each of those is right somewhere and wrong somewhere else, so
 each is a **named seam** with holt's answer as the default rather than the
 mechanism.
 
@@ -116,20 +122,20 @@ landed   = ["/usr/local/bin/my-landed", "--release-train"] # or an argv
 
 | Seam | Answers | holt's default |
 |---|---|---|
-| `agent` | which client a new worktree opens in | the `agent` key above |
+| `agent` | which client a new lane opens in | the `agent` key above |
 | `landed` | has this branch's work reached the default branch? | ancestry → merged PR → patch-equivalence |
 | `preserve` | does a closing pane's dirty tree become a `wip:` commit? | yes, unless it's untracked scratch on a landed branch |
-| `resume` | reopen this worktree's session | `cd`, then exec the client |
-| `open` | open a session in a brand-new worktree | `cd`, then exec the client |
+| `resume` | reopen this lane's session | `cd`, then exec the client |
+| `open` | open a session in a brand-new lane | `cd`, then exec the client |
 
 A seam is a program. holt execs it, hands it the situation as JSON on stdin
 *and* as `HOLT_*` environment variables, and reads the answer off the exit code:
 
 ```sh
 #!/usr/bin/env bash
-# a `resume` hook: open a zellij pane in the worktree instead of taking over
-# this process. $HOLT_CHAT, not $HOLT_PATH — a spawned worktree's conversation
-# lives in the pane that created it.
+# a `resume` hook: open a zellij pane in the lane instead of taking over this
+# process. $HOLT_CHAT, not $HOLT_PATH — a spawned lane's conversation lives in
+# the pane that created it.
 zellij action new-pane --cwd "$HOLT_CHAT" -- "$HOLT_AGENT" --resume
 ```
 
@@ -164,18 +170,18 @@ destroys work, so it waits for the architecture those settle into. Overriding
 with its reflog as the stack — and git's short list of per-worktree refs
 (`HEAD`, `refs/bisect/*`, `refs/worktree/*`, …) does not include it. So every
 worktree of a repo **and the main checkout** push and pop the *same stack*, and
-with parallel sessions that means:
+with parallel lanes that means:
 
-- Agent A stashes in its worktree; agent B runs `git stash pop` in another and
-  receives A's changes into a tree that never asked for them — files B's
-  session has no context for, gone from the stack the moment they land.
+- Lane A stashes; lane B runs `git stash pop` in another checkout and receives
+  A's changes into a tree that never asked for them — files B's agent has no
+  context for, gone from the stack the moment they land.
 - The "careful" form is racy too: `stash@{1}` is positional, so it names a
-  different entry the instant any parallel session pushes or drops one.
+  different entry the instant any parallel lane pushes or drops one.
 - A pop that conflicts leaves the entry both on the stack *and* half-applied —
-  now two sessions can each believe they own it.
+  now two lanes can each believe they own it.
 
 None of this bites a solo human, which is why nobody documents it: one popper,
-one stack, no race. It starts biting the moment worktrees make your sessions
+one stack, no race. It starts biting the moment worktrees make your work
 *parallel* — which is exactly what coding agents did.
 
 `holt park [label]` is the same "hold this thought" with nothing shared: it

@@ -2,7 +2,7 @@
 // policy seams.
 //
 // A *seam* is a place where holt makes a decision that looks universal but
-// isn't: what "landed" means, what makes a worktree reapable, whether a dirty
+// isn't: what "landed" means, what makes a lane reapable, whether a dirty
 // tree is worth a wip commit, what "reopen this session" means on a machine
 // that runs its agents inside a multiplexer. holt ships an opinion for each —
 // the one the nebelhaus rice grew up with — and every one of them is wrong for
@@ -33,7 +33,7 @@ import (
 
 // Config is the resolved contents of ~/.config/holt/config.toml.
 type Config struct {
-	// Agent is the top-level `agent = "codex"` key: the client a new worktree
+	// Agent is the top-level `agent = "codex"` key: the client a new lane
 	// opens in. It is the static, zero-process spelling of the `agent` hook —
 	// a constant answer needs no program to return it.
 	Agent string
@@ -52,7 +52,7 @@ type Config struct {
 // absent or defers, so this list is a list of overridable OPINIONS, not of
 // required configuration.
 const (
-	// HookAgent answers "which client should this new worktree open in?".
+	// HookAgent answers "which client should this new lane open in?".
 	// stdout: the client id. Built-in: the `agent` config key, then HOLT_AGENT,
 	// then claude.
 	HookAgent = "agent"
@@ -71,12 +71,12 @@ const (
 
 	// HookResume is the action seam behind `holt <name>`: the checkout has been
 	// rebuilt and the session needs reopening. A machine that runs its agents
-	// in a multiplexer wants a new pane cd'd into the worktree here, not an
+	// in a multiplexer wants a new pane cd'd into the lane here, not an
 	// agent exec'd into holt's own process. Built-in: chdir + exec the client's
 	// resume command.
 	HookResume = "resume"
 
-	// HookOpen is HookResume's counterpart for a worktree that was just
+	// HookOpen is HookResume's counterpart for a lane that was just
 	// created and has no session yet. Built-in: chdir + exec the client.
 	HookOpen = "open"
 )
@@ -234,7 +234,7 @@ func decode(s string) map[string]any {
 // lines of shell instead of a program with a JSON parser. Same data as stdin,
 // same names as the adapter template variables (SPEC.md §5.2).
 //
-// One collision to know about: HOLT_BASE is already the worktree base
+// One collision to know about: HOLT_BASE is already the lane base
 // DIRECTORY, so the repo's default branch is HOLT_BASE_BRANCH. Renaming either
 // would break something that already exists.
 func hookEnv(hook string, payload map[string]string) []string {

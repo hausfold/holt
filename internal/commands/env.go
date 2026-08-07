@@ -16,7 +16,7 @@ type Env struct {
 	Reg      *registry.Registry
 	Cfg      *config.Config // the machine config, and with it the policy seams
 	Cwd      string
-	Agent    string // the default client for new worktrees
+	Agent    string // the default client for new lanes
 	Warnings []string
 }
 
@@ -41,7 +41,7 @@ func baseDir() string {
 	return filepath.Join(home, ".cache", "claude-worktrees")
 }
 
-// defaultAgent is the client a new worktree opens in when nothing says
+// defaultAgent is the client a new lane opens in when nothing says
 // otherwise.
 //
 // The ladder, most explicit first: HOLT_AGENT is a one-invocation override; the

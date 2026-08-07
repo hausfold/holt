@@ -72,12 +72,12 @@ func (e *Env) HookCreate(stdin io.Reader) error {
 		return err
 	}
 
-	// Record it so holt can rebuild and reopen this worktree later — even after
-	// the checkout is gone, and even for a repo it has never otherwise heard of.
-	// The spawning pane's cwd is the parent, so a session can be shown only the
-	// worktrees IT spawned. This is Claude Code's own hook, so the client is
-	// known even when the machine-wide default is Codex or OpenCode.
-	// NOT ignored. A checkout with no registry row is a worktree holt can no
+	// Record it so holt can rebuild and reopen this lane later — even after the
+	// checkout is gone, and even for a repo it has never otherwise heard of.
+	// The spawning pane's cwd is the parent, so a pane can be shown only the
+	// lanes IT spawned. This is Claude Code's own hook, so the client is known
+	// even when the machine-wide default is Codex or OpenCode.
+	// NOT ignored. A checkout with no registry row is a lane holt can no
 	// longer find, resume, or reap — the branch survives, but every affordance
 	// around it is gone. Say so loudly rather than let a lock timeout eat it
 	// silently; the caller still gets the path, because the checkout is real.
@@ -108,7 +108,7 @@ func (e *Env) addWorktree(repo, name, dir string) error {
 	args := []string{"worktree", "add", "-b", branch, dir, "HEAD"}
 	if !gitx.HasCommits(repo) {
 		// A repo with no commits yet has no HEAD to branch from. --orphan gives
-		// the session a real checkout on an unborn branch; the ref appears with
+		// the lane a real checkout on an unborn branch; the ref appears with
 		// its first commit. Without this, `holt new` in a freshly-inited repo
 		// fails at exactly the moment a scaffolding agent is most useful.
 		args = []string{"worktree", "add", "--orphan", "-b", branch, dir}

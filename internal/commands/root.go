@@ -12,17 +12,19 @@ var Version = "0.1.0-dev"
 
 const usage = `holt — the worktree-lifecycle substrate
 
-  holt                    list every live/parked agent worktree, across all repos
+A LANE is one agent's branch, checkout and pane, from create to reaped.
+
+  holt                    list every live/parked lane, across all repos
   holt <name>             resume one: rebuild its checkout, reopen its agent
-  holt new [name]         worktree of THIS repo, then open the default agent in it
-  holt child <repo>       worktree of ANOTHER repo, as a child of this pane
+  holt new [name]         a lane on THIS repo, then open the default agent in it
+  holt child <repo>       a lane on ANOTHER repo, as a child of this pane
   holt spawn <repo> <name>
-                          a named worktree for a spawner with no pane of its own
+                          a named lane for a spawner with no pane of its own
   holt park [label]       set the working tree aside as a wip: commit on this branch
   holt unpark             put the last parked commit's changes back, uncommitted
-  holt reap               sweep every LANDED worktree that nobody is standing in
+  holt reap               sweep every LANDED lane that nobody is standing in
   holt reship [name]      push a branch that outran its merged PR, open the follow-up
-  holt hook create        [hook] make a worktree — JSON on stdin, path on stdout
+  holt hook create        [hook] open a lane — JSON on stdin, path on stdout
   holt hook remove        [hook] retire one without losing work — JSON on stdin
 
   --json                  machine-readable output (list, status)
@@ -105,7 +107,7 @@ func Run(args []string) error {
 		return env.HookRemove(os.Stdin)
 
 	default:
-		// A bare token is a worktree name: `holt sparkle` resumes it. This is the
+		// A bare token is a lane name: `holt sparkle` resumes it. This is the
 		// spelling that gets typed, so an unknown one must fail the way resume
 		// does — naming the listing — not with a generic "unknown command".
 		if strings.HasPrefix(args[0], "-") {

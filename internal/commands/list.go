@@ -12,8 +12,8 @@ import (
 	"github.com/nebelhaus/holt/internal/ui"
 )
 
-// List renders every live/parked agent worktree across every repo holt can
-// reach, and self-heals on the way in.
+// List renders every live/parked lane across every repo holt can reach, and
+// self-heals on the way in.
 func (e *Env) List(asJSON bool) error {
 	// Self-heal: reap parked branches whose PR has since merged. PARKED ONLY —
 	// it must never disturb a live checkout that may still have an open pane.
@@ -22,7 +22,7 @@ func (e *Env) List(asJSON bool) error {
 	sweep := e.reapSweep(sweepParked)
 	if !asJSON {
 		if n := len(sweep.Reaped); n > 0 {
-			ui.Say("swept %d merged worktree(s)", n)
+			ui.Say("swept %d merged lane(s)", n)
 		}
 		// Husks are deliberately left by the sweep, so the listing is where they
 		// surface — otherwise a half-removed checkout is a `stray` row with no
@@ -40,9 +40,9 @@ func (e *Env) List(asJSON bool) error {
 		return e.listJSON(rows)
 	}
 
-	ui.Say("agent worktrees you can resume (holt <name>, or <repo>/<name>)")
+	ui.Say("lanes you can resume (holt <name>, or <repo>/<name>)")
 	if len(rows) == 0 {
-		ui.Say("none parked — every worktree branch is merged & cleaned up. The fog is even.")
+		ui.Say("none parked — every lane's branch is merged & cleaned up. The fog is even.")
 		return nil
 	}
 	renderTable(rows)
@@ -86,7 +86,7 @@ func (e *Env) rows() []listRow {
 			row.Ahead, row.AheadPR, row.Relanded = n, pr, true
 		}
 		row.Agent = e.agentFor(entry.Path)
-		// Empty for an unborn branch (a session started in a repo with no
+		// Empty for an unborn branch (a lane opened in a repo with no
 		// commits yet) — say so rather than printing a blank cell that reads
 		// like a broken row.
 		last, err := gitx.Run(entry.Main, "log", "-1", "--format=%cr — %s", entry.Branch)
@@ -99,7 +99,7 @@ func (e *Env) rows() []listRow {
 	return out
 }
 
-// agentFor is the client recorded for a worktree. A registry row that predates
+// agentFor is the client recorded for a lane. A registry row that predates
 // the client column means Claude, never today's default — otherwise a parked
 // Codex branch would reopen in the wrong client.
 func (e *Env) agentFor(path string) string {
@@ -112,9 +112,9 @@ func (e *Env) agentFor(path string) string {
 // branchAlive reports whether a row still means something.
 //
 // Normally "does refs/heads/<branch> exist" — a branch that was merged and
-// deleted, or hand-nuked, can't resume anything. EXCEPT a worktree spawned in a
-// repo with no commits yet: its branch is UNBORN, checked out with no ref behind
-// it until the first commit lands. By ref alone such a session reads as dead the
+// deleted, or hand-nuked, can't resume anything. EXCEPT a lane opened in a repo
+// with no commits yet: its branch is UNBORN, checked out with no ref behind it
+// until the first commit lands. By ref alone such a lane reads as dead the
 // moment it starts.
 func (e *Env) branchAlive(entry Entry) bool {
 	if gitx.HasBranch(entry.Main, entry.Branch) {
@@ -128,9 +128,9 @@ func (e *Env) branchAlive(entry Entry) bool {
 }
 
 // postMergeAhead names the case reaping refuses to touch: the PR merged, then
-// the session kept committing. Those commits sit on a branch whose remote
+// the lane kept committing. Those commits sit on a branch whose remote
 // counterpart the forge deleted at merge — no PR covers them, nothing is pushed,
-// and the only symptom used to be a worktree that quietly declined to be reaped.
+// and the only symptom used to be a lane that quietly declined to be reaped.
 // Returns (0, 0) when this isn't that case.
 func (e *Env) postMergeAhead(main, branch string) (ahead, pr int) {
 	// Landed by ancestry beats everything: if the tip is already IN the default
@@ -164,7 +164,7 @@ func (e *Env) postMergeAhead(main, branch string) (ahead, pr int) {
 // mergedMapLookup asks ONE repo-wide question rather than one per branch.
 //
 // A per-branch query costs ~0.5 s, and the listing asks this of every row — a
-// repo with eight worktrees would go from 0.3 s to seconds, in exactly the fog
+// repo with eight lanes would go from 0.3 s to seconds, in exactly the fog
 // where you most want a fast listing. `Landed` deliberately keeps its own
 // precise per-branch query: it decides whether a branch DIES, so it must not
 // inherit this one's 100-PR horizon. Missing a merge here costs an annotation;
@@ -201,7 +201,7 @@ func (e *Env) mergedMapLookup(main, branch string) (headOID string, pr int) {
 // ── rendering ────────────────────────────────────────────────────────────────
 
 // renderTable sizes every column to its real content and to the pane, so the
-// listing stays one line per worktree however narrow the terminal is.
+// listing stays one line per lane however narrow the terminal is.
 func renderTable(rows []listRow) {
 	rw, nw, sw, cw := 4, 4, 6, 5
 	relanded := false
