@@ -31,25 +31,39 @@ import (
 //
 // # What drives it, and what doesn't
 //
-// fsnotify watches the registry file. `created`, `parked`, `resumed` and
-// `reaped` are ALL registry mutations (registry.Put/Delete/Prune — see
-// new.go, park.go, resume.go, reapSweep), so the file changing is a free and
-// COMPLETE signal for that whole family: nothing that matters to those four
-// events can happen without it.
+// fsnotify watches the registry file, and MOST of the state machine is a
+// registry mutation: `created` (registry.Put), `resumed` (Put again, from
+// rebuild), `reaped` (Delete/Prune). Watching the file is a free, instant
+// signal for those.
 //
-// `landed` and `post_merge_ahead` are not in that family — they change at the
-// forge, and nothing local fires when a PR merges. The honest way to surface
-// that would be a `gh` poll on a timer, and that is deliberately NOT what v1
-// does: the first consumer is one long-running `watch` per box, across
-// however many lanes and repos it's holding leases for, and a poll baked into
-// the stream multiplies by every one of them for as long as the process runs.
-// That is a rate-limit generator, not a feature. So v1 emits only what
-// fsnotify on the registry gives for free; a consumer that cares about
-// landedness polls `holt --json` at whatever cadence it can afford, exactly
-// as it does today. A forge-derived family is additive later — new `kind`
-// values, `source: "forge"` on the events that carry them — and every field
-// that choice needs (`source`, `capabilities`) is already in this schema so
-// that day doesn't cost a schema bump. See watchEvent's doc comment.
+// `parked` is not, for the common case. `holt park` only commits — the
+// checkout stays live on disk — and the actual live→parked transition is the
+// pane CLOSING (HookRemove / `git worktree remove`), which only touches the
+// registry when the branch is already landed (to drop its row). An unlanded
+// branch — the ordinary "pane closed, work isn't merged yet" case — leaves
+// the registry untouched: the row's path doesn't change, so there is nothing
+// to rewrite. The state that changed is purely on disk (checkoutState reads
+// `.git`'s presence), which fsnotify-on-the-registry structurally cannot see.
+// pollInterval below is the backstop for exactly that gap: a plain periodic
+// rescan, same cost as one `holt list` (mostly local git, forge answers
+// served from landed.go's disk cache), independent of the registry watch.
+//
+// `landed` and `post_merge_ahead` are a different gap, and NOT one
+// pollInterval papers over: they change at the forge, and nothing local — not
+// the registry, not the filesystem — fires when a PR merges. The honest way
+// to surface that would be a `gh` poll on its OWN timer, and that is
+// deliberately NOT what v1 does: the first consumer is one long-running
+// `watch` per box, across however many lanes and repos it's holding leases
+// for, and a forge poll baked into the stream multiplies by every one of
+// them for as long as the process runs. That is a rate-limit generator, not
+// a feature — pollInterval avoids it by hitting only local git and the
+// existing disk-cached forge lookup, never issuing a fresh `gh` call on its
+// own account. A consumer that wants fresher landedness than the cache still
+// polls `holt --json` at whatever cadence it can afford. A forge-derived
+// event family is additive later — new `kind` values, `source: "forge"` on
+// the events that carry them — and every field that choice needs (`source`,
+// `capabilities`) is already in this schema so that day doesn't cost a
+// schema bump. See watchEvent's doc comment.
 func (e *Env) Watch(args []string) error {
 	for _, a := range args {
 		// Accepted for spelling symmetry with `holt list --json` — watch has
@@ -131,6 +145,15 @@ func (e *Env) Watch(args []string) error {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 
+	// The filesystem-only backstop — see the package doc comment for the gap
+	// this covers (an unlanded pane closing never touches the registry).
+	// Ticks are independent of the registry watch/debounce below; a rescan is
+	// idempotent (diffLanes emits nothing when nothing changed), so an
+	// overlapping tick and registry event just do the same work twice rather
+	// than racing.
+	poll := time.NewTicker(pollInterval)
+	defer poll.Stop()
+
 	regBase := filepath.Base(e.Reg.Path())
 	var debounce *time.Timer
 	fire := make(chan struct{}, 1)
@@ -168,6 +191,10 @@ func (e *Env) Watch(args []string) error {
 			if err := rescan("created"); err != nil {
 				return err
 			}
+		case <-poll.C:
+			if err := rescan("created"); err != nil {
+				return err
+			}
 		case <-sig:
 			return nil
 		}
@@ -178,6 +205,14 @@ func (e *Env) Watch(args []string) error {
 // two fsnotify events for one logical change) plus several lanes changing in
 // the same sweep, into a single settled rescan.
 const watchDebounce = 200 * time.Millisecond
+
+// pollInterval is the filesystem-only backstop's cadence — see Watch's doc
+// comment for what it covers and why it's cheap. 3s is fast enough that a
+// pane closing reads as a lifecycle event within one human "huh, did that
+// register?" pause, and slow enough that it costs nothing: each tick is one
+// `e.rows()`, the same call `holt list` makes, and landed.go's disk cache
+// (120s TTL) means the overwhelming majority of ticks issue zero forge calls.
+const pollInterval = 3 * time.Second
 
 // watchHello is the first line of every stream — a version header so a
 // consumer can check compatibility once, up front, rather than sniffing the

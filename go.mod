@@ -8,8 +8,6 @@ go 1.26
 // inotify by hand for a lifecycle stream that other people's SDKs depend on.
 // fsnotify is the one dependency this crosses the threshold for. The UX layer
 // (fang/lipgloss) and the TOML adapter parser still wait for 0.2.
-//
-// NOTE: go.sum for this line has NOT been generated in this change — it
-// requires a `go mod tidy` with network access, which this environment didn't
-// have. Run it once before merging; see the PR description.
 require github.com/fsnotify/fsnotify v1.7.0
+
+require golang.org/x/sys v0.4.0 // indirect

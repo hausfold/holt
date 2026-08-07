@@ -22,11 +22,8 @@
           inherit version;
           src = ./.;
           # holt picked up its first dependency (fsnotify, for `holt watch`) —
-          # see go.mod. lib.fakeHash is the standard placeholder for "run the
-          # build once, `nix` prints the real hash in the mismatch error,
-          # paste it in here." Do that before merging; a fake hash left in
-          # place fails every build, loudly, which is the point.
-          vendorHash = pkgs.lib.fakeHash;
+          # see go.mod.
+          vendorHash = "sha256-SAZpfeTKHC/OEgMUWScXYwx7RY6LrSHkHXLg4vArX+g=";
           ldflags = [ "-X github.com/nebelhaus/holt/internal/commands.Version=${version}" ];
 
           # The suite is black-box: it drives the built binary with shim gh/lsof

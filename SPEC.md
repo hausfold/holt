@@ -1056,14 +1056,19 @@ item to the thing the SDKs are built on.
 2. **`holt watch --json`** — *shipped*. fsnotify on the registry, NDJSON out on
    stdout: a `hello` header (`holt`, `schema`, `capabilities`), then `sync` for
    every lane already alive, `ready`, then `created` / `parked` / `resumed` /
-   `reaped` / `changed` as the registry changes. This is `onOpen`.
-   `landed` / `post_merge_ahead` are deliberately NOT in v1 — they change at the
-   forge, and folding a `gh` poll into a stream meant to run for hours, across
-   however many lanes and repos one embedder holds leases on, is a rate-limit
-   generator waiting to happen (see §14.4's fork). A consumer that wants
-   landedness still polls `--json`. `source` on every event and `capabilities`
-   on `hello` exist so a forge-derived family can be added later without a
-   schema bump — see §14.4.
+   `reaped` / `changed` as things change. This is `onOpen`.
+   `created`/`resumed`/`reaped` are registry mutations, caught instantly.
+   `parked` mostly isn't — an unlanded pane closing only touches the
+   filesystem (`park.go` commits; the WorktreeRemove hook drops the registry
+   row only when landed) — so `watch` also re-scans on a plain local timer
+   (3s) as a backstop; still no forge call beyond the existing 120s disk
+   cache. `landed` / `post_merge_ahead` are the one family deliberately NOT
+   in v1 — they change at the forge, and folding a `gh` poll into a stream
+   meant to run for hours, across however many lanes and repos one embedder
+   holds leases on, is a rate-limit generator waiting to happen (see §14.4's
+   fork). A consumer that wants landedness still polls `--json`. `source` on
+   every event and `capabilities` on `hello` exist so a forge-derived family
+   can be added later without a schema bump — see §14.4.
 3. **TS SDK** — subprocess + the two above. Ship it and let it find what the
    schema is missing, before three more languages pin the gaps.
 4. Python, Swift — mechanical once TS has proven the wire schema.
@@ -1074,10 +1079,14 @@ item to the thing the SDKs are built on.
 ### 14.4 Why `watch` doesn't poll the forge, and the schema headroom that decision bought
 
 The design question step 2 actually had to answer: fsnotify on the registry
-gives `created` / `parked` / `resumed` / `reaped` for free — those are all
-registry mutations, so the file changing is a complete signal. `landed` and
-`post_merge_ahead` are not: they change at the forge, and nothing local fires
-when a PR merges. Three shapes were on the table —
+gives `created` / `resumed` / `reaped` for free — those are registry
+mutations, so the file changing is a complete signal. `parked` turned out to
+need its own backstop (a plain local re-scan timer, still v1's "registry and
+filesystem only" scope — see the note on step 2 above) because the common
+case, an unlanded pane closing, never touches the registry at all. `landed`
+and `post_merge_ahead` are the harder gap: they change at the forge, and
+nothing LOCAL — registry or filesystem — fires when a PR merges. Three shapes
+were on the table for that one —
 
 - **(a) registry-derived only.** A consumer that cares about landedness polls
   `holt --json` itself, at whatever cadence it can afford.

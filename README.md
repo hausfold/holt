@@ -152,18 +152,25 @@ live change: `created`, `parked`, `resumed`, `reaped`, or a catch-all
 `changed` for anything else about a lane that differs from what this stream
 last said (agent, dirty, landed, post-merge-ahead, last commit).
 
-**What it doesn't cover, on purpose:** `created`/`parked`/`resumed`/`reaped`
-are all registry mutations, so watching the registry file is a complete,
-free signal for that family. `landed` and `post_merge_ahead` change at the
-*forge*, with nothing local to watch — surfacing those here would mean
-polling `gh` on a timer for as long as `watch` runs, and the one process this
-is built for holds leases across many lanes and many repos at once, which
-turns a timer into a rate-limit generator. So v1 emits registry-derived
-events only; a consumer that cares about landedness polls `holt --json`,
-same as today. `source` is on every event for exactly this reason — a
-forge-derived family is additive later (`source: "forge"`, new `kind`
-values) without a schema bump, and `capabilities` on `hello` is how a
-consumer will be able to tell which families a given `holt` can ever send.
+Most of that is a registry mutation — `created`/`resumed`/`reaped` all are —
+so fsnotify on the registry file catches them instantly. `parked` usually
+isn't: `holt park` only commits, and the pane actually closing (`git worktree
+remove`) touches the registry only when the branch is already landed. An
+unlanded pane closing changes nothing but the filesystem, which the registry
+watch can't see — so `watch` also re-scans every few seconds as a backstop,
+the same cost as one `holt list`.
+
+**What it doesn't cover, on purpose:** `landed` and `post_merge_ahead` change
+at the *forge*, with nothing local — not the registry, not the filesystem —
+to fire on. Surfacing those here would mean polling `gh` on its own timer for
+as long as `watch` runs, and the one process this is built for holds leases
+across many lanes and many repos at once, which turns a timer into a
+rate-limit generator. So v1 emits registry- and filesystem-derived events
+only; a consumer that cares about landedness polls `holt --json`, same as
+today. `source` is on every event for exactly this reason — a forge-derived
+family is additive later (`source: "forge"`, new `kind` values) without a
+schema bump, and `capabilities` on `hello` is how a consumer will be able to
+tell which families a given `holt` can ever send.
 
 ## Default agent
 
