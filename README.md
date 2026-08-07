@@ -1,81 +1,65 @@
 # 🦦 holt
 
 **The worktree-lifecycle substrate for parallel coding agents.**
+*Never loses work. Never reaps what's in use. The registry — not the filesystem — is truth.*
 
 Every vendor now ships worktree *creation* — `claude --worktree`, the Claude
-Agent SDK's `isolation: worktree`, Cursor, Copilot CLI — and every one of them
-stops there. What nobody owns is the rest of the life: the branch that's still
-alive after the pane died, the checkout nobody is sitting in, the tree with 40
-uncommitted minutes in it, the branch whose PR merged yesterday and which has
-kept committing since.
+Agent SDK's `isolation: worktree`, Cursor, Copilot CLI — and every one of
+them stops there. Nobody owns the rest of the life: **the branch that's
+still alive after the pane died**, **the checkout nobody is sitting in
+anymore**, **the tree with 40 uncommitted minutes in it**, **the branch
+whose PR merged yesterday and has kept committing since**. If you've ever
+`git worktree list`'d your way through a graveyard trying to remember which
+of these you can safely delete — *that's* the problem holt makes go away.
 
-holt owns that.
+## Quickstart
 
-```
-create ──▶ live ──▶ parked ──▶ live ──▶ landed ──▶ reaped
-             │        │                    ▲
-             └────────┴────────────────────┘
-```
+```bash
+# spin up a lane on this repo: new checkout, new branch, agent opens in it
+holt new fix-flaky-test
 
-The thing moving through those states is a **lane**: one agent's branch,
-checkout and pane. Not a "worktree" — a parked lane has no checkout on disk at
-all, and the branch is what survives. Not an "agent" either: that word is
-reserved for the *client* a lane runs (`claude`, `codex`, `opencode`), and not
-"session", which belongs to your multiplexer and to the clients' own transcripts.
+# see every lane you've got going, live or parked, across every repo
+holt
 
-Three invariants, in priority order — they are the product:
+# pane's closing and the tree's dirty? don't reach for `git stash` — it's
+# shared across every worktree of this repo. `park` commits it instead, as
+# a wip: commit only this branch has
+holt park "mid-refactor on the retry logic"
 
-1. **Never lose work.** Every destructive path parks first. The failure
-   direction is always "a branch lingers", never "a tree vanished".
-2. **Never reap something in use.** Occupied, dirty, or not-provably-landed
-   means keep. Uncertainty resolves to *keep*, including when the forge is
-   unreachable.
-3. **The registry is the source of truth, and it is locked.** Not the
-   filesystem, not `git worktree list` — those are derived, and they lie.
+# back later — rebuild the checkout, reopen the agent, right where you left it
+holt fix-flaky-test
 
-What you *do* at each transition — build, test, deploy — is yours. holt has no
-opinion about your build system.
+# sweep every lane whose branch already landed and nobody's standing in
+holt reap
 
-## Why not just use your agent's built-in worktrees
-
-Because a vendor will never ship cross-client (nobody is going to support
-`codex` **and** `opencode` **and** `claude` in one registry), never ship
-cross-repo parentage, and treats the lifecycle invariants as an afterthought —
-because losing *your* work isn't *their* problem.
-
-## Status
-
-**Pre-0.1.** The design is [`SPEC.md`](SPEC.md); it is the spec for a Go rewrite
-of a 1295-line bash predecessor that had been running this author's machine as
-Claude Code's worktree hooks for months, since retired entirely. holt was
-extracted from the
-[nebelhaus workshop](https://github.com/nebelhaus/workshop) incubator once it
-passed that implementation's whole test suite.
-
-**All 110 acceptance tests pass** (77 ported from that bash predecessor, two for
-the bare-PATH hook environment, 14 for the policy seams, nine for occupancy
-leases, and eight for `watch`). They are black-box, carried over from the bash
-implementation — they drive the binary with shim `gh`/`lsof` on `PATH` and
-never touch a real repo, so they describe the contract rather than the
-implementation:
-
-```
-make test
+# working on a DIFFERENT repo than this pane — never a raw `git worktree add`
+cd "$(holt child ../other-repo)"
 ```
 
-Every command in the list below is implemented. What 0.1 still needs before
-cutover is not features but *proof*: a week of dual-running against the shell
-version on a real machine, and the hook switch behind one revertible option.
+## What's in a lane?
 
-Then 0.2 — the adapter TOML that replaces the hardcoded client table, bootstrap
-hooks with APFS/btrfs reflink, and `holt overlap`. Then 0.3 — `batch`, with
-queue bisection. See [`SPEC.md`](SPEC.md).
+A **lane** is one agent's branch, checkout, and pane — not a "worktree" (a
+parked lane has no checkout on disk, only a branch), and not a "session"
+(that's your multiplexer's). `holt --json` returns lanes in this shape; the
+SDKs below wrap it.
 
-## Non-goals
+| Field | Meaning |
+|---|---|
+| `name` | lane name |
+| `repo` / `main` | repo identity, and the main checkout's path |
+| `branch` | full branch name |
+| `path` | checkout path on disk — empty once `parked` |
+| `parent` | the pane that spawned it via `holt child`, or `""` |
+| `agent` | `claude` \| `codex` \| `opencode` |
+| `state` | `live` \| `parked` \| `stray` |
+| `occupied` | is anything actually standing in it right now |
+| `dirty` | uncommitted changes |
+| `landed` | reached the default branch? `yes` \| `no` \| `contained` |
+| `post_merge_ahead` | commits made *after* the PR merged |
+| `last_commit` | most recent commit |
 
-No scheduling. No agent supervision or restart. No fullscreen TUI. No hosted
-anything. No knowledge of your build system, package manager, or CI. No merge
-conflict *resolution*. No opinion about which agent you should run.
+Full lifecycle (states, invariants, landing rules, policy hooks) →
+[`docs/lifecycle.md`](docs/lifecycle.md).
 
 ## Commands
 
@@ -96,96 +80,25 @@ holt hook create        [hook] open a lane — JSON on stdin, path on stdout
 holt hook remove        [hook] retire one without losing work — JSON on stdin
 ```
 
-## Occupancy — telling holt a checkout is in use
+Config, exit codes, and building from source →
+[`docs/reference.md`](docs/reference.md).
 
-`reap` never removes a lane somebody is standing in, which means it has to know
-who is standing where. On a developer machine one `lsof` dump answers that:
-a zellij pane has a shell cwd'd into the checkout. Anything else — a container,
-a CI runner, a program embedding holt whose "sessions" are connections rather
-than directories — has to say so itself:
+---
 
-```
-holt heartbeat            # this checkout is in use while the calling process lives
-holt heartbeat --release  # done with it
-```
+*Why not your agent's built-in worktrees? No vendor ships cross-client
+(`claude` **and** `codex` **and** `opencode`, one registry), none ship
+cross-repo, and losing your work isn't their problem — it's holt's.*
 
-A lease naming a live pid is self-maintaining: the kernel releases it the moment
-the holder dies, with no TTL to wait out and no refresh loop to write. Use
-`--pid 0` when there is no local process to watch, and refresh within 90s.
-
-One asymmetry is deliberate and load-bearing: **a lease can save a lane from the
-sweep, never condemn one.** "Nobody leased it" is not evidence that nobody is
-there — somebody may have just `cd`'d in. An orchestrator that genuinely owns
-every session it serves can opt out with `HOLT_OCCUPANCY=lease`, and then an
-unleased lane does count as free.
-
-A lease is a client reporting on *itself*. The complementary case — a machine
-that can enumerate everyone's sessions better than `lsof` can, and wants to
-replace it outright — is a policy seam, and it's the next one to land.
-
-## `holt watch` — embedding holt in something else
-
-holt stays a binary; there is no daemon, no port, no socket to authenticate.
-An embedder — an agent UI, a web server holding one session per lane — shells
-out, same as a human at a terminal, and `watch` is the piece that makes that
-enough: a long-running process emitting one NDJSON object per line on stdout
-for as long as it runs.
-
-```console
-$ holt watch --json
-{"kind":"hello","seq":0,"holt":"0.1.0","schema":1,"capabilities":["registry"]}
-{"kind":"sync","seq":1,"ts":"2026-08-07T02:11:04Z","source":"registry","lane":{"name":"sparkle", …}}
-{"kind":"ready","seq":2,"ts":"2026-08-07T02:11:04Z"}
-{"kind":"created","seq":3,"ts":"2026-08-07T02:12:40Z","source":"registry","lane":{"name":"fresh", …}}
-```
-
-Every line after `hello` is one `kind`, at most one `lane`, and a `seq` that
-counts the whole stream — hello included — so a consumer fanning this out over
-its own transport (websockets, for a server holding many sessions on one
-`watch`) can tell whether it dropped a line, without holt knowing anything
-about that transport. `lane` is the exact shape `--json` uses for one entry in
-`lanes[]` — one schema, whether you're reading a snapshot or a stream.
-
-`sync` reports every lane already alive when the stream opened (your
-baseline), then `ready` marks the end of that burst — everything after is a
-live change: `created`, `parked`, `resumed`, `reaped`, or a catch-all
-`changed` for anything else about a lane that differs from what this stream
-last said (agent, dirty, landed, post-merge-ahead, last commit).
-
-Most of that is a registry mutation — `created`/`resumed`/`reaped` all are —
-so fsnotify on the registry file catches them instantly. `parked` usually
-isn't: `holt park` only commits, and the pane actually closing (`git worktree
-remove`) touches the registry only when the branch is already landed. An
-unlanded pane closing changes nothing but the filesystem, which the registry
-watch can't see — so `watch` also re-scans every few seconds as a backstop,
-the same cost as one `holt list`.
-
-**What it doesn't cover, on purpose:** `landed` and `post_merge_ahead` change
-at the *forge*, with nothing local — not the registry, not the filesystem —
-to fire on. Surfacing those here would mean polling `gh` on its own timer for
-as long as `watch` runs, and the one process this is built for holds leases
-across many lanes and many repos at once, which turns a timer into a
-rate-limit generator. So v1 emits registry- and filesystem-derived events
-only; a consumer that cares about landedness polls `holt --json`, same as
-today. `source` is on every event for exactly this reason — a forge-derived
-family is additive later (`source: "forge"`, new `kind` values) without a
-schema bump, and `capabilities` on `hello` is how a consumer will be able to
-tell which families a given `holt` can ever send.
-
-### SDKs
+## SDKs
 
 <details>
 <summary><strong>TypeScript</strong> — <code>@hausfold/holt</code> (not published yet)</summary>
 
-[`sdk/ts`](sdk/ts) is a thin client over the binary — `list()`, `watch()` as
-an async iterator over the NDJSON stream, `child`/`spawn` to create a lane
-without attaching an agent, `park`/`unpark`/`reap`/`reship`, and occupancy
-leases. Works from a Bun/Node TUI or a web backend; its types are safe to
-import into a browser bundle for the frontend.
-
-The npm package name is decided (`@hausfold/holt`) but nothing is published
-yet — for now, reference it from within this repo or copy `sdk/ts` out. This
-section moves to a proper docs page once it ships.
+[`sdk/ts`](sdk/ts) — `list()`, `watch()` as an async iterator over the
+NDJSON stream, `child`/`spawn` to create a lane without attaching an agent,
+`park`/`unpark`/`reap`/`reship`, and occupancy leases. Works from a
+Bun/Node TUI or a web backend; its types are safe to import into a browser
+bundle for the frontend.
 
 ```ts
 import { HoltClient } from "@hausfold/holt";
@@ -197,20 +110,17 @@ for await (const line of holt.watch()) {
 }
 ```
 
-See [`sdk/ts/README.md`](sdk/ts/README.md) for the full API, the
-programmatic-vs-interactive split (`new`/`resume` vs `newInteractive`/
-`resumeInteractive`), and leases.
+See [`sdk/ts/README.md`](sdk/ts/README.md) for the full API.
 
 </details>
 
 <details>
 <summary><strong>Python</strong> — <code>hausfold-holt</code></summary>
 
-[`sdk/python`](sdk/python) is the same thin client, async-first
+[`sdk/python`](sdk/python) — the same client, async-first
 (`asyncio.create_subprocess_exec`): `list()`, `watch()` as an async
 iterator, `child`/`spawn`, `park`/`unpark`/`reap`/`reship`, and occupancy
-leases (a throwing `async` factory here, unlike the TS SDK's constructor-
-based one). Drops into a FastAPI/asyncio backend or a plain script equally.
+leases. Drops into a FastAPI/asyncio backend or a plain script equally.
 
 ```
 pip install hausfold-holt
@@ -238,18 +148,15 @@ See [`sdk/python/README.md`](sdk/python/README.md) for the full API.
 <details>
 <summary><strong>Swift</strong> — <code>Holt</code></summary>
 
-[`sdk/swift`](sdk/swift) is the same thin client over
-`Foundation.Process`: `list()`, `watch()`/`watchLane(path:)` as
-`AsyncThrowingStream`, `child`/`spawn`, `park`/`unpark`/`reap`/`reship`,
-and occupancy leases (an `actor Lease`, taken via a throwing `async`
-factory). macOS + Linux — not iOS/tvOS/watchOS, since `Process` can't
-spawn a subprocess there.
+[`sdk/swift`](sdk/swift) — the same client over `Foundation.Process`:
+`list()`, `watch()`/`watchLane(path:)` as `AsyncThrowingStream`,
+`child`/`spawn`, `park`/`unpark`/`reap`/`reship`, and occupancy leases.
+macOS + Linux — not iOS/tvOS/watchOS, since `Process` can't spawn a
+subprocess there.
 
-Swift Package Manager has no monorepo-subdirectory story for a remote git
-dependency, so this ships from a generated mirror,
-[`nebelhaus/holt-swift`](https://github.com/nebelhaus/holt-swift)
-(`git subtree split --prefix=sdk/swift`, tagged to match) — send changes
-to `sdk/swift` here, never to the mirror directly.
+Ships from a generated mirror,
+[`nebelhaus/holt-swift`](https://github.com/nebelhaus/holt-swift) — send
+changes to `sdk/swift` here, never to the mirror directly.
 
 ```swift
 .package(url: "https://github.com/nebelhaus/holt-swift", from: "0.1.0")
@@ -274,22 +181,14 @@ See [`sdk/swift/README.md`](sdk/swift/README.md) for the full API.
 <details>
 <summary><strong>Go</strong> — <code>github.com/nebelhaus/holt/sdk/go</code></summary>
 
-[`sdk/go`](sdk/go) is the same thin client over `os/exec`: `List`,
-`Watch`/`WatchLane` as Go 1.23 range-over-func iterators (`iter.Seq2`, no
-channel or goroutine bridging needed — the generator body runs
-synchronously on the caller's own loop), `Child`/`Spawn`, `Park`/
-`Unpark`/`Reap`/`Reship`, and occupancy leases (`*Lease`, taken via
-`Client.Lease`, refreshed on a background goroutine until `Release`).
-Every method takes a `context.Context` first, Go's own idiom for what the
-other SDKs do with generator `.return()`/`break`.
+[`sdk/go`](sdk/go) — the same client over `os/exec`: `List`,
+`Watch`/`WatchLane` as Go 1.23 range-over-func iterators, `Child`/`Spawn`,
+`Park`/`Unpark`/`Reap`/`Reship`, and occupancy leases via `Client.Lease`.
 
-It's the one SDK that installs with zero setup: `sdk/go` carries its own
-nested `go.mod` (`github.com/nebelhaus/holt/sdk/go`), so `go get` resolves
-it straight from this repo via the module proxy — no npm/PyPI-style
-publish step, no package-manager account, and no separate mirror repo
-(unlike Swift's SwiftPM problem above). A pushed `sdk/go/vX.Y.Z` tag is
-all a real release needs; none exist yet, so `go get
-github.com/nebelhaus/holt/sdk/go@<commit-sha>` for now.
+The one SDK with zero setup: its own nested `go.mod`
+(`github.com/nebelhaus/holt/sdk/go`) means `go get` resolves it straight
+from this repo — no publish step, no separate mirror. No tagged release
+yet, so `go get github.com/nebelhaus/holt/sdk/go@<commit-sha>` for now.
 
 ```go
 import (
@@ -313,20 +212,14 @@ See [`sdk/go/README.md`](sdk/go/README.md) for the full API.
 <details>
 <summary><strong>Rust</strong> — <code>hausfold-holt</code></summary>
 
-[`sdk/rust`](sdk/rust) is the same thin client, async (tokio) like the
-Python SDK's stance: `list()`, `watch()`/`watch_lane()` as a `Stream` of
-typed lines (dropping it kills the underlying process — no channel or
-callback plumbing needed beyond that), `child`/`spawn`, `park`/`unpark`/
-`reap`/`reship`, and occupancy leases (`Lease`, taken via `HoltClient::lease`,
-refreshed on a background `tokio` task until `release()`). Drops into an
-axum/tonic backend or a plain async binary equally.
+[`sdk/rust`](sdk/rust) — the same client, async (tokio): `list()`,
+`watch()`/`watch_lane()` as a `Stream` of typed lines, `child`/`spawn`,
+`park`/`unpark`/`reap`/`reship`, and occupancy leases via `HoltClient::lease`.
+Drops into an axum/tonic backend or a plain async binary equally.
 
 ```sh
 cargo add hausfold-holt
 ```
-
-Import name is `holt` (plain `holt` is already taken on crates.io by an
-unrelated crate, same split as the PyPI package name).
 
 ```rust
 use futures_util::StreamExt;
@@ -342,158 +235,10 @@ while let Some(line) = lines.next().await {
 }
 ```
 
-See [`sdk/rust/README.md`](sdk/rust/README.md) for the full API, leases,
-and why the open-set fields (`state`, `landed.verdict`, `kind`) stay plain
-`String` rather than a Rust `enum`.
+See [`sdk/rust/README.md`](sdk/rust/README.md) for the full API.
 
 </details>
 
-## Default agent
+---
 
-Set a durable default that works from Zellij, launchd, and a standalone terminal:
-
-```toml
-# ~/.config/holt/config.toml
-agent = "codex"
-```
-
-`HOLT_AGENT` overrides that file for one invocation. Older nebelhaus installs
-may supply `NEBELHAUS_AGENT_DEFAULT` as a compatibility fallback.
-
-## Policy seams — disagreeing with holt
-
-holt grew out of one machine's setup, and it inherited that machine's answers to
-questions that only *look* universal. "Landed" means merged into the default
-branch. "Reapable" means landed, clean and unoccupied. "Resume" means become the
-client process. Each of those is right somewhere and wrong somewhere else, so
-each is a **named seam** with holt's answer as the default rather than the
-mechanism.
-
-```toml
-# ~/.config/holt/config.toml
-[hooks]
-resume   = "/usr/local/bin/my-resume"                     # a bare program
-landed   = ["/usr/local/bin/my-landed", "--release-train"] # or an argv
-```
-
-| Seam | Answers | holt's default |
-|---|---|---|
-| `agent` | which client a new lane opens in | the `agent` key above |
-| `landed` | has this branch's work reached the default branch? | ancestry → merged PR → patch-equivalence |
-| `preserve` | does a closing pane's dirty tree become a `wip:` commit? | yes, unless it's untracked scratch on a landed branch |
-| `resume` | reopen this lane's session | `cd`, then exec the client |
-| `open` | open a session in a brand-new lane | `cd`, then exec the client |
-
-A seam is a program. holt execs it, hands it the situation as JSON on stdin
-*and* as `HOLT_*` environment variables, and reads the answer off the exit code:
-
-```sh
-#!/usr/bin/env bash
-# a `resume` hook: open a zellij pane in the lane instead of taking over this
-# process. $HOLT_CHAT, not $HOLT_PATH — a spawned lane's conversation lives in
-# the pane that created it.
-zellij action new-pane --cwd "$HOLT_CHAT" -- "$HOLT_AGENT" --resume
-```
-
-| exit | means |
-|---|---|
-| `0` | yes / handled |
-| `1` | no / failed |
-| `2` | no — refused for safety |
-| `3` | **no opinion: run holt's built-in** |
-| anything else | run the built-in, and warn |
-
-Every failure mode falls back to the built-in, so a broken hook costs you the
-override and never the operation — loudly, because a policy that silently
-stopped applying is worse than one that never existed. A predicate can print a
-JSON object on stdout to say more than yes/no: `{"via": "release-train"}` from a
-`landed` hook keeps a reap attributable in `--json`.
-
-Two things no seam can override, because they are about holt not sawing off the
-branch it is sitting on: the checkout holt is being **run from** is never swept,
-and a **stray** is never swept, only reported.
-
-No `reapable` seam yet — it spans three of holt's opinions at once (occupancy,
-dirtiness, landedness) and a `yes` on a dirty tree is the one answer that
-destroys work, so it waits for the architecture those settle into. Overriding
-`landed` already moves the rung that matters most.
-
-`SPEC.md` §6.5 has the full contract and the list of facts still hardcoded.
-
-### `park`, not `git stash` — the shared-stash-stack footgun
-
-`git stash` looks per-checkout. It isn't. The stash is one ref — `refs/stash`,
-with its reflog as the stack — and git's short list of per-worktree refs
-(`HEAD`, `refs/bisect/*`, `refs/worktree/*`, …) does not include it. So every
-worktree of a repo **and the main checkout** push and pop the *same stack*, and
-with parallel lanes that means:
-
-- Lane A stashes; lane B runs `git stash pop` in another checkout and receives
-  A's changes into a tree that never asked for them — files B's agent has no
-  context for, gone from the stack the moment they land.
-- The "careful" form is racy too: `stash@{1}` is positional, so it names a
-  different entry the instant any parallel lane pushes or drops one.
-- A pop that conflicts leaves the entry both on the stack *and* half-applied —
-  now two lanes can each believe they own it.
-
-None of this bites a solo human, which is why nobody documents it: one popper,
-one stack, no race. It starts biting the moment worktrees make your work
-*parallel* — which is exactly what coding agents did.
-
-`holt park [label]` is the same "hold this thought" with nothing shared: it
-commits the whole dirty tree — untracked files included, `.gitignore`d ones
-never — as one `wip:` commit on the branch only this pane has checked out (the
-on-demand form of what the remove hook does on pane close). `holt unpark`
-rewinds it, putting the changes back uncommitted. It refuses to unpark a wip
-commit you've already pushed, so it can never become a force-push. Git lets a
-branch be checked out in only one worktree at a time; that exclusivity is the
-entire trick.
-
-### Workspace trust is inherited, never invented
-
-Claude Code keys its "do you trust the files in this folder?" dialog on the
-**exact cwd**, in `~/.claude.json` — there is no inheritance from a parent
-directory, and none from the git common dir. Its own `--worktree` doesn't prompt
-because it seeds that key for the checkout it makes; a checkout *holt* made was
-a directory Claude had never seen, so the same worktree of the same repo greeted
-you differently depending on who ran `git worktree add`.
-
-So when the client is Claude and the parent repo is **already trusted**, holt
-copies that one boolean onto the new checkout. If the parent isn't trusted this
-does nothing — holt propagates a decision you already made, it never makes one
-for you — and it is a no-op for Codex and OpenCode, which have no such model.
-Every failure (no config, unreadable, unparseable) is silent and costs exactly
-one trust prompt, which is the behaviour it replaced.
-
-### What "landed" means
-
-The predicate that decides whether a branch **dies** handles every merge
-strategy explicitly — fast-forward, merge commit, forge rebase, squash,
-cherry-pick, merged-then-kept-committing — and degrades to *keep* whenever it
-cannot prove the work is upstream. The full matrix is [SPEC.md §3](SPEC.md).
-
-## Exit codes
-
-| | |
-|---|---|
-| 0 | success, including "nothing to do" |
-| 1 | usage / precondition error |
-| 2 | **refused for safety** — occupied, dirty, or not provably landed |
-| 3 | degraded — completed, but a signal was unavailable |
-| 4 | conflict found (a finding, not an error) |
-| 5 | registry locked by another holt |
-
-`2` vs `1` is the one that matters: a wrapper script must be able to tell "you
-asked wrong" from "I declined to destroy something".
-
-## Building
-
-```bash
-make check
-```
-
-or `nix develop` for a shell with Go, bats and `gh`.
-
-## License
-
-Apache-2.0.
+<p align="center"><a href="https://hausfold.co">⌂ hausfold</a></p>

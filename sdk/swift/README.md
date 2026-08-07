@@ -1,29 +1,22 @@
 # Holt (Swift SDK)
 
 A thin Swift client over the [`holt`](../../README.md) binary — the
-worktree-lifecycle substrate for parallel coding agents. holt stays a
-binary; this SDK shells out to it (`Process` + `--json`, `watch --json`
-for a live NDJSON stream) rather than talking to a daemon, because there
-isn't one (SPEC.md §14.1).
+worktree-lifecycle substrate for parallel coding agents. Shells out to
+`holt` (`Process` + `--json`, `watch --json` for a live NDJSON stream)
+rather than talking to a daemon.
 
-macOS only, no iOS/tvOS/watchOS: `Foundation.Process` cannot spawn a
-subprocess on those platforms (App Store sandboxing forbids it outright,
-and there's no `holt` binary to bundle even if it could). Linux works too
-— `Process` is part of `swift-corelibs-foundation` — for the server /
-long-running-orchestrator case SPEC.md §14 calls out as the first real
-consumer; SwiftPM's `platforms:` field just doesn't list it because that
-field only constrains Apple OSes. Needs Swift 5.9+ (uses
+macOS only, no iOS/tvOS/watchOS: `Foundation.Process` can't spawn a
+subprocess there. Linux works too — `Process` is part of
+`swift-corelibs-foundation`. Needs Swift 5.9+ (uses
 `FileHandle.bytes.lines` and `AsyncThrowingStream`).
 
 ## Install
 
-Swift Package Manager has no monorepo-subdirectory story for a *remote*
-git dependency the way `npm`/`pip` do (no `#subdirectory=` equivalent —
-`Package.swift` has to sit at a repo's root), so this ships from a
-generated mirror instead: [`nebelhaus/holt-swift`](https://github.com/nebelhaus/holt-swift),
-kept in sync via [`sync-mirror.sh`](sync-mirror.sh) (a `git subtree
-split`) and tagged to match. Send changes here, to `sdk/swift`, never to
-the mirror directly — it gets overwritten on the next sync.
+Ships from a generated mirror — [`nebelhaus/holt-swift`](https://github.com/nebelhaus/holt-swift),
+kept in sync via [`sync-mirror.sh`](sync-mirror.sh) — since SwiftPM
+requires `Package.swift` to sit at a repo's root. Send changes here, to
+`sdk/swift`, never to the mirror directly — it's overwritten on the next
+sync.
 
 ```swift
 .package(url: "https://github.com/nebelhaus/holt-swift", from: "0.1.0")
@@ -49,7 +42,7 @@ let holt = HoltClient()
 let envelope = try await holt.list()
 for lane in envelope.lanes {
     // occupied/dirty are `Bool?` — nil means "not determined", never
-    // coerce it to false (SPEC.md §2.2's whole nullable-discipline point).
+    // coerce it to false.
     print(lane.name, lane.state, lane.occupied as Any)
 }
 
@@ -80,18 +73,16 @@ try await holt.newInteractive("task-42")
 // ... the agent owned the screen; you're back here when it exits.
 ```
 
-**Do not call `newInteractive` from a server.** `holt new` execs the
-agent client unconditionally — it doesn't check for a TTY the way
-`resume` does — so calling it with piped stdio blocks forever with your
-pipes attached to whatever the agent expects on stdin. `resume()` (the
-non-interactive form) is safe from a server: holt detects the piped
-stdout and prints the reopen command as text instead of exec'ing.
+**Do not call `newInteractive` from a server.** It execs the agent client
+unconditionally, without checking for a TTY, so piped stdio blocks
+forever. Use `resume()` from a server instead — it detects piped stdout
+and prints the reopen command as text rather than exec'ing.
 
-## Holding a session open: leases, not callbacks
+## Holding a session open: leases
 
-holt's sweep (`reap`) needs to know a checkout is in use. On a human's
-machine, `lsof` answers that. A server holding one session per lane has
-no pane and no shell cwd'd anywhere — so it says so itself, with a lease:
+`holt`'s sweep (`reap`) needs to know a checkout is in use — `lsof`
+answers that on a human's machine, but a server holding one session per
+lane has no pane or shell cwd'd anywhere, so it says so itself with a lease:
 
 ```swift
 let lease = try await holt.lease(path: laneDir) // refreshes on an interval, < the 90s TTL
@@ -103,22 +94,19 @@ Pass `pid:` instead when the lease should track a real local process —
 the OS then drops it the instant that pid dies, no refresh loop needed.
 
 A lease can only **save** a lane from `reap`, never condemn one —
-"nobody leased it" isn't proof nobody's there. See SPEC.md §14.2.
+absence of a lease isn't proof nobody's there.
 
-`holt.lease(...)` is a throwing `async` factory here (an `actor Lease`
-comes back once the first heartbeat has succeeded), the same tradeoff the
-Python SDK made and unlike the TS SDK's constructor-based `lease()`:
-Swift can await that first heartbeat before returning, so a failure to
-take the lease raises immediately instead of surfacing on the next
-refresh or release call.
+`holt.lease(...)` is a throwing `async` factory (an `actor Lease` comes
+back once the first heartbeat succeeds), so a failure to take the lease
+raises immediately instead of surfacing on the next refresh or release call.
 
 ## `watch()` cleanup
 
 `watch()`/`watchLane(path:)` return an `AsyncThrowingStream`. The
 underlying process is killed via the stream's `onTermination` handler,
 which fires when you `break` out of a `for try await` loop or the
-enclosing `Task` is cancelled — there is no other way to stop it short:
-`watch` has no built-in end condition, by design (SPEC.md §14).
+enclosing `Task` is cancelled — the only ways to stop it, since `watch`
+has no built-in end condition.
 
 ## Types for a UI layer
 
@@ -135,49 +123,21 @@ import Holt // HoltLane, WatchEvent, …
 `LaneState`, `LandedVerdict`, `LandedVia`, and `WatchEventKind` are not
 Swift `enum`s — they're `HoltOpenEnum<Tag>`, a `RawRepresentable` string
 wrapper with `static let` cases. A real `enum: String, Codable` throws a
-`DecodingError` on an unrecognized case; SPEC.md §2.2 requires the
-opposite ("additions are minor, removals major" — a consumer must treat
-an unknown value as opaque, not an error), same as the TS/Python SDKs'
-plain string-literal/`Literal` types, which perform no runtime check at
-all. Compare with `==` and the `static let` constants (`lane.state ==
-.live`); switching exhaustively isn't available and isn't the point.
+`DecodingError` on an unrecognized value; an unknown value here decodes
+as opaque instead of failing. Compare with `==` and the `static let`
+constants (`lane.state == .live`) — exhaustive `switch` isn't available.
 
-## What's NOT here yet
+## What's not here yet
 
-- `hook create`/`hook remove` (the Claude Code hook protocol, SPEC.md
-  §2.3) have no wrapper — they're for editor integrations, not the
-  orchestrator use case this SDK targets first. Shell out via the free
+- `hook create`/`hook remove` have no wrapper — shell out via the free
   `run()` function if you need them.
-- The `--json` envelope's future fields (`pr`, `overlap`, `ahead`/
-  `behind` — SPEC.md §2.2's example, gated behind the `overlap`/forge-
-  polling milestones) aren't in `HoltLane` because they aren't on the
-  wire in schema 1 yet. Don't add them here before
-  `internal/commands/json.go` does.
-- Types are hand-ported from the Go structs, not generated, same as the
-  TS/Python SDKs. If holt's JSON shape and this file drift, that's a real
-  bug class this SDK exists to avoid — SPEC.md §14.1 says "generate SDK
-  types from it" as the intended end state.
-- **Automating the mirror sync.** [`sync-mirror.sh`](sync-mirror.sh) and
-  the tag afterward are run by hand today — there's no CI hook that fires
-  them on release. `sdk/ts`/`sdk/python` have a CI wiring gap of their
-  own kind too (`.github/workflows/check.yml` only runs the Go acceptance
-  suite), so none of the three SDKs' tests run in CI yet either.
-- **Swift Package Index / registry listing.** Git-URL install (above) is
-  enough for almost every real consumer — most popular Swift packages
-  (e.g. `swift-argument-parser`) ship exactly this way. Listing on the
-  free, no-account [Swift Package Index](https://swiftpackageindex.com)
-  is a cheap future step for discoverability; a Swift Package
-  **Registry** publish (SE-0292) needs an account on whichever registry
-  is picked and isn't planned unless something specific calls for it.
+- `HoltLane` doesn't include the `--json` envelope's future fields
+  (`pr`, `overlap`, `ahead`/`behind`) — they aren't on the wire yet.
 
 ## Testing
 
 `Tests/HoltTests/fake-holt.sh` stands in for the real binary so tests
-don't need a Go build — it's a fixture, not a spec of holt's behavior,
-kept in sync by hand with `sdk/ts/test/fake-holt.sh` /
-`sdk/python/tests/fake-holt.sh`. Once `holt` builds in CI, add a second
-suite that runs the same assertions against the real binary in a scratch
-repo.
+don't need a Go build.
 
 ```
 swift test

@@ -1,19 +1,14 @@
 # hausfold-holt (Python SDK)
 
 A thin Python client over the [`holt`](../../README.md) binary — the
-worktree-lifecycle substrate for parallel coding agents. holt stays a
-binary; this SDK shells out to it (`asyncio.create_subprocess_exec` +
-`--json`, `watch --json` for a live NDJSON stream) rather than talking to a
-daemon, because there isn't one (SPEC.md §14.1).
+worktree-lifecycle substrate for parallel coding agents. holt has no daemon,
+so this SDK shells out to it (`asyncio.create_subprocess_exec` + `--json`,
+`watch --json` for a live NDJSON stream).
 
-Async-first, like the wire protocol wants: `watch()` is naturally a stream,
-and the obvious host for this SDK — a web backend serving many concurrent
-agent sessions — is async-native in Python too (FastAPI, Starlette, aiohttp).
-A sync script can still call every method with `asyncio.run(...)`.
+Async-first: `watch()` is naturally a stream. A sync script can still call
+every method via `asyncio.run(...)`.
 
-Import name is `holt`; the package on PyPI is `hausfold-holt` (`import
-holt` after `pip install hausfold-holt`, same split as most `<org>-<name>`
-distributions).
+Import name is `holt`; the package on PyPI is `hausfold-holt`.
 
 ## Install
 
@@ -28,9 +23,9 @@ For local development against this repo instead: `pip install -e sdk/python`.
 
 ## Two shapes of usage
 
-**Programmatic (a web backend, an orchestrator).** Every `HoltClient`
-method except the two ending in `_interactive` captures the child's stdout
-and returns — safe to call from a server with many concurrent sessions.
+**Programmatic.** Every `HoltClient` method except the two ending in
+`_interactive` captures the child's stdout and returns — safe to call from
+a server with many concurrent sessions.
 
 ```python
 import asyncio
@@ -41,9 +36,8 @@ async def main() -> None:
 
     envelope = await holt.list()
     for lane in envelope.lanes:
-        # occupied/dirty are `bool | None` — None means "not determined",
-        # never coerce it to False (SPEC.md §2.2's whole nullable-discipline
-        # point).
+        # occupied/dirty are `bool | None`: None means "not determined",
+        # never coerce it to False.
         print(lane.name, lane.state, lane.occupied)
 
     # Create a lane WITHOUT attaching an agent to it — the primitive an
@@ -61,11 +55,11 @@ async for line in holt.watch():
         notify_ui(line.lane)
 ```
 
-**Interactive (a real terminal TUI).** `new_interactive` /
-`resume_interactive` inherit the calling process's stdio, so when holt
-execs the configured agent client (`claude`, `codex`, `opencode`), it takes
-over the real terminal — same as running `holt new` by hand — and control
-returns to you when that session ends.
+**Interactive.** `new_interactive` / `resume_interactive` inherit the
+calling process's stdio, so when holt execs the configured agent client
+(`claude`, `codex`, `opencode`) it takes over the real terminal — same as
+running `holt new` by hand — and control returns to you when that session
+ends.
 
 ```python
 # A terminal app, run in an actual TTY:
@@ -73,18 +67,16 @@ await holt.new_interactive("task-42")
 # ... the agent owned the screen; you're back here when it exits.
 ```
 
-**Do not call `new_interactive` from a server.** `holt new` execs the agent
-client unconditionally — it doesn't check for a TTY the way `resume` does —
-so calling it with piped stdio blocks forever with your pipes attached to
-whatever the agent expects on stdin. `resume()` (the non-interactive form)
-is safe from a server: holt detects the piped stdout and prints the reopen
-command as text instead of exec'ing.
+**Do not call `new_interactive` from a server** — `holt new` execs the
+agent client unconditionally, without checking for a TTY, so piped stdio
+blocks forever. Use `resume()` instead: it detects piped stdout and prints
+the reopen command as text rather than exec'ing.
 
-## Holding a session open: leases, not callbacks
+## Holding a session open: leases
 
 holt's sweep (`reap`) needs to know a checkout is in use. On a human's
-machine, `lsof` answers that. A server holding one session per lane has no
-pane and no shell cwd'd anywhere — so it says so itself, with a lease:
+machine, `lsof` answers that; a server has no pane or shell cwd'd anywhere,
+so it says so itself with a lease:
 
 ```python
 lease = await holt.lease(lane_dir)  # refreshes on an interval, < the 90s TTL
@@ -96,21 +88,18 @@ Pass `pid=` instead when the lease should track a real local process — the
 OS then drops it the instant that pid dies, no refresh loop needed.
 
 A lease can only **save** a lane from `reap`, never condemn one — "nobody
-leased it" isn't proof nobody's there. See SPEC.md §14.2.
+leased it" isn't proof nobody's there.
 
-`holt.lease(...)` is a coroutine here, unlike the TS SDK's constructor-based
-`holt.lease(...)`: Python can await the first heartbeat before returning, so
-a failure to take the lease raises immediately instead of surfacing on the
-next refresh or release call.
+`holt.lease(...)` is a coroutine, so it can await the first heartbeat before
+returning: a failure to take the lease raises immediately instead of
+surfacing on the next refresh or release call.
 
 ## `watch()` cleanup
 
 `watch()` returns an async generator; stop consuming (`break`, or
-`.aclose()`) to kill the underlying process. CPython's refcounting closes a
-*sync* generator promptly when it goes out of scope, but async generators
-aren't guaranteed the same — wrap long-lived use in `contextlib.aclosing()`
-if you want the subprocess torn down deterministically rather than on the
-next GC pass:
+`.aclose()`) to kill the underlying process. Async generators aren't
+guaranteed to close promptly when they go out of scope — wrap long-lived use
+in `contextlib.aclosing()` to tear down the subprocess deterministically:
 
 ```python
 from contextlib import aclosing
@@ -122,12 +111,9 @@ async with aclosing(holt.watch()) as stream:
 
 ## Types for a frontend
 
-`holt.types` has no runtime dependencies beyond the standard library —
-`subprocess`/`asyncio` only appear in `exec.py`/`watch.py`/`client.py`.
+`holt.types` has no runtime dependencies beyond the standard library.
 Import just the dataclasses if you're modeling the same wire shape
-elsewhere (e.g. your web backend fans `watch()` out over its own
-websocket, and something downstream needs `HoltLane`/`WatchEvent` to
-validate what it receives):
+elsewhere:
 
 ```python
 from holt import HoltLane, WatchEvent
@@ -135,25 +121,14 @@ from holt import HoltLane, WatchEvent
 
 ## What's NOT here yet
 
-- `hook create`/`hook remove` (the Claude Code hook protocol, SPEC.md §2.3)
-  have no wrapper — they're for editor integrations, not the orchestrator
-  use case this SDK targets first. Shell out via `run()` if you need them.
-- The `--json` envelope's future fields (`pr`, `overlap`, `ahead`/`behind` —
-  SPEC.md §2.2's example, gated behind the `overlap`/forge-polling
-  milestones) aren't in `HoltLane` because they aren't on the wire in
-  schema 1 yet. Don't add them here before `internal/commands/json.go` does.
-- Types are hand-ported from the Go structs, not generated, same as the TS
-  SDK. If holt's JSON shape and this file drift, that's a real bug class
-  this SDK exists to avoid — SPEC.md §14.1 says "generate SDK types from
-  it" as the intended end state.
+`hook create`/`hook remove` have no wrapper — shell out via `run()` if you
+need them. Types are hand-ported from the Go structs, not generated; if
+holt's JSON shape drifts from this file, that's a bug here.
 
 ## Testing
 
 `tests/fake-holt.sh` stands in for the real binary so tests don't need a Go
-build — it's a fixture, not a spec of holt's behavior, kept in sync by hand
-with `sdk/ts/test/fake-holt.sh`. Once `holt` builds in CI, add a second
-suite that runs the same assertions against the real binary in a scratch
-repo.
+build.
 
 ```
 python -m venv .venv && source .venv/bin/activate
