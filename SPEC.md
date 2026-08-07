@@ -956,7 +956,7 @@ and belong in holt 0.1, not just in nebelhaus:
 | **0.1** | Everything in §2 (contracts), §3 (landed, incl. patch-equivalence), §4 (slug identity), §5 (adapters), §10 (cutover). Commands: `list`, `new`, `child`, `spawn`, `resume`, `park`, `unpark`, `reap`, `reship`, `hook create/remove`, `doctor`. | The ported acceptance suite passes unmodified against `holt`; every nebelhaus caller is repointed at it (done, nebelhaus#201/#245) with no bash predecessor left to fall back to. |
 | **0.2** | §6 bootstrap (reflink, ports, secrets, trust), §7 `overlap`. | `holt doctor --write` produces a usable `.holt.toml` on a stranger's Node repo; `overlap` sees parked branches. |
 | **0.3** | §8 `batch` with queue bisection; `bench try-batch` becomes a wrapper. | It names a culprit *pair* on a real red queue. |
-| **0.4** | §14 SDKs: `holt watch --json`, then TS, then Python/Swift. holt stays a binary — SDKs shell out. | A third party ships an agent UI whose only worktree logic is `holt`. |
+| **0.4** | §14 SDKs: `holt watch --json`, then TS, then Python/Swift, plus §14.5's `holt docs agent` + adapter `instructions_file` + `bootstrap.agent_instructions`. holt stays a binary — SDKs shell out. | A third party ships an agent UI whose only worktree logic is `holt` — and whose spawned agent knows `holt child`/`holt park` without a hand-written CLAUDE.md stanza. |
 | later | Runtime backends, GUI-embeddable library split, §14.3 step 5 (remote transport). | — |
 
 ---
@@ -1071,8 +1071,12 @@ item to the thing the SDKs are built on.
    can be added later without a schema bump — see §14.4.
 3. **TS SDK** — subprocess + the two above. Ship it and let it find what the
    schema is missing, before three more languages pin the gaps.
-4. Python, Swift — mechanical once TS has proven the wire schema.
-5. Remote transport, as an HTTP server speaking the same protocol. Only here does
+4. `holt docs agent` + the adapter `instructions_file` field + the
+   `bootstrap.agent_instructions` step (§14.5) — ship alongside the TS SDK, so
+   "an embedder's only worktree logic is holt" (§12's 0.4 exit bar) is true of
+   the *agent's* knowledge too, not just the UI's.
+5. Python, Swift — mechanical once TS has proven the wire schema.
+6. Remote transport, as an HTTP server speaking the same protocol. Only here does
    the machine-local-rows problem above need solving, and by then a server knows
    which client each row came from, which is most of the answer.
 
@@ -1113,3 +1117,77 @@ nothing in v1 — is deliberate: the whole point of freezing a wire schema this
 early (§14.1) is not needing a v2 of it for a long time, and the fields that
 save that are far cheaper to ship now, unused, than to retrofit once three
 languages have generated types against their absence.
+
+### 14.5 Teaching the agent holt exists — embedders with no CLAUDE.md
+
+§14.1–14.3 make holt *reachable* from any language. They say nothing about
+whether the **agent** an embedder spawns knows to use it. On Julien's machine
+that's solved by accident, not by design: a global `~/.claude/CLAUDE.md`,
+Nix-rendered, gets injected into every Claude Code session regardless of repo,
+and happens to carry a hand-written `holt child`/`holt park` stanza. A
+third-party TUI built on the TS SDK has no such file, no Nix, no
+global-instructions injection point at all — and an agent that doesn't know
+`holt child` exists will run `git worktree add`, and one that doesn't know
+`holt park` exists will run `git stash`, landing exactly on the
+shared-stash-stack footgun the README already spends a whole section warning
+about. A substrate whose whole pitch is owning worktree-lifecycle invariants
+can't leave "does the agent know the invariants exist" as an exercise for
+every embedder.
+
+**The instructions are not per-lane data.** They don't need §5.2's template
+variables — "use `holt child`, not `git worktree add`" is the same sentence on
+every repo, every lane, every machine. That means they aren't a lifecycle hook
+(§6.1) an embedder has to wire themselves; they're closer to a §6.3 built-in
+bootstrap step, and the text itself can be a single Markdown asset compiled
+into the binary (`go:embed`), not a network fetch or a template render.
+
+```
+holt docs agent [--format=md|json]   # print the canonical instruction block
+```
+
+`--format=json` returns `{"version": "...", "body": "..."}` so an embedder can
+detect drift against a copy it already spliced in, rather than diffing prose.
+`version` bumps only when `body` changes — the same discipline as §2.2's
+envelope, so a pinned embedder never gets silently rewritten instructions
+under it.
+
+**Where it lands is a per-client fact, so it's an adapter field, not a new
+concept.** §5.3's agent adapters already carry client-specific behavior in six
+lines; add one:
+
+```toml
+kind    = "agent"
+id      = "claude"
+...
+instructions_file = "CLAUDE.md"      # codex/opencode/amp: "AGENTS.md"
+```
+
+**Injection is opt-in and idempotent**, wired the same way §6.3's `copy` and
+`reflink` steps are:
+
+```toml
+[bootstrap]
+agent_instructions = true   # append `holt docs agent`'s body into instructions_file
+```
+
+Idempotent means holt looks for a marker —
+`<!-- holt:agent-instructions v3 -->` … `<!-- /holt:agent-instructions -->` —
+in the target file and rewrites only that span, leaving whatever the embedder
+already wrote above and below it untouched. Same discipline as the trust-file
+seeding in the README's "Workspace trust is inherited, never invented": holt
+propagates a decision, it never invents or overwrites one. A repo with no
+instructions file yet gets one created containing just the marked block.
+
+`holt doctor` gets one more finding: an agent adapter with
+`instructions_file` set but no marker present in that file for the repo being
+inspected — "this agent won't know about `holt`; `holt doctor --write` to add
+it."
+
+**TS SDK surface is a single call:** `holt.agentInstructions()` execs
+`holt docs agent --format=json` and returns the typed envelope — no new
+transport, no new invariant, consistent with §14.1's "SDKs are thin."
+
+None of this is mandatory: an embedder can ignore it and hand-write their own
+stanza, the way nebelhaus does today. What it buys the ones who don't want to
+is the same thing adapters buy for clients — one canonical, versioned copy
+instead of N drifting hand-copied ones.
