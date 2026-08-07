@@ -57,7 +57,7 @@ type jsonPostMerge struct {
 }
 
 func (e *Env) listJSON(rows []listRow) error {
-	occupied, occKnown := occupancy()
+	occ := e.Occupancy()
 
 	out := jsonEnvelope{
 		Holt:     Version,
@@ -85,9 +85,17 @@ func (e *Env) listJSON(rows []listRow) error {
 		if row, ok := e.Reg.Find(entry.Path); ok {
 			w.Parent = row.Parent
 		}
-		if occKnown {
-			occ := isOccupied(occupied, entry.Path)
-			w.Occupied = &occ
+		// true / false / null, and the three are genuinely different answers.
+		// A lease asserts presence even when nothing on this machine can vouch
+		// for absence, so "held" outranks "unknowable" — but the reverse never
+		// happens, and an unvouched miss stays null rather than becoming false.
+		switch {
+		case occ.Occupied(entry.Path):
+			held := true
+			w.Occupied = &held
+		case occ.Known():
+			held := false
+			w.Occupied = &held
 		}
 		if entry.State == Live {
 			dirty := gitx.Dirty(entry.Path)

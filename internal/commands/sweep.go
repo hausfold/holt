@@ -1,9 +1,7 @@
 package commands
 
 import (
-	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/nebelhaus/holt/internal/gitx"
 	"github.com/nebelhaus/holt/internal/registry"
@@ -42,14 +40,18 @@ type SweepResult struct {
 // lot of them has to wait for the shape those settle into.
 func (e *Env) reapSweep(mode sweepMode) SweepResult {
 	var res SweepResult
-	occupied, occKnown := occupancy()
-	if !occKnown && mode == sweepAll {
+	occ := e.Occupancy()
+	if !occ.Known() && mode == sweepAll {
 		// "Landed and clean" does NOT mean "nobody is standing here". Without a
 		// way to ask, the live half of the sweep is unsafe, so degrade to
 		// parked-only rather than guess.
 		mode = sweepParked
 		res.Degraded = true
-		e.Warn("no lsof — can't tell which checkouts have a pane open, so only PARKED lanes were swept")
+		// "No provider vouched for absence", which on a developer machine means
+		// no lsof. Leases alone never reach this branch: they assert presence
+		// only, so a lane nobody leased is still an open question. An embedder
+		// that owns every session it serves says so with HOLT_OCCUPANCY=lease.
+		e.Warn("no lsof — can't tell which checkouts have a pane open, so only PARKED lanes were swept (an embedder that owns every session can answer with HOLT_OCCUPANCY=lease)")
 	}
 	selfTop, _ := gitx.Toplevel(e.Cwd)
 
@@ -69,7 +71,7 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 			if entry.Path == selfTop {
 				continue // never the checkout we are being run from
 			}
-			if isOccupied(occupied, entry.Path) {
+			if occ.Occupied(entry.Path) {
 				// Landed or not, a pane is standing in it. Removing the checkout
 				// yanks the cwd out from under a running client: the shell and
 				// the agent keep running in a deleted directory and every
@@ -139,46 +141,6 @@ func (e *Env) pruneRegistry() {
 			State:  checkoutState(row.Path),
 		})
 	})
-}
-
-// ── occupancy ────────────────────────────────────────────────────────────────
-
-// occupancy returns every cwd a live process is sitting in, and whether the
-// question could be answered at all.
-//
-// A zellij pane always has at least its login shell cwd'd into the lane's
-// checkout (and the agent as a child), so "some process's cwd is inside this
-// tree" is the signal. One dump for the whole sweep, prefix-matched per lane.
-//
-// This is the most portability-bound thing holt does — SPEC.md §9 replaces it
-// with a heartbeat, with lsof demoted to one provider among several. Until then:
-// an empty or failed dump means UNKNOWN, never "nothing is occupied".
-func occupancy() (cwds []string, known bool) {
-	if _, err := exec.LookPath("lsof"); err != nil {
-		return nil, false
-	}
-	out, err := exec.Command("lsof", "-w", "-d", "cwd", "-F", "n").Output()
-	if err != nil && len(out) == 0 {
-		return nil, false
-	}
-	for _, line := range strings.Split(string(out), "\n") {
-		if strings.HasPrefix(line, "n") {
-			cwds = append(cwds, strings.TrimSpace(line[1:]))
-		}
-	}
-	if len(cwds) == 0 {
-		return nil, false
-	}
-	return cwds, true
-}
-
-func isOccupied(cwds []string, path string) bool {
-	for _, c := range cwds {
-		if c == path || strings.HasPrefix(c, path+"/") {
-			return true
-		}
-	}
-	return false
 }
 
 func itoa(n int) string {
