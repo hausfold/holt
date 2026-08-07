@@ -17,20 +17,20 @@ import (
 // taken name is fatal.
 //
 //	New    — a pane pressed the key. Parent is the PANE's cwd, so the statusline
-//	         files the worktree under the session that opened it. Then it EXECS
-//	         the client, becoming that session.
+//	         files the lane under the pane that opened it. Then it EXECS the
+//	         client, becoming that pane's session.
 //	Child  — a pane working on ANOTHER repo. Same parent rule, so the child's PR
-//	         surfaces under the session that spawned it. Prints the path so the
+//	         surfaces under the lane that spawned it. Prints the path so the
 //	         caller can `cd "$(holt child …)"`. A taken name is fatal: there is
 //	         a human here to tell.
-//	Spawn  — nobody's pane (the palette's command runs under launchd). The
-//	         session it launches is TOP-LEVEL, so the parent is the repo's own
-//	         main checkout — a pane sitting in that repo lists it, which is where
-//	         a human looks. A taken name takes the next free suffix, because a
+//	Spawn  — nobody's pane (the palette's command runs under launchd). The lane
+//	         it opens is TOP-LEVEL, so the parent is the repo's own main
+//	         checkout — a pane sitting in that repo lists it, which is where a
+//	         human looks. A taken name takes the next free suffix, because a
 //	         palette has nobody to tell and a dead end there is a command that
 //	         silently did nothing.
 
-// New makes a worktree of THIS repo and opens the default client in it.
+// New opens a lane on THIS repo and starts the default client in it.
 //
 // This is the client-agnostic spawn bind. Claude Code has a native --worktree
 // flag that fires the create hook; Codex and OpenCode have nothing like it, so a
@@ -58,9 +58,9 @@ func (e *Env) New(want, agentID string) error {
 		Path: dir, Parent: e.Cwd, Agent: agentID,
 	})
 	trustWorktree(agentID, main, dir)
-	ui.Say("created %s worktree '%s' → %s", filepath.Base(main), name, dir)
+	ui.Say("created %s lane '%s' → %s", filepath.Base(main), name, dir)
 
-	// The client is resolved LAST, and its absence is not fatal to the worktree:
+	// The client is resolved LAST, and its absence is not fatal to the lane:
 	// the checkout and the registry row are already on disk, so an uninstalled
 	// client costs you this launch, not the branch. `holt <name>` picks it up.
 	spec, err := resolveAgent(agentID)
@@ -73,7 +73,7 @@ func (e *Env) New(want, agentID string) error {
 	return execClient(spec.open)
 }
 
-// Child makes a worktree of ANOTHER repo, as a child of this pane.
+// Child opens a lane on ANOTHER repo, as a child of this pane.
 //
 // The cross-repo escape hatch. A workshop pane whose task belongs to a sub-repo
 // would otherwise reach for a raw `git worktree add` — which never touches the
@@ -91,8 +91,8 @@ func (e *Env) Child(target, want string) error {
 		return err
 	}
 
-	// Default the child's name to THIS pane's own worktree name, so a sub-worktree
-	// shares the session's identity (…-sparkle in both repos).
+	// Default the child's name to THIS pane's own lane name, so a child lane
+	// shares its parent's identity (…-sparkle in both repos).
 	if want == "" {
 		if b := gitx.CurrentBranch(e.Cwd); len(b) > 9 && b[:9] == "worktree-" {
 			want = b[9:]
@@ -103,7 +103,7 @@ func (e *Env) Child(target, want string) error {
 
 	dir := filepath.Join(e.Base, e.bucketFor(main), want)
 	if _, err := os.Stat(dir); err == nil {
-		return exitcode.Usagef("a worktree already exists at %s — pass another name: holt child %s <name>", dir, target)
+		return exitcode.Usagef("a lane already exists at %s — pass another name: holt child %s <name>", dir, target)
 	}
 	if gitx.HasBranch(main, "worktree-"+want) {
 		return exitcode.Usagef("branch worktree-%s already exists in %s — pass another name: holt child %s <name>",
@@ -113,15 +113,15 @@ func (e *Env) Child(target, want string) error {
 		return err
 	}
 	// Registered with THIS pane's cwd as parent — the same field the create hook
-	// stores — so the statusline lists the child under the session that spawned
-	// it, and queries the CHILD repo's forge for its PR state.
+	// stores — so the statusline lists the child under the lane that spawned it,
+	// and queries the CHILD repo's forge for its PR state.
 	agentID := e.agentForPath(e.Cwd)
 	_ = e.Reg.Put(registry.Row{
 		Name: want, Main: main, Branch: "worktree-" + want,
 		Path: dir, Parent: e.Cwd, Agent: agentID,
 	})
 	trustWorktree(agentID, main, dir)
-	ui.Say("created %s worktree '%s' → %s", filepath.Base(main), want, dir)
+	ui.Say("created %s lane '%s' → %s", filepath.Base(main), want, dir)
 	ui.Out("%s\n", dir) // ONLY the path on stdout, so: cd "$(holt child …)"
 	return nil
 }

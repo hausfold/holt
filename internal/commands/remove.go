@@ -11,8 +11,8 @@ import (
 	"github.com/nebelhaus/holt/internal/ui"
 )
 
-// HookRemove implements the WorktreeRemove hook: retire a worktree WITHOUT
-// losing work.
+// HookRemove implements the WorktreeRemove hook: retire a lane WITHOUT losing
+// work.
 //
 // A plain `git worktree remove --force` silently discards uncommitted edits.
 // Committed work always survives on the branch; the dirty remainder is parked
@@ -77,7 +77,7 @@ func (e *Env) HookRemove(stdin io.Reader) error {
 			// Even --force refused, and git never got as far as unregistering.
 			// The branch is still checked out here, so don't reap it out from
 			// under the checkout.
-			ui.Say("git wouldn't remove %s — the worktree is still registered; try: holt reap", dir)
+			ui.Say("git wouldn't remove %s — the lane is still registered; try: holt reap", dir)
 			return nil
 		}
 	}
@@ -96,8 +96,8 @@ func (e *Env) HookRemove(stdin io.Reader) error {
 // only remaining changes are UNTRACKED files, is holding build scratch (a
 // target/, a .venv/) — not history. Wip-committing it moves the tip one commit
 // past the merged PR's SHA, so the branch no longer matches its merge and the
-// worktree gets falsely PARKED instead of reaped. That is how merged worktrees
-// piled up. Tracked edits, or an unmerged branch, are real work → always kept.
+// lane gets falsely PARKED instead of reaped. That is how merged lanes piled
+// up. Tracked edits, or an unmerged branch, are real work → always kept.
 func (e *Env) mustPreserve(main, branch, porcelain string) bool {
 	if branch == "" {
 		return true

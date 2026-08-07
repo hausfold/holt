@@ -13,19 +13,23 @@ import (
 // of cutover. Field ADDITIONS are non-breaking and consumers must ignore unknown
 // keys; removals and meaning changes are not.
 //
+// The array is `lanes`, not `worktrees`, because a parked entry has no checkout
+// on disk at all — the branch is the durable artifact. `agent` inside each lane
+// keeps its own meaning: the CLIENT (claude | codex | opencode), never the lane.
+//
 // The nullable fields are the part that matters. `occupied`, `dirty` and `pr`
 // are pointers so that "not determined" (no lsof, no forge, cache miss) is
 // distinguishable from "false". Every consumer bug in the shell version's
 // statusline came from conflating those two.
 
 type jsonEnvelope struct {
-	Holt      string         `json:"holt"`
-	Schema    int            `json:"schema"`
-	Worktrees []jsonWorktree `json:"worktrees"`
-	Warnings  []string       `json:"warnings"`
+	Holt     string     `json:"holt"`
+	Schema   int        `json:"schema"`
+	Lanes    []jsonLane `json:"lanes"`
+	Warnings []string   `json:"warnings"`
 }
 
-type jsonWorktree struct {
+type jsonLane struct {
 	Name           string        `json:"name"`
 	Repo           string        `json:"repo"`
 	Main           string        `json:"main"`
@@ -56,10 +60,10 @@ func (e *Env) listJSON(rows []listRow) error {
 	occupied, occKnown := occupancy()
 
 	out := jsonEnvelope{
-		Holt:      Version,
-		Schema:    1,
-		Worktrees: []jsonWorktree{},
-		Warnings:  []string{},
+		Holt:     Version,
+		Schema:   1,
+		Lanes:    []jsonLane{},
+		Warnings: []string{},
 	}
 	for _, r := range rows {
 		entry := r.Entry
@@ -67,7 +71,7 @@ func (e *Env) listJSON(rows []listRow) error {
 		if err != nil {
 			slug = "local/" + filepath.Base(entry.Main)
 		}
-		w := jsonWorktree{
+		w := jsonLane{
 			Name:           r.Name,
 			Repo:           slug,
 			Main:           entry.Main,
@@ -99,7 +103,7 @@ func (e *Env) listJSON(rows []listRow) error {
 			// never did anything, so `reap` ignores it without --contained.
 			w.Landed.Verdict = "contained"
 		}
-		out.Worktrees = append(out.Worktrees, w)
+		out.Lanes = append(out.Lanes, w)
 	}
 	out.Warnings = append(out.Warnings, e.Warnings...)
 

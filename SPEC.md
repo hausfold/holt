@@ -68,6 +68,24 @@ treat the lifecycle invariants as an afterthought because losing *your* work
 isn't *their* problem. Park, PR-verified reap, occupancy detection, and
 post-merge drift detection are the product.
 
+### Vocabulary: a **lane**
+
+The thing that state machine moves through its states is a **lane** — one
+agent's branch, checkout and pane, from `create` to `reaped`. Every command,
+message and `--json` field means *lane* when it says lane.
+
+Three words that were doing this job are now reserved, because each already
+means something narrower and the overload was the bug:
+
+| word | means, and only this |
+|---|---|
+| **worktree** | git's — the checkout on disk. A *parked* lane has none, so "worktree" cannot name the unit; §0's whole point is that the branch is the durable artifact and the directory is disposable. |
+| **agent** | the **client**: `claude`, `codex`, `opencode`. Registry field 6, `--json` `agent`, `--agent`, `HOLT_AGENT`. Frozen (§2.1) — a lane *runs* an agent, it is not one. |
+| **session** | somebody else's: zellij's session, and each client's own transcript/resume session. holt never names its own unit this. |
+
+`pane` stays available for the terminal pane a lane is (or isn't) occupied by —
+that is exactly what `occupied` reports.
+
 ---
 
 ## 1. Name, license, distribution
@@ -91,7 +109,7 @@ pin them within a day of cutover.
 
 ### 2.1 Registry schema
 
-Today (`$WT_BASE/registry.tsv`), one tab-separated line per worktree, six fields:
+Today (`$WT_BASE/registry.tsv`), one tab-separated line per lane, six fields:
 
 ```
 name    main-checkout    branch    checkout-path    parent    agent
@@ -109,7 +127,7 @@ propose v1.
 Proposed v1 (post-cutover, opt-in, `holt migrate`):
 
 ```toml
-# $HOLT_STATE/registry/<sha256(checkout-path)[:12]>.toml   — one file per worktree
+# $HOLT_STATE/registry/<sha256(checkout-path)[:12]>.toml   — one file per lane
 schema   = 1
 name     = "sparkle"
 repo     = "nebelhaus/nebelhaus"   # remote slug — see §4
@@ -142,7 +160,7 @@ version-check without sniffing:
 {
   "holt": "0.1.0",
   "schema": 1,
-  "worktrees": [
+  "lanes": [
     {
       "name": "sparkle",
       "repo": "nebelhaus/nebelhaus",
@@ -168,6 +186,9 @@ version-check without sniffing:
 
 Contract points that matter:
 
+- The array is **`lanes`**, not `worktrees` — a parked entry has no checkout on
+  disk, so `worktrees` was never true of the whole set. `agent` inside each lane
+  keeps its own meaning: the client, never the lane.
 - `state` ∈ `live | parked | stray`. Closed set; additions are minor, removals major.
 - `landed.verdict` ∈ `yes | no | contained` and `landed.via` ∈
   `ancestry | pr-head-oid | patch-equivalence | merge-tree-empty | null` — see §3.
@@ -242,7 +263,7 @@ existing signal and close the remaining holes explicitly.
 
 The existing division of labour is right and must survive the port: the **listing**
 uses one repo-wide `merged_map` query (a per-branch query costs ~0.5 s each, which
-turns a 0.3 s listing into seconds with eight worktrees), while **`branch_landed`
+turns a 0.3 s listing into seconds with eight lanes), while **`branch_landed`
 keeps its own exact per-branch query** because it decides whether a branch dies and
 must not inherit the listing's horizon.
 
@@ -317,12 +338,12 @@ $HOLT_HOME/<owner-name>/<worktree-name>
   works, and `holt doctor` tells you to add a remote.
 - Multiple remotes disagreeing (fork workflows): `origin` wins; `holt doctor`
   reports the ambiguity.
-- The bucket directory is **cosmetic**; every command re-derives a worktree's main
+- The bucket directory is **cosmetic**; every command re-derives a lane's main
   checkout from the checkout itself (`git rev-parse --git-common-dir`), exactly as
   `resume_rows` does today. Never parse identity out of a path.
 
 **Migration:** existing rows keep their existing `path`. holt reads them, resolves
-them, and never rewrites a path under a live row — new worktrees get slug buckets,
+them, and never rewrites a path under a live row — new lanes get slug buckets,
 old ones stay where they are. One `holt doctor --relocate` can offer to move them
 later. Cutover day changes nothing on disk.
 
@@ -359,14 +380,14 @@ learn, one table to document.
 
 | Variable | Meaning |
 |---|---|
-| `{{.Path}}` | the worktree checkout path |
+| `{{.Path}}` | the lane's checkout path |
 | `{{.Main}}` | the main checkout path |
 | `{{.Repo}}` | remote slug, `owner/name` |
 | `{{.Name}}` | worktree name (branch minus the `worktree-` prefix) |
 | `{{.Branch}}` | full branch name |
 | `{{.Base}}` | default branch of the repo |
 | `{{.Parent}}` | the spawning pane's cwd, or empty |
-| `{{.Agent}}` | client id recorded for this worktree |
+| `{{.Agent}}` | client id recorded for this lane |
 | `{{.Prompt}}` | initial prompt, when starting a client |
 | `{{.Image}}` | path to an attached image, or empty |
 | `{{.Port}}` | the deterministically allocated base port (§6) |
@@ -544,7 +565,7 @@ The *idea* is correct and worth having. The *dependency* isn't, for four reasons
    including the matrix rendering. Taking a second Rust binary, a second config
    file, and a second Claude plugin for that flatly contradicts holt's own "single
    binary, no runtime dependencies" pitch.
-2. **It's structurally blind to exactly the worktrees that matter to holt.** Clash
+2. **It's structurally blind to exactly the lanes that matter to holt.** Clash
    enumerates `git worktree list` — so it sees live checkouts only. holt's
    **parked** branches have no checkout on disk at all, and those are precisely
    the ones you've forgotten about and that have been rotting against `main` for a
@@ -568,12 +589,12 @@ approach — and the approach is one paragraph of public documentation, not IP.
 holt overlap [--json] [--committed-only] [--pair A B]
 ```
 
-- Pairwise `git merge-tree --write-tree` across **every registry worktree,
+- Pairwise `git merge-tree --write-tree` across **every registry lane,
   including parked branches**, using each pair's own merge base.
 - **Uncommitted work counts.** Clash's `has_active_changes` is a bare dirty
   boolean — it doesn't merge-test what the agents are currently typing, which in
-  agent worktrees is *most of the interesting content*. holt builds a throwaway
-  tree per worktree with `GIT_INDEX_FILE=$tmp git add -A && git write-tree` (the
+  agent lanes is *most of the interesting content*. holt builds a throwaway
+  tree per lane with `GIT_INDEX_FILE=$tmp git add -A && git write-tree` (the
   real index is untouched) and merge-tests those. That's the difference between
   "these branches will conflict eventually" and "your two running agents are
   fighting over `src/auth.ts` right now". `--committed-only` skips the worktree
@@ -586,7 +607,7 @@ holt overlap [--json] [--committed-only] [--pair A B]
   strictly opt-in and never the documented default.
 
 Scaling is a non-issue and should be stated so: N is 3–8, merge-tree is
-milliseconds, 12 worktrees is 66 pairs and still sub-second. Cache keyed on the
+milliseconds, 12 lanes is 66 pairs and still sub-second. Cache keyed on the
 pair's `(tipA, tipB, mergeBase)` triple; the temp-tree path additionally keys on
 worktree mtime.
 
@@ -648,7 +669,7 @@ removed on completion, including on failure (behind `--keep` for debugging).
 | **Submodules** | not initialised in a new worktree — `git worktree add` doesn't recurse | detect `.gitmodules`; `bootstrap.submodules = "recursive" \| "none"`; default `none` with a `doctor` warning, because recursing can be minutes |
 | **LFS** | pointers, not files, unless a smudge runs | detect `.gitattributes` filter=lfs; offer `git lfs pull` as a bootstrap step; warn loudly rather than silently handing over pointer files |
 | **Sparse-checkout** | not inherited from the main checkout | copy the main checkout's sparse patterns into the new worktree by default (`--no-inherit-sparse` to opt out) — inheriting is nearly always what's meant |
-| **Disk accounting** | none | `holt list --disk` / `doctor` reports per-worktree and per-repo usage (`du`-equivalent, walked in Go); flag when reflink fell back to copy and the tree is >1 GB |
+| **Disk accounting** | none | `holt list --disk` / `doctor` reports per-lane and per-repo usage (`du`-equivalent, walked in Go); flag when reflink fell back to copy and the tree is >1 GB |
 | **`python3` dependency** | `hook_field` shells out to python3 to parse hook JSON | gone — Go has `encoding/json` |
 | **Registry race** | whole-table temp-file rewrite | per-row files + `flock` (§2.1) |
 | **Windows** | not attempted | out of scope for 0.1; state it. Path handling should not gratuitously preclude it. |

@@ -385,7 +385,7 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
   git -C "$main" worktree remove --force "$dir"
   wt_run list
   [ "$status" -eq 0 ]
-  [[ "$output" == *"swept 1 merged worktree"* ]]
+  [[ "$output" == *"swept 1 merged lane"* ]]
   run git -C "$main" show-ref -q --verify refs/heads/worktree-landed
   [ "$status" -ne 0 ]
 }
@@ -423,7 +423,7 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
 @test "resume: an unknown name dies pointing at the listing" {
   wt_run resume nope
   [ "$status" -ne 0 ]
-  [[ "$output" == *"no agent worktree named 'nope'"* ]]
+  [[ "$output" == *"no lane named 'nope'"* ]]
 }
 
 @test "resume: a branch checked out OUTSIDE the base is reported live, not re-added" {
@@ -687,7 +687,7 @@ mkremote() { # mkremote <main> — give a repo a bare origin it can actually pus
   mkrepo alpha >/dev/null
   cd "$TMP"; wt_run reship nosuch
   [ "$status" -ne 0 ]
-  [[ "$output" == *"no agent worktree named 'nosuch'"* ]]
+  [[ "$output" == *"no lane named 'nosuch'"* ]]
 }
 
 # ── child ────────────────────────────────────────────────────────────────────
@@ -739,7 +739,7 @@ mkremote() { # mkremote <main> — give a repo a bare origin it can actually pus
   git -C "$b" worktree remove --force "$cdir"
   wt_run resume beta/par
   [ "$status" -eq 0 ]
-  [[ "$output" == *"spawned from a session in $dir"* ]]
+  [[ "$output" == *"spawned from a pane in $dir"* ]]
 }
 
 # ── spawn ────────────────────────────────────────────────────────────────────
@@ -1092,8 +1092,8 @@ EOF
   [[ "$output" != *"#!/usr/bin/env"* ]]
 }
 
-@test "dispatch: a bare unknown token is treated as a worktree name" {
+@test "dispatch: a bare unknown token is treated as a lane name" {
   wt_run gibberish
   [ "$status" -ne 0 ]
-  [[ "$output" == *"no agent worktree named 'gibberish'"* ]]
+  [[ "$output" == *"no lane named 'gibberish'"* ]]
 }

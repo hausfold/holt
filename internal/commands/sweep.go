@@ -12,8 +12,8 @@ import (
 type sweepMode int
 
 const (
-	// sweepParked touches only worktrees with no checkout on disk. Nothing a
-	// pane could be sitting in is at risk, which is why the listing runs it.
+	// sweepParked touches only lanes with no checkout on disk. Nothing a pane
+	// could be sitting in is at risk, which is why the listing runs it.
 	sweepParked sweepMode = iota
 	// sweepAll additionally considers live checkouts — clean, landed and
 	// unoccupied ones only. Opt-in, via `holt reap`.
@@ -29,7 +29,7 @@ type SweepResult struct {
 	Degraded    bool     // occupancy was unknowable, so live checkouts were spared
 }
 
-// reapSweep removes every LANDED worktree the mode allows, and nothing else.
+// reapSweep removes every LANDED lane the mode allows, and nothing else.
 //
 // Every `continue` in here is a safety invariant, not an optimisation. The
 // failure direction is always "a branch lingers": a branch that outlives its
@@ -44,7 +44,7 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 		// parked-only rather than guess.
 		mode = sweepParked
 		res.Degraded = true
-		e.Warn("couldn't determine which checkouts are occupied — swept parked worktrees only")
+		e.Warn("couldn't determine which checkouts are occupied — swept parked lanes only")
 	}
 	selfTop, _ := gitx.Toplevel(e.Cwd)
 
@@ -66,7 +66,7 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 			}
 			if isOccupied(occupied, entry.Path) {
 				// Landed or not, a pane is standing in it. Removing the checkout
-				// yanks the cwd out from under a running session: the shell and
+				// yanks the cwd out from under a running client: the shell and
 				// the agent keep running in a deleted directory and every
 				// subsequent tool call fails.
 				res.SkippedLive = append(res.SkippedLive,
@@ -97,7 +97,7 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 }
 
 // noteRelanded records the "its PR merged but the branch moved on" case, so a
-// worktree that declines to be reaped says why instead of silently persisting.
+// lane that declines to be reaped says why instead of silently persisting.
 func (e *Env) noteRelanded(res *SweepResult, entry Entry) {
 	if n, pr := e.postMergeAhead(entry.Main, entry.Branch); n > 0 {
 		res.Relanded = append(res.Relanded,
@@ -141,9 +141,9 @@ func (e *Env) pruneRegistry() {
 // occupancy returns every cwd a live process is sitting in, and whether the
 // question could be answered at all.
 //
-// A zellij pane always has at least its login shell cwd'd into the worktree
-// (and the agent as a child), so "some process's cwd is inside this tree" is the
-// signal. One dump for the whole sweep, prefix-matched per worktree.
+// A zellij pane always has at least its login shell cwd'd into the lane's
+// checkout (and the agent as a child), so "some process's cwd is inside this
+// tree" is the signal. One dump for the whole sweep, prefix-matched per lane.
 //
 // This is the most portability-bound thing holt does — SPEC.md §9 replaces it
 // with a heartbeat, with lsof demoted to one provider among several. Until then:
