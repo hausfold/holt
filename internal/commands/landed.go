@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nebelhaus/holt/internal/config"
 	"github.com/nebelhaus/holt/internal/gitx"
 )
 
@@ -43,7 +44,47 @@ const forgeTimeout = 6 * time.Second
 var cacheTTL = 120 * time.Second
 
 // Landed reports whether branch has already landed in main's default branch.
+//
+// The `landed` hook comes first and, when it answers, is the whole answer. This
+// is the seam with teeth — a yes here is what permits a branch to be DELETED —
+// and it is overridable anyway, because "landed" is a house rule wearing a
+// universal name. A repo that merges into a release train, a shop whose CI
+// stamps a ref on release, a monorepo where the PR is in a different repo than
+// the code: none of those are visible to the ladder below, and all of them are
+// two lines of shell to the person who runs them.
+//
+// A hook that defers, or that isn't there, or that is broken, leaves the ladder
+// exactly as it was.
 func (e *Env) Landed(main, branch string) Verdict {
+	if e.Cfg.Defined(config.HookLanded) {
+		res := e.Cfg.Ask(config.HookLanded, e.hookPayload(main, branch, "", ""))
+		e.noteHook(res)
+		if res.Answer != config.Defer {
+			return hookVerdict(res)
+		}
+	}
+	return e.builtinLanded(main, branch)
+}
+
+// hookVerdict turns a hook's answer into a Verdict, letting the hook name its
+// own rule so a reap stays attributable in `--json`: `via: "release-train"`
+// beats `via: "hook"` when you are working out why a branch went away.
+func hookVerdict(res config.Result) Verdict {
+	v := Verdict{Landed: res.Answer == config.Yes, Via: "hook:landed", Confidence: "certain"}
+	if s, ok := res.Data["via"].(string); ok && s != "" {
+		v.Via = s
+	}
+	if s, ok := res.Data["confidence"].(string); ok && s != "" {
+		v.Confidence = s
+	}
+	if n, ok := res.Data["pr"].(float64); ok {
+		v.PR = int(n)
+	}
+	return v
+}
+
+// builtinLanded is holt's own ladder — the default the `landed` hook replaces.
+func (e *Env) builtinLanded(main, branch string) Verdict {
 	base := gitx.DefaultBranch(main)
 
 	// 1. Ancestry — offline, exact, always safe.

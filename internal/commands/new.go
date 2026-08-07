@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/nebelhaus/holt/internal/config"
 	"github.com/nebelhaus/holt/internal/exitcode"
 	"github.com/nebelhaus/holt/internal/gitx"
 	"github.com/nebelhaus/holt/internal/registry"
@@ -59,6 +60,14 @@ func (e *Env) New(want, agentID string) error {
 	})
 	trustWorktree(agentID, main, dir)
 	ui.Say("created %s worktree '%s' → %s", filepath.Base(main), name, dir)
+
+	// How a fresh worktree gets a session is the machine's business, same as
+	// `resume`. holt's own answer is to become the client; a machine with a
+	// multiplexer would rather have a pane.
+	entry := Entry{Main: main, Branch: "worktree-" + name, Path: dir, State: Live}
+	if res := e.openSession(config.HookOpen, entry, agentID, dir); res.Answer != config.Defer {
+		return hookOutcome(config.HookOpen, res)
+	}
 
 	// The client is resolved LAST, and its absence is not fatal to the worktree:
 	// the checkout and the registry row are already on disk, so an uninstalled

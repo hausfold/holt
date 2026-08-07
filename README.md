@@ -96,6 +96,64 @@ agent = "codex"
 `HOLT_AGENT` overrides that file for one invocation. Older nebelhaus installs
 may supply `NEBELHAUS_AGENT_DEFAULT` as a compatibility fallback.
 
+## Policy seams — disagreeing with holt
+
+holt grew out of one machine's setup, and it inherited that machine's answers to
+questions that only *look* universal. "Landed" means merged into the default
+branch. "Reapable" means landed, clean and unoccupied. "Resume" means become the
+agent process. Each of those is right somewhere and wrong somewhere else, so
+each is a **named seam** with holt's answer as the default rather than the
+mechanism.
+
+```toml
+# ~/.config/holt/config.toml
+[hooks]
+resume   = "/usr/local/bin/my-resume"                     # a bare program
+landed   = ["/usr/local/bin/my-landed", "--release-train"] # or an argv
+```
+
+| Seam | Answers | holt's default |
+|---|---|---|
+| `agent` | which client a new worktree opens in | the `agent` key above |
+| `landed` | has this branch's work reached the default branch? | ancestry → merged PR → patch-equivalence |
+| `reapable` | may this worktree be swept **now**? | not occupied, not dirty, landed |
+| `preserve` | does a closing pane's dirty tree become a `wip:` commit? | yes, unless it's untracked scratch on a landed branch |
+| `resume` | reopen this worktree's session | `cd`, then exec the client |
+| `open` | open a session in a brand-new worktree | `cd`, then exec the client |
+
+A seam is a program. holt execs it, hands it the situation as JSON on stdin
+*and* as `HOLT_*` environment variables, and reads the answer off the exit code:
+
+```sh
+#!/usr/bin/env bash
+# a `resume` hook: open a zellij pane in the worktree instead of taking over
+# this process. $HOLT_CHAT, not $HOLT_PATH — a spawned worktree's conversation
+# lives in the pane that created it.
+zellij action new-pane --cwd "$HOLT_CHAT" -- "$HOLT_AGENT" --resume
+```
+
+| exit | means |
+|---|---|
+| `0` | yes / handled |
+| `1` | no / failed |
+| `2` | no — refused for safety |
+| `3` | **no opinion: run holt's built-in** |
+| anything else | run the built-in, and warn |
+
+Every failure mode falls back to the built-in, so a broken hook costs you the
+override and never the operation — loudly, because a policy that silently
+stopped applying is worse than one that never existed. A predicate can print a
+JSON object on stdout to say more than yes/no: `{"via": "release-train"}` from a
+`landed` hook keeps a reap attributable in `--json`.
+
+Two things no seam can override, because they are about holt not sawing off the
+branch it is sitting on: the checkout holt is being **run from** is never swept,
+and a **stray** is never swept, only reported. Everything else is yours —
+including discarding a dirty tree, which holt will do on a `reapable` hook's say
+so (the hook is told `dirty` and answers anyway) and always name in the output.
+
+`SPEC.md` §6.5 has the full contract and the list of facts still hardcoded.
+
 ### `park`, not `git stash` — the shared-stash-stack footgun
 
 `git stash` looks per-checkout. It isn't. The stash is one ref — `refs/stash`,

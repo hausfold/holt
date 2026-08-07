@@ -3,15 +3,18 @@ package commands
 import (
 	"os"
 	"path/filepath"
-	"strings"
 
+	"github.com/nebelhaus/holt/internal/config"
+	"github.com/nebelhaus/holt/internal/gitx"
 	"github.com/nebelhaus/holt/internal/registry"
+	"github.com/nebelhaus/holt/internal/ui"
 )
 
 // Env is the resolved environment one holt invocation runs in.
 type Env struct {
 	Base     string // where checkouts live
 	Reg      *registry.Registry
+	Cfg      *config.Config // the machine config, and with it the policy seams
 	Cwd      string
 	Agent    string // the default client for new worktrees
 	Warnings []string
@@ -38,53 +41,31 @@ func baseDir() string {
 	return filepath.Join(home, ".cache", "claude-worktrees")
 }
 
-// configuredAgent reads the one machine-wide setting Holt needs before its
-// richer config surface lands. It is deliberately small and dependency-free:
-// agent ids have no TOML syntax worth interpreting beyond `agent = "codex"`.
-// Unknown and malformed values are ignored, leaving the documented fallbacks
-// intact rather than turning every `holt new` into a hard failure.
-func configuredAgent() string {
-	configDir := os.Getenv("XDG_CONFIG_HOME")
-	if configDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			home = os.Getenv("HOME")
-		}
-		if home == "" {
-			return ""
-		}
-		// Holt's documented config is ~/.config on every platform, including
-		// macOS, rather than os.UserConfigDir's Application Support location.
-		configDir = filepath.Join(home, ".config")
-	}
-	raw, err := os.ReadFile(filepath.Join(configDir, "holt", "config.toml"))
-	if err != nil {
-		return ""
-	}
-	for _, line := range strings.Split(string(raw), "\n") {
-		key, value, ok := strings.Cut(line, "=")
-		if !ok || strings.TrimSpace(key) != "agent" {
-			continue
-		}
-		value = strings.TrimSpace(strings.SplitN(value, "#", 2)[0])
-		value = strings.Trim(value, " \t\"'")
-		if registry.KnownAgent(value) {
-			return value
-		}
-	}
-	return ""
-}
-
 // defaultAgent is the client a new worktree opens in when nothing says
-// otherwise. HOLT_AGENT is an explicit per-invocation override; the persisted
-// config works for long-running callers such as Zellij and for standalone Holt.
-// NEBELHAUS_AGENT_DEFAULT remains a cutover fallback for pre-config rice builds.
-func defaultAgent() string {
+// otherwise.
+//
+// The ladder, most explicit first: HOLT_AGENT is a one-invocation override; the
+// `agent` hook is a program, for a machine that picks per repo or per time of
+// day; the `agent` config key is the static answer, which is what almost
+// everyone wants and costs no process; NEBELHAUS_AGENT_DEFAULT is a cutover
+// fallback for pre-config rice builds; claude is the last word.
+//
+// A value that names a client holt has never heard of is ignored at every rung
+// rather than fatal — an unknown agent must not turn every `holt new` into a
+// hard failure when a working default is one rung down.
+func (e *Env) defaultAgent() string {
 	if a := os.Getenv("HOLT_AGENT"); registry.KnownAgent(a) {
 		return a
 	}
-	if a := configuredAgent(); a != "" {
-		return a
+	if e.Cfg.Defined(config.HookAgent) {
+		res := e.Cfg.Ask(config.HookAgent, map[string]string{"cwd": e.Cwd})
+		e.noteHook(res)
+		if id, _ := res.Data["agent"].(string); res.Answer == config.Yes && registry.KnownAgent(id) {
+			return id
+		}
+	}
+	if registry.KnownAgent(e.Cfg.Agent) {
+		return e.Cfg.Agent
 	}
 	if a := os.Getenv("NEBELHAUS_AGENT_DEFAULT"); registry.KnownAgent(a) {
 		return a
@@ -103,12 +84,63 @@ func NewEnv() (*Env, error) {
 	if err != nil {
 		cwd = "."
 	}
-	agent := defaultAgent()
-	registry.DefaultAgent = agent
-	return &Env{Base: base, Reg: reg, Cwd: cwd, Agent: agent}, nil
+	cfg, cfgWarnings := config.Load()
+	e := &Env{Base: base, Reg: reg, Cfg: cfg, Cwd: cwd}
+	// Through Warn, not straight into the field: a line of the config that
+	// didn't parse is a seam the operator believes is in force and isn't, which
+	// is the one thing this whole surface must never be quiet about.
+	for _, w := range cfgWarnings {
+		e.Warn(w)
+	}
+	e.Agent = e.defaultAgent()
+	registry.DefaultAgent = e.Agent
+	return e, nil
 }
 
-// Warn records a degraded-mode explanation. Every one of these becomes a
-// `warnings[]` entry under --json and an exit code of Degraded, because silent
-// degradation is how a user learns to distrust the tool (SPEC.md §3.4).
-func (e *Env) Warn(msg string) { e.Warnings = append(e.Warnings, msg) }
+// Warn records a degraded-mode explanation AND says it out loud. Every one of
+// these becomes a `warnings[]` entry under --json, because silent degradation is
+// how a user learns to distrust the tool (SPEC.md §3.4).
+//
+// It prints as well as records because recording alone was the same silence with
+// extra steps: `warnings[]` is only ever rendered under --json, so a human
+// running `holt reap` never saw "no forge CLI on PATH — nothing will be reaped
+// on that basis", and now would never see "your landed hook wouldn't run". Both
+// go to stderr, which leaves the stdout data contract (SPEC.md §2.3) untouched.
+func (e *Env) Warn(msg string) {
+	e.Warnings = append(e.Warnings, msg)
+	ui.Warn("%s", msg)
+}
+
+// noteHook surfaces a hook that misbehaved. A policy override that quietly
+// stopped applying is worse than one that never existed, because the operator
+// still believes it is in force.
+func (e *Env) noteHook(res config.Result) {
+	if res.Warning != "" {
+		e.Warn(res.Warning)
+	}
+}
+
+// hookPayload is the situation, in the same names the adapter templates use
+// (SPEC.md §5.2). Every hook gets the same table; the empty fields are the
+// honest answer for the ones a given seam has no value for.
+func (e *Env) hookPayload(main, branch, path, agent string) map[string]string {
+	name := branch
+	if len(branch) > 9 && branch[:9] == "worktree-" {
+		name = branch[9:]
+	}
+	slug, _ := gitx.RemoteSlug(main)
+	payload := map[string]string{
+		"path":   path,
+		"main":   main,
+		"repo":   slug,
+		"name":   name,
+		"branch": branch,
+		"base":   gitx.DefaultBranch(main),
+		"agent":  agent,
+		"cwd":    e.Cwd,
+	}
+	if row, ok := e.Reg.Find(path); ok {
+		payload["parent"] = row.Parent
+	}
+	return payload
+}

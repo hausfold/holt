@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nebelhaus/holt/internal/config"
 	"github.com/nebelhaus/holt/internal/exitcode"
 	"github.com/nebelhaus/holt/internal/gitx"
 	"github.com/nebelhaus/holt/internal/ui"
@@ -82,25 +83,56 @@ func (e *Env) HookRemove(stdin io.Reader) error {
 		}
 	}
 
-	// The branch is how unmerged work survives; only reap it once landed. Keep
-	// the registry row in lockstep: gone when reaped, kept while resumable.
-	if branch != "" && e.reapBranch(main, branch) {
-		_ = e.Reg.Delete(dir)
+	// The branch is how unmerged work survives; only reap it once landed — or
+	// once the `reapable` hook has said this one may go. Keep the registry row
+	// in lockstep: gone when reaped, kept while resumable.
+	if branch != "" {
+		cleared := false
+		if e.Cfg.Defined(config.HookReapable) {
+			payload := e.hookPayload(main, branch, dir, e.agentForPath(dir))
+			payload["state"] = "closing"
+			payload["occupied"] = "false" // the pane that held it is going away
+			payload["dirty"] = "false"    // whatever was dirty is committed above
+			payload["landed"] = boolString(e.Landed(main, branch).Landed)
+			res := e.Cfg.Ask(config.HookReapable, payload)
+			e.noteHook(res)
+			if res.Answer == config.No {
+				return nil // the hook is keeping this branch; say nothing more
+			}
+			cleared = res.Answer == config.Yes
+		}
+		if e.reapBranch(main, branch, cleared) {
+			_ = e.Reg.Delete(dir)
+		}
 	}
 	return nil
 }
 
 // mustPreserve decides whether a dirty tree needs a wip commit before removal.
 //
-// One exception, and it matters: a branch whose PR has ALREADY merged, whose
-// only remaining changes are UNTRACKED files, is holding build scratch (a
-// target/, a .venv/) — not history. Wip-committing it moves the tip one commit
-// past the merged PR's SHA, so the branch no longer matches its merge and the
-// worktree gets falsely PARKED instead of reaped. That is how merged worktrees
-// piled up. Tracked edits, or an unmerged branch, are real work → always kept.
+// The `preserve` hook owns this when it is configured. It is the cheapest seam
+// to want: "always wip-commit, I'll sort it out later" and "never, my worktrees
+// are disposable" are both one line, and both are wrong for the other person.
+//
+// holt's own rule has one exception, and it matters: a branch whose PR has
+// ALREADY merged, whose only remaining changes are UNTRACKED files, is holding
+// build scratch (a target/, a .venv/) — not history. Wip-committing it moves the
+// tip one commit past the merged PR's SHA, so the branch no longer matches its
+// merge and the worktree gets falsely PARKED instead of reaped. That is how
+// merged worktrees piled up. Tracked edits, or an unmerged branch, are real work
+// → always kept.
 func (e *Env) mustPreserve(main, branch, porcelain string) bool {
 	if branch == "" {
 		return true
+	}
+	if e.Cfg.Defined(config.HookPreserve) {
+		payload := e.hookPayload(main, branch, "", "")
+		payload["porcelain"] = porcelain
+		res := e.Cfg.Ask(config.HookPreserve, payload)
+		e.noteHook(res)
+		if res.Answer != config.Defer {
+			return res.Answer == config.Yes
+		}
 	}
 	for _, line := range gitx.Lines(porcelain) {
 		if !strings.HasPrefix(line, "??") {

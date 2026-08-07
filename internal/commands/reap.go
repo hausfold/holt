@@ -19,9 +19,8 @@ func (e *Env) Reap() error {
 
 	res := e.reapSweep(sweepAll)
 
-	if res.Degraded {
-		ui.Say("no lsof — can't tell which checkouts have a pane open, so only PARKED worktrees were swept.")
-	}
+	// res.Degraded needs no line of its own — Env.Warn already said it out loud
+	// on the way past, and saying it twice reads as two different problems.
 	for _, name := range res.Reaped {
 		ui.Say("reaped %s", name)
 	}
@@ -29,6 +28,9 @@ func (e *Env) Reap() error {
 		ui.Say("kept %s — a pane is open in it", name)
 	}
 	for _, note := range res.Relanded {
+		ui.Say("kept %s", note)
+	}
+	for _, note := range res.Declined {
 		ui.Say("kept %s", note)
 	}
 	for _, s := range res.Strays {
