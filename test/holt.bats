@@ -1202,23 +1202,37 @@ preserve = \"$hook\""
   # Both channels carry the same table, because a seam may be a program with a
   # JSON parser or three lines of shell, and neither should have to become the
   # other. HOLT_BASE_BRANCH is the one that needs pinning: HOLT_BASE is already
-  # the worktree base DIRECTORY, so the default branch had to be spelled apart.
+  # the lane base DIRECTORY, so the default branch had to be spelled apart.
+  #
+  # The hook only DUMPS its two inputs; every assertion lives out here in bats.
+  # The first version matched the JSON with a `case` nested inside a command
+  # substitution inside the hook body, and word-split its own printf arguments
+  # on both CI runners while passing on two local shells — including the exact
+  # bash 3.2 macOS ships. Whatever the trigger, a hook body that only writes
+  # two files cannot have it: no nested quoting, no command substitution, and
+  # printf rather than echo, which is the one that mangles a JSON \n.
   local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" payload)"
   echo edit >"$dir/README.md"
   hook="$(mkhook preserve '
     read -r body
-    printf "hook=%s name=%s branch=%s repo=%s base=%s main=%s json=%s\n" \
+    printf "%s\n" "$body" >"'"$TMP"'/stdin"
+    printf "hook=%s name=%s branch=%s repo=%s base=%s main=%s\n" \
       "$HOLT_HOOK" "$HOLT_NAME" "$HOLT_BRANCH" "$HOLT_REPO" \
-      "$HOLT_BASE_BRANCH" "$HOLT_MAIN" \
-      "$(case "$body" in *\"branch\":\"worktree-payload\"*) echo yes ;; *) echo "$body" ;; esac)" \
-      >"'"$TMP"'/seen"
+      "$HOLT_BASE_BRANCH" "$HOLT_MAIN" >"'"$TMP"'/env"
     exit 3')"
   setcfg "[hooks]
 preserve = \"$hook\""
   hook_remove "$dir" 2>/dev/null
-  run cat "$TMP/seen"
-  [ "$output" = "hook=preserve name=payload branch=worktree-payload repo=acme/alpha base=main main=$main json=yes" ] \
-    || fail "the payload is wrong: $output"
+
+  run cat "$TMP/env"
+  [ "$output" = "hook=preserve name=payload branch=worktree-payload repo=acme/alpha base=main main=$main" ] \
+    || fail "the HOLT_* vars are wrong: $output"
+
+  run cat "$TMP/stdin"
+  local json="$output" needle
+  for needle in '"branch":"worktree-payload"' '"base":"main"' '"repo":"acme/alpha"'; do
+    [[ "$json" == *"$needle"* ]] || fail "stdin JSON lacks $needle: $json"
+  done
 }
 
 @test "hooks: resume — the hook reopens the session instead of holt exec'ing a client" {
