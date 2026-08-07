@@ -21,9 +21,12 @@
           pname = "holt";
           inherit version;
           src = ./.;
-          # holt is dependency-free through 0.1 — see go.mod. When that stops
-          # being true this becomes a real hash.
-          vendorHash = null;
+          # holt picked up its first dependency (fsnotify, for `holt watch`) —
+          # see go.mod. lib.fakeHash is the standard placeholder for "run the
+          # build once, `nix` prints the real hash in the mismatch error,
+          # paste it in here." Do that before merging; a fake hash left in
+          # place fails every build, loudly, which is the point.
+          vendorHash = pkgs.lib.fakeHash;
           ldflags = [ "-X github.com/nebelhaus/holt/internal/commands.Version=${version}" ];
 
           # The suite is black-box: it drives the built binary with shim gh/lsof
