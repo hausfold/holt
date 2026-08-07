@@ -1,15 +1,14 @@
 # holt (Go SDK)
 
 A thin Go client over the [`holt`](../../README.md) binary — the
-worktree-lifecycle substrate for parallel coding agents. holt stays a
-binary; this SDK shells out to it (`os/exec` + `--json`, `watch --json`
-for a live NDJSON stream) rather than talking to a daemon, because there
-isn't one (SPEC.md §14.1).
+worktree-lifecycle substrate for parallel coding agents. It shells out to
+`holt` (`os/exec` + `--json`, `watch --json` for a live NDJSON stream)
+rather than talking to a daemon.
 
-Nested module: this directory has its own `go.mod`
-(`github.com/nebelhaus/holt/sdk/go`), separate from the CLI's at the repo
-root, so importing it doesn't pull in holt's own dependencies (fsnotify,
-the CLI framework) — only the standard library.
+This directory is its own Go module (`github.com/nebelhaus/holt/sdk/go`),
+separate from the CLI's at the repo root, so importing it doesn't pull in
+holt's own dependencies (fsnotify, the CLI framework) — only the standard
+library.
 
 ## Install
 
@@ -17,13 +16,9 @@ the CLI framework) — only the standard library.
 go get github.com/nebelhaus/holt/sdk/go
 ```
 
-Go modules resolve straight from this git repo via the module proxy — no
-separate publish step, no package-manager account, unlike npm/PyPI. The
-only thing that makes a version installable is a pushed tag shaped
-`sdk/go/vX.Y.Z` (the `sdk/go/` prefix is what tells the Go tooling this
-tag versions the nested module, not the root one). None exist yet — for
-now, `go get github.com/nebelhaus/holt/sdk/go@<commit-sha>` or a `replace`
-directive pointing at a local checkout.
+Versions come from pushed tags shaped `sdk/go/vX.Y.Z`. None exist yet —
+for now, use `go get github.com/nebelhaus/holt/sdk/go@<commit-sha>` or a
+`replace` directive pointing at a local checkout.
 
 `holt` itself must be on `PATH`, or set `Client.Bin` to its path.
 
@@ -46,7 +41,7 @@ ctx := context.Background()
 envelope, err := c.List(ctx)
 for _, lane := range envelope.Lanes {
 	// Occupied/Dirty are *bool — nil means "not determined", never treat
-	// that as false (SPEC.md §2.2's whole nullable-discipline point).
+	// that as false.
 	fmt.Println(lane.Name, lane.State, lane.Occupied)
 }
 
@@ -88,12 +83,11 @@ if err := c.NewInteractive(ctx, "task-42", ""); err != nil {
 
 **Do not call `NewInteractive` from a server.** `holt new` execs the agent
 client unconditionally — it doesn't check for a TTY the way `resume`
-does — so calling it with piped stdio blocks forever with your pipes
-attached to whatever the agent expects on stdin. `Resume` (the
-non-interactive form) is safe from a server: holt detects the piped
-stdout and prints the reopen command as text instead of exec'ing.
+does — so piped stdio blocks forever. `Resume` (non-interactive) is safe
+from a server: holt detects piped stdout and prints the reopen command as
+text instead of exec'ing.
 
-## Holding a session open: leases, not callbacks
+## Holding a session open: leases
 
 holt's sweep (`reap`) needs to know a checkout is in use. On a human's
 machine, `lsof` answers that. A server holding one session per lane has
@@ -110,20 +104,17 @@ local process — the OS then drops it the instant that pid dies, no
 refresh loop needed.
 
 A lease can only **save** a lane from `reap`, never condemn one —
-"nobody leased it" isn't proof nobody's there. See SPEC.md §14.2.
+"nobody leased it" isn't proof nobody's there.
 
-`Lease` fires its first heartbeat in the background rather than blocking
-the constructor on it (a constructor has nowhere clean to return an
-error) — a failed take surfaces on the next refresh, the same
-best-effort/self-healing behavior every later refresh already has. Call
+`Lease` fires its first heartbeat in the background instead of blocking
+the constructor on it; a failed take surfaces on the next refresh. Call
 `c.Heartbeat(ctx, path, 0)` yourself first if you need the initial take
 to be synchronous and its error immediate.
 
 ## Errors
 
 Every method that shells out returns `*holt.Error` on a non-zero exit,
-carrying holt's real exit code (SPEC.md §2.4) rather than collapsing
-every failure into one shape:
+carrying holt's real exit code:
 
 ```go
 _, err := c.Unpark(ctx)
@@ -138,36 +129,17 @@ if errors.As(err, &herr) && herr.Refused() {
 "completed, but a signal was unavailable (forge down, no `lsof`)" — check
 an `Envelope`'s `Warnings` for why.
 
-## What's NOT here yet
+## Not covered
 
-- `hook create`/`hook remove` (the Claude Code hook protocol, SPEC.md
-  §2.3) have no wrapper — they're for editor integrations, not the
-  orchestrator use case this SDK targets first. Shell out via
-  `exec.Command` yourself if you need them.
-- The `--json` envelope's future fields (`pr`, `overlap`, `ahead`/
-  `behind` — SPEC.md §2.2's example, gated behind the `overlap`/forge-
-  polling milestones) aren't in `Lane` because they aren't on the wire in
-  schema 1 yet. Don't add them here before `internal/commands/json.go`
-  does.
-- `holt.agentInstructions()` (SPEC.md §14.5's `holt docs agent --format=json`)
-  — the TS SDK doesn't have a wrapper for it yet either; add one here once
-  that lands.
-- Types are hand-ported from the Go structs in `internal/commands/`, not
-  shared by import — this module deliberately has no dependency on the
-  CLI module, so it can't just reuse `jsonEnvelope`/`jsonLane` directly.
-  If holt's JSON shape and this file drift, that's a real bug class this
-  SDK exists to avoid — SPEC.md §14.1 says "generate SDK types from it"
-  as the intended end state. A `go generate` step emitting this file (or
-  a small shared internal package the CLI and this SDK both import) is
-  the natural fix; out of scope for this first pass.
+`hook create`/`hook remove` (the Claude Code hook protocol) have no
+wrapper — shell out via `exec.Command` yourself if you need them. Types
+are hand-ported from the Go structs in `internal/commands/`, not shared
+by import, so this module has no dependency on the CLI module.
 
 ## Testing
 
-`testdata/fake-holt.sh` stands in for the real binary so tests don't need
-a Go build of `holt` itself — it's a fixture, not a spec of holt's
-behavior, and is shared verbatim with `sdk/ts` and `sdk/python`'s fixture
-of the same name. Once `holt` builds in CI, add a second suite that runs
-the same assertions against the real binary in a scratch repo.
+`testdata/fake-holt.sh` stands in for the real binary (shared with
+`sdk/ts` and `sdk/python`'s fixture of the same name).
 
 ```sh
 go test ./...
