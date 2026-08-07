@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'
-          cache: false          # holt has no dependencies to cache — see go.mod
+          cache: true           # fsnotify is now a real dependency — see go.mod
       - name: install bats
         run: |
           if [ "$RUNNER_OS" = macOS ]; then brew install bats-core
