@@ -17,11 +17,20 @@ field only constrains Apple OSes. Needs Swift 5.9+ (uses
 
 ## Install
 
-Not published yet — for now, reference it as a local package
-(`.package(path: "../holt/sdk/swift")`) or copy `sdk/swift` out. Swift
-Package Manager has no monorepo-subdirectory story for a *remote* git
-dependency the way `npm`/`pip` do (no `#subdirectory=` equivalent) — see
-"What's NOT here yet" below for what publishing this actually needs.
+Swift Package Manager has no monorepo-subdirectory story for a *remote*
+git dependency the way `npm`/`pip` do (no `#subdirectory=` equivalent —
+`Package.swift` has to sit at a repo's root), so this ships from a
+generated mirror instead: [`nebelhaus/holt-swift`](https://github.com/nebelhaus/holt-swift),
+kept in sync via [`sync-mirror.sh`](sync-mirror.sh) (a `git subtree
+split`) and tagged to match. Send changes here, to `sdk/swift`, never to
+the mirror directly — it gets overwritten on the next sync.
+
+```swift
+.package(url: "https://github.com/nebelhaus/holt-swift", from: "0.1.0")
+```
+
+For working on the SDK itself from within this repo, reference it as a
+local package instead: `.package(path: "../holt/sdk/swift")`.
 
 `holt` itself must be on `PATH`, or pass `HoltClientOptions(bin: "/path/to/holt")`.
 
@@ -148,25 +157,18 @@ all. Compare with `==` and the `static let` constants (`lane.state ==
   TS/Python SDKs. If holt's JSON shape and this file drift, that's a real
   bug class this SDK exists to avoid — SPEC.md §14.1 says "generate SDK
   types from it" as the intended end state.
-- **Real publishing.** This lives at `sdk/swift` inside the `holt` repo,
-  same holding pattern as `sdk/ts`/`sdk/python` before they published.
-  Swift Package Manager has no equivalent of `npm`'s scoped package or
-  `pip`'s `#subdirectory=` for a monorepo — a *remote* git dependency
-  needs `Package.swift` at the repo root. Getting this to a real
-  `.package(url: "https://github.com/nebelhaus/holt-swift", from: "0.1.0")`
-  needs either (a) a standalone mirror repo (e.g. `nebelhaus/holt-swift`)
-  that this directory is synced or subtree-split into, or (b) tagging
-  releases straight off this repo and accepting that consumers pin a
-  `branch`/`revision` instead of a semver range pointed at a subdirectory
-  — SwiftPM does not support the latter for the root manifest location.
-  Neither needs a package-manager *account*: unlike npm/PyPI, SwiftPM has
-  no central index to publish to for git-URL consumption. Optional next
-  steps, once there's a tagged release: listing on the (free, no-account)
-  [Swift Package Index](https://swiftpackageindex.com) via a PR to their
-  repo, and/or publishing to a Swift Package **Registry** (SE-0292) if
-  one is wanted — that does need an account on whichever registry you
-  pick (GitHub's supports it under a repo's own auth; there's no single
-  "the" Swift registry the way PyPI/npmjs.org are canonical).
+- **Automating the mirror sync.** [`sync-mirror.sh`](sync-mirror.sh) and
+  the tag afterward are run by hand today — there's no CI hook that fires
+  them on release. `sdk/ts`/`sdk/python` have a CI wiring gap of their
+  own kind too (`.github/workflows/check.yml` only runs the Go acceptance
+  suite), so none of the three SDKs' tests run in CI yet either.
+- **Swift Package Index / registry listing.** Git-URL install (above) is
+  enough for almost every real consumer — most popular Swift packages
+  (e.g. `swift-argument-parser`) ship exactly this way. Listing on the
+  free, no-account [Swift Package Index](https://swiftpackageindex.com)
+  is a cheap future step for discoverability; a Swift Package
+  **Registry** publish (SE-0292) needs an account on whichever registry
+  is picked and isn't planned unless something specific calls for it.
 
 ## Testing
 
