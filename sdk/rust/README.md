@@ -164,11 +164,10 @@ constants (`lane.state == holt::lane_state::LIVE`).
   TS/Python/Swift/Go SDKs. If holt's JSON shape and this file drift, that's
   a real bug class this SDK exists to avoid — SPEC.md §14.1 says "generate
   SDK types from it" as the intended end state.
-- **crates.io publish.** The crate name (`hausfold-holt`) is picked and
-  confirmed free, but nothing is published yet — for now, reference it from
-  within this repo or a `path`/`git` dependency. Needs a crates.io API token
-  under the `hausfold` account/org before `cargo publish` can run (see the
-  repo README's SDKs section for the equivalent npm/PyPI gaps).
+- **Publish automation.** `0.1.0` was pushed to crates.io by hand
+  (`cargo publish`); there's no CI wiring that cuts a release on a tag the
+  way a real workflow eventually should (same gap the TS/Python/Swift SDKs
+  have for their own registries).
 
 ## Testing
 

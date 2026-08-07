@@ -311,7 +311,7 @@ See [`sdk/go/README.md`](sdk/go/README.md) for the full API.
 </details>
 
 <details>
-<summary><strong>Rust</strong> — <code>hausfold-holt</code> (not published yet)</summary>
+<summary><strong>Rust</strong> — <code>hausfold-holt</code></summary>
 
 [`sdk/rust`](sdk/rust) is the same thin client, async (tokio) like the
 Python SDK's stance: `list()`, `watch()`/`watch_lane()` as a `Stream` of
@@ -321,10 +321,12 @@ callback plumbing needed beyond that), `child`/`spawn`, `park`/`unpark`/
 refreshed on a background `tokio` task until `release()`). Drops into an
 axum/tonic backend or a plain async binary equally.
 
-The crate name is decided (`hausfold-holt` — plain `holt` is already taken
-by an unrelated crate) but nothing is published yet — for now, reference it
-from within this repo or a `path`/`git` dependency. This section moves to a
-proper docs page once it ships.
+```sh
+cargo add hausfold-holt
+```
+
+Import name is `holt` (plain `holt` is already taken on crates.io by an
+unrelated crate, same split as the PyPI package name).
 
 ```rust
 use futures_util::StreamExt;
