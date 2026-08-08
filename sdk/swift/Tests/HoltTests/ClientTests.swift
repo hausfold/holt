@@ -57,6 +57,18 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(seen, ["created"])
     }
 
+    /// `sync` names a lane, so it is data, not framing — it's the only way a
+    /// caller that attached AFTER the lane went live learns the lane exists.
+    /// Pinned because three doc comments used to claim the opposite.
+    func testWatchLanePassesALanesSyncThrough() async throws {
+        var seen: [String] = []
+        for try await event in client().watchLane(path: "/repo/.holt/nebelhaus/sparkle") {
+            seen.append(event.kind.rawValue)
+            break
+        }
+        XCTAssertEqual(seen, ["sync"])
+    }
+
     func testChildReturnsOnlyTheNewCheckoutPath() async throws {
         let dir = try await client().child("/repo/other")
         XCTAssertEqual(dir, "/repo/.holt/other/new-lane")

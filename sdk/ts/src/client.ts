@@ -74,7 +74,7 @@ export class HoltClient {
    * Compare full paths, not names: names aren't unique across repos, but a
    * checkout path is the registry's own primary key (SPEC.md §2.1).
    *
-   * The module-level {@link watchLane} does the same thing but takes its own
+   * The module-level `watchLane` export does the same thing but takes its own
    * `RunOptions`; this one carries the client's `bin`/`cwd`/`env`.
    */
   watchLane(path: string): AsyncGenerator<WatchEvent> {
@@ -242,12 +242,21 @@ export class Lease {
     private readonly path: string,
     private readonly options: { pid?: number; refreshMs?: number },
   ) {
-    // Errors surface on the next refresh/release call rather than here — a
-    // constructor can't be awaited, and a lease that failed to take should not
-    // throw somewhere its caller can't catch it. The `.catch` is load-bearing,
-    // not decoration: `void`-ing a rejecting promise is still an UNHANDLED
-    // rejection, which Node terminates the process over by default — so a lane
-    // path holt refuses would take the embedder's whole server down with it.
+    // A constructor can't be awaited, so a failed first heartbeat can't be
+    // raised to the caller here. The `.catch` is load-bearing, not decoration:
+    // `void`-ing a rejecting promise is still an UNHANDLED rejection, which
+    // Node terminates the process over by default — so a lane path holt
+    // refuses would take the embedder's whole server down with it.
+    //
+    // What that costs, stated honestly: on the refresh path the next tick
+    // retries, so a transient failure self-heals and a permanent one keeps
+    // failing visibly in holt's own logs. On the `pid` path there IS no next
+    // call — no timer runs, and `release()` only ever calls
+    // `heartbeat --release` — so a lease that never got taken looks exactly
+    // like one that did. Call `client.heartbeat(path, { pid })` yourself first
+    // if you need the initial take to be observable. (Go's `lease.go` and the
+    // Rust SDK discard the first heartbeat the same way; Python's `lease()` is
+    // a coroutine, so it alone can and does await it.)
     void client
       .heartbeat(path, options.pid !== undefined ? { pid: options.pid } : {})
       .catch(() => {});

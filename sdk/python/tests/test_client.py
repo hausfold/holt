@@ -57,6 +57,18 @@ async def test_client_watch_lane_filters_the_same_way_on_its_own_options() -> No
     assert seen == ["created"]
 
 
+# `sync` names a lane, so it is data, not framing — it's the only way a caller
+# that attached AFTER the lane went live learns the lane exists. Pinned because
+# three docstrings used to claim the opposite.
+async def test_watch_lane_passes_a_lanes_sync_through() -> None:
+    seen = []
+    async with aclosing(client().watch_lane("/repo/.holt/nebelhaus/sparkle")) as stream:
+        async for ev in stream:
+            seen.append(ev.kind)
+            break
+    assert seen == ["sync"]
+
+
 async def test_child_returns_only_the_new_checkout_path() -> None:
     directory = await client().child("/repo/other")
     assert directory == "/repo/.holt/other/new-lane"

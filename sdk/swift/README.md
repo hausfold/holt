@@ -59,6 +59,13 @@ for try await line in holt.watch() {
         notifyUI(event.lane)
     }
 }
+
+// Or scoped to the one lane this session holds — no hello/ready framing,
+// and nothing about anybody else's lanes. `.sync` still arrives: it's how
+// you learn about a lane that went live before you attached.
+for try await event in holt.watchLane(path: dir) {
+    if event.kind == .reaped { endSession() }
+}
 ```
 
 **Interactive (a real terminal app).** `newInteractive` /
