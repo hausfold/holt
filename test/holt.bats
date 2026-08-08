@@ -611,6 +611,43 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
   [[ "$output" != *"+1"* ]] || fail "a branch fully in main was flagged as un-shipped: $output"
 }
 
+@test "list: +N counts THIS lane's un-shipped commits, not main's that it caught up on" {
+  # The marker promises "commits no PR covers". A long-lived lane keeps catching
+  # up on the default branch, and every commit that ride brings along is
+  # reachable from the tip but NOT from the merged head — so a bare
+  # `head..branch` bills other people's already-landed work to this lane. A real
+  # one read `live+131` for two commits of its own, which reads as "unreviewable,
+  # deal with it later" instead of "one PR, two commits".
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" longlived)"
+  export FAKE_GH_MERGED=1 FAKE_GH_OID="$(git -C "$dir" rev-parse HEAD)" FAKE_GH_PR=12
+  export FAKE_GH_BRANCH=worktree-longlived
+  commit_in "$main" one.txt "someone else's work"      # three other PRs land
+  commit_in "$main" two.txt "and more"
+  commit_in "$main" three.txt "and more still"
+  git -C "$dir" rebase -q main                          # the lane catches up
+  commit_in "$dir" mine.txt "the commit that really is un-shipped"
+  cd "$TMP"; wt_run
+  [[ "$output" == *"live+2"* ]] \
+    || fail "the marker billed main's landed commits to this lane: $output"
+}
+
+@test "list: the +N count agrees with the commit list reship would put in the PR" {
+  # `reshipBody` already lists `base..branch`, so before this agreed, `reship`
+  # announced "131 commit(s) past the merge" and opened a PR whose body listed
+  # two. Same lane, same moment, two numbers — the marker is what has to move.
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" agrees)"
+  export FAKE_GH_MERGED=1 FAKE_GH_OID="$(git -C "$dir" rev-parse HEAD)" FAKE_GH_PR=12
+  export FAKE_GH_BRANCH=worktree-agrees
+  commit_in "$main" one.txt "someone else's work"
+  commit_in "$main" two.txt "and more"
+  git -C "$dir" rebase -q main
+  commit_in "$dir" mine.txt "un-shipped"
+  local listed; listed="$(git -C "$main" rev-list --count main..worktree-agrees)"
+  cd "$TMP"; wt_run
+  [[ "$output" == *"live+$listed"* ]] \
+    || fail "the marker says something other than the $listed commit(s) reship would list: $output"
+}
+
 @test "list: an ordinary in-flight branch keeps a bare state column" {
   local main; main="$(mkrepo alpha)"; mkwt "$main" plain >/dev/null
   cd "$TMP"; wt_run

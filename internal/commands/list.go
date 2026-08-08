@@ -148,7 +148,8 @@ func (e *Env) postMergeAhead(main, branch string) (ahead, pr int) {
 	// branch, those later commits landed too (a second PR, a direct merge) and
 	// there is nothing to ship. Local, cheap, and asked FIRST so the marker can
 	// never contradict the sweep that would reap this branch.
-	if gitx.IsAncestor(main, branch, gitx.DefaultBranch(main)) {
+	base := gitx.DefaultBranch(main)
+	if gitx.IsAncestor(main, branch, base) {
 		return 0, 0
 	}
 	head, num := e.mergedMapLookup(main, branch)
@@ -163,9 +164,24 @@ func (e *Env) postMergeAhead(main, branch string) (ahead, pr int) {
 	// it), so this count is exact. When it isn't reachable at all — the branch
 	// was rebased or amended after the merge — say 1, because "at least one
 	// commit here is not what landed" is the part that is certainly true.
+	//
+	// `--not base` is what keeps the number honest. A long-lived lane pulls the
+	// default branch back in — a merge from main, a rebase onto it — and every
+	// commit that ride brings along is reachable from the tip but not from the
+	// merged head, so a bare `head..branch` counts other people's landed work as
+	// this lane's un-shipped commits. That is how a lane with two real commits
+	// came to read `live+131`: a number that size reads as "unreviewable, deal
+	// with it later" rather than "one PR, two commits". The marker promises
+	// "commits no PR covers", so anything already on the default branch — which
+	// some PR demonstrably did cover — must not be in it.
 	n := 1
-	if out, err := gitx.Run(main, "rev-list", "--count", head+".."+branch); err == nil {
-		if parsed, err := strconv.Atoi(out); err == nil && parsed > 0 {
+	if out, err := gitx.Run(main, "rev-list", "--count", head+".."+branch, "--not", base); err == nil {
+		if parsed, err := strconv.Atoi(out); err == nil {
+			if parsed == 0 {
+				// Every commit since the merge is on the default branch already:
+				// this lane has nothing un-shipped, whatever the raw count says.
+				return 0, 0
+			}
 			n = parsed
 		}
 	}

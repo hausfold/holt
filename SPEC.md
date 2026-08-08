@@ -256,6 +256,7 @@ existing signal and close the remaining holes explicitly.
 | Rebase-and-merge (forge button) | ❌ (new SHAs) | MERGED, `headRefOid` = pre-rebase tip = local tip | `headRefOid == local tip` |
 | Squash-and-merge | ❌ | MERGED, `headRefOid` = local tip | `headRefOid == local tip` |
 | Merged, then more commits on the branch | ❌ | MERGED, `headRefOid` ≠ tip | `post_merge_ahead` → `+N`, `holt reship` |
+| Merged, then the lane caught up on the default branch | ❌ | MERGED, `headRefOid` ≠ tip | `+N` counts `headRefOid..branch` **`--not` default** — a rebase onto, or a merge from, the default branch drags its already-landed commits past `headRefOid`, and billing those to the lane read `live+131` for two commits of its own |
 | Branch amended/rebased *after* its merge | ❌ | MERGED, `headRefOid` unreachable | count falls back to 1 — "at least one commit here didn't land" |
 | Merged into a release branch, later to default | eventually ✅ | maybe | ancestry, once it arrives |
 | Local `git merge --squash` + direct push, no PR | ❌ | none | **gap → merge-tree-empty (§3.2)** |
