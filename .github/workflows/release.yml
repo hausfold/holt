@@ -1,0 +1,239 @@
+name: release
+
+# Tag v<semver> (e.g. v0.2.0) -> a GitHub release, plus all six artifacts holt
+# ships, published from one number:
+#
+#   CLI          the GitHub release + source tarball (Nix consumers take the
+#                flake input; there is no binary to attach)
+#   sdk/ts       npm            @hausfold/holt
+#   sdk/python   PyPI           hausfold-holt
+#   sdk/rust     crates.io      hausfold-holt
+#   sdk/go       a `sdk/go/v<version>` tag — Go's proxy needs nothing else
+#   sdk/swift    a tag on the nebelhaus/holt-swift mirror — SwiftPM likewise
+#
+# Cut tags with `bench release holt <version>` from the workshop; it stamps the
+# version everywhere (script/stamp-version.sh), commits, pushes, tags, and then
+# watches this run. Never push a v* tag by hand — the stamp commit has to land
+# first or the `version stamp` job below rejects the tag.
+#
+# holt is semver, not the family's CalVer. See script/stamp-version.sh for why
+# (short version: four of these registries already hold semver 0.1.0, and a
+# published version can never be taken back).
+#
+# ── One-time setup, per registry ──────────────────────────────────────────────
+# Every publish here authenticates by OIDC — no long-lived tokens, no 2FA
+# prompt, and npm/PyPI get build provenance for free. Each registry has to be
+# told to trust this repo + workflow ONCE, in a browser:
+#
+#   npm       npmjs.com -> @hausfold/holt -> Settings -> Trusted Publisher
+#             GitHub Actions, org `nebelhaus`, repo `holt`, workflow `release.yml`
+#   PyPI      pypi.org -> hausfold-holt -> Publishing -> Add a trusted publisher
+#             owner `nebelhaus`, repo `holt`, workflow `release.yml`
+#   crates.io crates.io -> hausfold-holt -> Settings -> Trusted Publishing
+#             repo `nebelhaus/holt`, workflow `release.yml`
+#
+# The Swift mirror is the one that can't use OIDC — pushing to ANOTHER repo is
+# outside what this workflow's GITHUB_TOKEN can ever be scoped to. It needs a
+# fine-grained PAT with Contents: read+write on nebelhaus/holt-swift, stored as
+# the repo secret MIRROR_TOKEN.
+#
+# Until a registry is wired, its job fails and the others still publish — the
+# jobs are deliberately independent, and every one of them is idempotent, so
+# `gh run rerun --failed` finishes the release rather than half-cutting a second
+# one.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Does the tree at this tag actually claim to be this version? bench stamps it
+  # before tagging, so this only fires on a hand-pushed tag or a botched stamp —
+  # which is exactly when you want it to.
+  stamp:
+    name: version stamp
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          script/stamp-version.sh --check "$V"
+
+  # The full PR gate, reused verbatim (see check.yml's `workflow_call`): the Go
+  # acceptance suite on both OSes, all five SDK suites against the shared
+  # fake-holt fixture, and the Swift suite on macOS.
+  check:
+    uses: ./.github/workflows/check.yml
+
+  github-release:
+    needs: [stamp, check]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME already exists — leaving it alone"
+            exit 0
+          fi
+          gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
+
+  npm:
+    name: npm (sdk/ts)
+    needs: [stamp, check]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write          # the OIDC token npm trades for publish rights
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      # setup-node's bundled npm predates trusted publishing; without this the
+      # publish falls back to looking for an _authToken it will never find.
+      - run: npm install -g npm@latest
+      - name: build
+        working-directory: sdk/ts
+        run: |
+          bun install --frozen-lockfile
+          bunx tsc -p tsconfig.json
+      - name: publish
+        working-directory: sdk/ts
+        run: |
+          V="${{ needs.stamp.outputs.version }}"
+          if npm view "@hausfold/holt@$V" version >/dev/null 2>&1; then
+            echo "@hausfold/holt@$V is already on npm — nothing to do"
+            exit 0
+          fi
+          npm publish --access public
+
+  pypi:
+    name: PyPI (sdk/python)
+    needs: [stamp, check]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: build sdist + wheel
+        working-directory: sdk/python
+        run: |
+          python -m pip install --quiet build
+          python -m build
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: sdk/python/dist
+          skip-existing: true     # makes a rerun a no-op, not a 400
+
+  crates:
+    name: crates.io (sdk/rust)
+    needs: [stamp, check]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: already published?
+        id: pub
+        run: |
+          V="${{ needs.stamp.outputs.version }}"
+          if curl -sf -H 'User-Agent: nebelhaus-holt-release' \
+               "https://crates.io/api/v1/crates/hausfold-holt/$V" >/dev/null; then
+            echo "hausfold-holt $V is already on crates.io — nothing to do"
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: rust-lang/crates-io-auth-action@v1
+        if: steps.pub.outputs.skip != '1'
+        id: auth
+      - name: publish
+        if: steps.pub.outputs.skip != '1'
+        working-directory: sdk/rust
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: cargo publish
+
+  go-sdk:
+    name: go (sdk/go tag)
+    needs: [stamp, check]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write            # pushes the module tag into this repo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+      # There is no registry to publish to: a Go module IS its tag. sdk/go has
+      # its own go.mod, so the tag carries the subdirectory as a prefix —
+      # `sdk/go/v0.2.0`, not `v0.2.0` — which is what makes
+      # `go get github.com/nebelhaus/holt/sdk/go@v0.2.0` resolve.
+      - name: tag the module
+        run: |
+          # An annotated tag needs a tagger; actions/checkout doesn't set one.
+          git config user.name  haus-release
+          git config user.email haus-release@users.noreply.github.com
+          V="${{ needs.stamp.outputs.version }}"
+          TAG="sdk/go/v$V"
+          if git ls-remote --tags --exit-code origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "$TAG already exists — nothing to do"
+          else
+            git tag -a "$TAG" -m "sdk/go $V"
+            git push origin "$TAG"
+          fi
+      # Warm the module proxy so the first `go get` after a release is instant
+      # rather than a cold fetch, and so a broken module surfaces HERE.
+      - name: verify through the proxy
+        run: |
+          V="${{ needs.stamp.outputs.version }}"
+          cd "$(mktemp -d)" && go mod init probe
+          for _ in 1 2 3 4 5; do
+            GOPROXY=https://proxy.golang.org GOFLAGS=-mod=mod \
+              go get "github.com/nebelhaus/holt/sdk/go@v$V" && exit 0
+            echo "proxy hasn't seen v$V yet — retrying in 20s"; sleep 20
+          done
+          exit 1
+
+  swift:
+    name: SwiftPM (holt-swift mirror)
+    needs: [stamp, check]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0         # subtree split walks the whole history
+      - name: mirror + tag
+        env:
+          MIRROR_TOKEN: ${{ secrets.MIRROR_TOKEN }}
+        run: |
+          if [ -z "$MIRROR_TOKEN" ]; then
+            echo "::error::MIRROR_TOKEN is unset — see this workflow's header for how to mint it." >&2
+            exit 1
+          fi
+          git config user.name  haus-release
+          git config user.email haus-release@users.noreply.github.com
+          MIRROR_URL="https://x-access-token:$MIRROR_TOKEN@github.com/nebelhaus/holt-swift.git" \
+            sdk/swift/sync-mirror.sh --tag "${{ needs.stamp.outputs.version }}"

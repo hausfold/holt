@@ -84,6 +84,9 @@ holt hook remove        [hook] retire one without losing work — JSON on stdin
 Config, exit codes, and building from source →
 [`docs/reference.md`](docs/reference.md).
 
+How the CLI and all five SDKs are cut from one version number →
+[`docs/releasing.md`](docs/releasing.md).
+
 ---
 
 *Why not your agent's built-in worktrees? No vendor ships cross-client

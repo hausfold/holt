@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  # release.yml calls this rather than restating the gate. Publishing to npm,
+  # PyPI and crates.io is IRREVERSIBLE — a version number, once taken, can only
+  # be superseded — so the bar at a release tag must be the same bar a PR
+  # clears, not a re-typed approximation of it that drifts.
+  workflow_call:
 
 jobs:
   test:
