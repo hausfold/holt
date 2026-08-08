@@ -65,7 +65,11 @@ func (e *Env) New(want, agentID string) error {
 	// `resume`. holt's own answer is to become the client; a machine with a
 	// multiplexer would rather have a pane.
 	entry := Entry{Main: main, Branch: "worktree-" + name, Path: dir, State: Live}
-	if res := e.openSession(config.HookOpen, entry, agentID, dir); res.Answer != config.Defer {
+	// Resolved without the install check that resolveAgent does below: the hook
+	// is told what holt WOULD run, and an uninstalled client is that hook's
+	// problem to report, not a reason to withhold the command.
+	openSpec, _ := specFor(agentID)
+	if res := e.openSession(config.HookOpen, entry, agentID, dir, openSpec.open); res.Answer != config.Defer {
 		return hookOutcome(config.HookOpen, res)
 	}
 

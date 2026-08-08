@@ -26,10 +26,20 @@ import (
 // agentSpec is what holt needs to know about a client. The 0.2 adapter loader
 // produces exactly this struct from a TOML file.
 type agentSpec struct {
-	id     string
-	start  func(image, prompt string) []string
-	open   []string
+	id    string
+	start func(image, prompt string) []string
+	open  []string
+	// resume opens the client's session PICKER, filtered to the cwd. It is the
+	// right answer only when holt genuinely cannot tell which conversation is
+	// meant — a lane whose chat lives in a shared parent checkout.
 	resume []string
+	// last continues the newest conversation in the cwd, with no picker. A
+	// lane's own checkout is a directory only that lane's agent ever ran in, so
+	// "the newest conversation here" IS the lane's chat — asking which one is a
+	// question with one answer, and answering it for the user is the point of
+	// `holt <name>`. Empty means the client has no such mode and the picker
+	// stands.
+	last []string
 	// imageFlag reports whether the client can attach a local image itself.
 	// The ones that can't are TOLD about the file in their first turn, rather
 	// than pretending an unsupported flag attached it.
@@ -44,6 +54,7 @@ func specFor(id string) (agentSpec, bool) {
 			start:  func(_, prompt string) []string { return []string{"claude", prompt} },
 			open:   []string{"claude"},
 			resume: []string{"claude", "--resume"},
+			last:   []string{"claude", "--continue"},
 		}, true
 	case "codex":
 		return agentSpec{
@@ -56,17 +67,36 @@ func specFor(id string) (agentSpec, bool) {
 			},
 			open:      []string{"codex"},
 			resume:    []string{"codex", "resume"},
+			last:      []string{"codex", "resume", "--last"},
 			imageFlag: true,
 		}, true
 	case "opencode":
 		return agentSpec{
-			id:     "opencode",
-			start:  func(_, prompt string) []string { return []string{"opencode", "--prompt", prompt} },
-			open:   []string{"opencode"},
+			id:    "opencode",
+			start: func(_, prompt string) []string { return []string{"opencode", "--prompt", prompt} },
+			open:  []string{"opencode"},
+			// opencode's `--continue` is already continue-the-last-session; it
+			// has no separate picker flag (its TUI lists sessions in-app), so
+			// both rungs are the same command.
 			resume: []string{"opencode", "--continue"},
+			last:   []string{"opencode", "--continue"},
 		}, true
 	}
 	return agentSpec{}, false
+}
+
+// resumeArgv picks between continuing the newest conversation and opening the
+// picker.
+//
+// `own` says the lane's chat lives in the lane's OWN checkout. `pick` is the
+// user overriding from the command line, for the case holt's rule gets wrong:
+// a lane whose newest conversation is not the one wanted (a throwaway session
+// started in the same checkout, or a deliberate second thread).
+func resumeArgv(spec agentSpec, own, pick bool) []string {
+	if own && !pick && len(spec.last) > 0 {
+		return spec.last
+	}
+	return spec.resume
 }
 
 func resolveAgent(id string) (agentSpec, error) {
