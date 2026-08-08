@@ -1,0 +1,164 @@
+package commands
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/nebelhaus/holt/internal/exitcode"
+	"github.com/nebelhaus/holt/internal/gitx"
+	"github.com/nebelhaus/holt/internal/ui"
+)
+
+// This file is holt's answer to the lanes `reap` will never take: the ones
+// whose PR was CLOSED unmerged, and the ones in a repo the forge has archived.
+//
+// Both were reported as "not landed", which is correct and also useless — the
+// work cannot land, so the lane sits in every listing forever and the only exit
+// is `git branch -D` by hand, outside holt, unrecorded.
+//
+// The fix is deliberately NOT to widen `reap`. A closed PR means the work was
+// REJECTED, not landed, and an archived repo means it can no longer be
+// submitted — in both cases the commits are the only copy, and a sweep that
+// deleted them would be holt doing the exact thing it exists to never do. The
+// asymmetry is the point: `reap` is automatic and therefore may only ever take
+// landed work; `drop` is typed by a human at a named lane and may take
+// anything, because a person just said so and the ledger can hand it back.
+
+// matchLane resolves a lane by `name` or `<repo>/<name>`.
+func (e *Env) matchLane(want string) (Entry, error) {
+	repo, name := "", want
+	if i := strings.Index(want, "/"); i >= 0 {
+		repo, name = want[:i], want[i+1:]
+	}
+	var matches []Entry
+	for _, entry := range e.discover() {
+		if !e.branchAlive(entry) || entry.Name() != name {
+			continue
+		}
+		if repo != "" && filepath.Base(entry.Main) != repo {
+			continue
+		}
+		matches = append(matches, entry)
+	}
+	switch len(matches) {
+	case 0:
+		return Entry{}, exitcode.Usagef("no lane named '%s' — run: holt", want)
+	case 1:
+		return matches[0], nil
+	default:
+		return Entry{}, exitcode.Usagef("'%s' exists in more than one repo — qualify it: holt <repo>/%s", name, name)
+	}
+}
+
+// Drop retires a lane whose work will never land — `holt drop <name>`.
+//
+// Everything `reap` refuses on is refused here too EXCEPT landedness: a pane
+// standing in the checkout still wins (removing it yanks the cwd out from under
+// a running client), and so does an uncommitted tree, because an unlanded lane's
+// dirt has no PR anywhere to fall back on. Only the "has it landed?" gate is
+// waived, and only because a human typed this lane's name.
+func (e *Env) Drop(want string) error {
+	if want == "" {
+		return exitcode.Usagef("name the lane to drop: holt drop <name>  (holt, to see them)")
+	}
+	entry, err := e.matchLane(want)
+	if err != nil {
+		return err
+	}
+	label := entry.Name() + " (" + filepath.Base(entry.Main) + ")"
+
+	if entry.State == Live {
+		selfTop, _ := gitx.Toplevel(e.Cwd)
+		if entry.Path == selfTop {
+			return exitcode.Refusedf("that is the checkout you are standing in — drop %s from another pane", label)
+		}
+		if e.Occupancy().Occupied(entry.Path) {
+			return exitcode.Refusedf("a pane is open in %s — close it first", label)
+		}
+		if gitx.Dirty(entry.Path) {
+			return exitcode.Refusedf("%s has uncommitted changes and no PR to fall back on — `holt park` them first, or commit", label)
+		}
+	}
+
+	// Ledger BEFORE anything is destroyed, and echo the recovery line even on
+	// the happy path. A drop is the one deletion holt performs that no forge
+	// record justifies, so the undo has to be in front of you at the moment it
+	// happens rather than filed away for a bad day.
+	sha := gitx.Rev(entry.Main, entry.Branch)
+	e.noteReaped(entry.Main, entry.Branch, Verdict{Via: "dropped", Confidence: "certain"})
+
+	if entry.State == Live {
+		if _, err := gitx.Run(entry.Main, "worktree", "remove", entry.Path); err != nil {
+			if _, err := gitx.Run(entry.Main, "worktree", "remove", "--force", entry.Path); err != nil {
+				return exitcode.Refusedf("git wouldn't remove the checkout at %s — the branch is untouched (%v)", entry.Path, err)
+			}
+		}
+		if _, err := os.Stat(entry.Path); err == nil {
+			_ = os.RemoveAll(entry.Path)
+		}
+	}
+	if !gitx.OK(entry.Main, "branch", "-D", entry.Branch) {
+		return exitcode.Refusedf("couldn't delete %s — the checkout is gone but the branch remains", entry.Branch)
+	}
+	_ = e.Reg.Delete(entry.Path)
+
+	ui.Say("dropped %s — %s was at %s", label, entry.Branch, shortSHA(sha))
+	ui.Say("undo: git -C %s branch %s %s", entry.Main, entry.Branch, shortSHA(sha))
+	return nil
+}
+
+// deadEnd is why a lane can never land, or "" when it still can.
+//
+// Asked only of lanes a sweep has already declined to reap, so its forge calls
+// never touch the common path — a listing of healthy lanes pays nothing for it.
+func (e *Env) deadEnd(main, branch string) string {
+	if e.repoArchived(main) {
+		slug, _ := gitx.RemoteSlug(main)
+		return slug + " is archived on the forge — no PR can ever land this"
+	}
+	if pr := e.closedPR(main, branch); pr > 0 {
+		return "PR #" + itoa(pr) + " was closed unmerged — nothing is going to land these commits"
+	}
+	return ""
+}
+
+// repoArchived reports whether the forge has archived this repo.
+func (e *Env) repoArchived(main string) bool {
+	slug, err := gitx.RemoteSlug(main)
+	if err != nil || slug == "" {
+		return false
+	}
+	out := e.cachedForge("archived-"+slug,
+		"repo", "view", slug, "--json", "isArchived", "--jq", ".isArchived")
+	return strings.TrimSpace(out) == "true"
+}
+
+// closedPR is the number of this branch's most recent PR that was closed
+// WITHOUT merging, or 0.
+//
+// `--state closed` is the forge's word for "not open", so it returns merged PRs
+// too; the jq filter is what makes this mean what it says. A branch with both a
+// merged and a closed PR is not a dead end — the merged one landed something —
+// so the merged case is checked first by the caller.
+func (e *Env) closedPR(main, branch string) int {
+	slug, err := gitx.RemoteSlug(main)
+	if err != nil || slug == "" {
+		return 0
+	}
+	if state, _, _ := e.mergedPR(main, branch); state == "MERGED" {
+		return 0
+	}
+	out := e.cachedForge("closed-"+slug+"-"+branch,
+		"pr", "list", "-R", slug, "--head", branch, "--state", "closed", "--limit", "5",
+		"--json", "number,state",
+		"--jq", `[.[] | select(.state == "CLOSED") | .number] | first // empty`)
+	n := 0
+	for _, r := range strings.TrimSpace(out) {
+		if r < '0' || r > '9' {
+			return 0
+		}
+		n = n*10 + int(r-'0')
+	}
+	return n
+}

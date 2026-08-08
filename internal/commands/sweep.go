@@ -25,6 +25,7 @@ type SweepResult struct {
 	SkippedLive []string
 	Relanded    []string // landed PR, but the branch committed past it
 	Diverged    []string // landed PR, but the tip isn't built on what merged
+	DeadEnds    []string // nothing will ever land this: PR closed, or repo archived
 	Degraded    bool     // occupancy was unknowable, so live checkouts were spared
 }
 
@@ -105,19 +106,33 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 }
 
 // noteRelanded records why a lane declined to be reaped, so it says something
-// instead of silently persisting — and points at the right fix. "Moved on"
-// (real work after the merge) and "diverged" (a stale or sideways tip that
-// never built on what merged — a second checkout of the same branch that
-// pushed first, a rebase, an amend) produce the same nonzero commit count but
-// call for opposite remedies: `holt reship` for one, removing the checkout for
-// the other. Reshipping a diverged branch would push and PR content the merge
-// already superseded.
+// instead of silently persisting — and points at the right fix. Three shapes,
+// mutually exclusive, each with its own remedy:
+//
+//   - "moved on" — real work after the merge → `holt reship`.
+//   - "diverged" — a stale or sideways tip that never built on what merged (a
+//     second checkout of the same branch that pushed first, a rebase, an amend).
+//     Same nonzero commit count as "moved on" and the opposite remedy: its
+//     content already landed, so reshipping would push and PR what the merge
+//     already superseded. Remove the checkout instead.
+//   - "dead end" — no merged PR at all, and there never will be one, because the
+//     PR was closed unmerged or the repo is archived → `holt drop`.
+//
+// The dead-end question is asked LAST and only when the count is zero, so its
+// two forge calls stay off the path every healthy lane walks.
 func (e *Env) noteRelanded(res *SweepResult, entry Entry) {
+	name := entry.Name() + " (" + filepath.Base(entry.Main) + ")"
 	n, pr, diverged := e.postMergeAhead(entry.Main, entry.Branch)
 	if n == 0 {
+		// `reap` still won't touch a dead end — the commits are unlanded and this
+		// sweep is automatic — but a lane that can never land has to SAY so, or it
+		// reads exactly like one still in flight and outlives everything around it.
+		if why := e.deadEnd(entry.Main, entry.Branch); why != "" {
+			res.DeadEnds = append(res.DeadEnds,
+				name+" — "+why+": rescue the commits, or holt drop "+entry.Name())
+		}
 		return
 	}
-	name := entry.Name() + " (" + filepath.Base(entry.Main) + ")"
 	if diverged {
 		res.Diverged = append(res.Diverged,
 			name+" — merged PR #"+itoa(pr)+", but the tip isn't built on what merged."+
@@ -138,9 +153,17 @@ func (e *Env) noteRelanded(res *SweepResult, entry Entry) {
 // actually mean. Having confirmed it, -d/-D is just the mechanism: -d first so
 // git's own safety net still gets a say, -D for the squash case it cannot see.
 func (e *Env) reapBranch(main, branch string) bool {
-	if !e.Landed(main, branch).Landed {
+	v := e.Landed(main, branch)
+	if !v.Landed {
 		return false
 	}
+	// The ledger is written BEFORE the delete and only here, because this is the
+	// single choke point every deletion goes through — the listing's parked
+	// sweep, `holt reap`, and the remove hook all arrive at this function. The
+	// SHA is only resolvable while the branch still exists, and it is the whole
+	// point: `git branch -D` takes the branch's reflog with it, so without this
+	// line a lane that went away is unrecoverable AND unexplainable.
+	e.noteReaped(main, branch, v)
 	if gitx.OK(main, "branch", "-d", branch) {
 		return true
 	}
