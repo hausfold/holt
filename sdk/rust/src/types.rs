@@ -184,4 +184,61 @@ impl WatchLine {
     pub fn is_hello(&self) -> bool {
         self.kind == watch_kind::HELLO
     }
+
+    /// Narrows a line from [`crate::HoltClient::watch`] to a [`WatchEvent`],
+    /// returning `None` for the one line that isn't an event — the `hello`
+    /// header. The Rust spelling of the TS SDK's
+    /// `isWatchHello(line) ? … : line as WatchEvent`, for callers of the
+    /// full stream who want the narrower type
+    /// [`crate::HoltClient::watch_lane`] hands out.
+    pub fn into_event(self) -> Option<WatchEvent> {
+        if self.is_hello() {
+            return None;
+        }
+        Some(WatchEvent {
+            kind: self.kind,
+            seq: self.seq,
+            ts: self.ts,
+            source: self.source,
+            lane: self.lane,
+            message: self.message,
+        })
+    }
+}
+
+/// Every line of the stream EXCEPT the `hello` header: the header-only
+/// fields (`holt`, `schema`, `capabilities`) are gone rather than left
+/// `None`, so a value of this type cannot be a version header.
+/// [`crate::HoltClient::watch_lane`] yields these — a stream already scoped
+/// to one lane never carries a `hello`, and a caller shouldn't have to
+/// re-prove that before reading `lane`. Same split the TS/Python SDKs get
+/// from `WatchLine = WatchHello | WatchEvent`, and Swift from its
+/// `WatchLine` enum.
+///
+/// `kind` stays a `String` for the same reason [`WatchLine::kind`] does: an
+/// unrecognized wire value decodes as opaque data instead of failing. See
+/// [`watch_kind`] for known values — `HELLO` never appears here.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WatchEvent {
+    pub kind: String,
+    /// Monotonic across the WHOLE stream, `hello` included — so the first
+    /// event on a filtered stream will not have `seq` 0, and gaps are
+    /// expected on a stream this narrow. See [`WatchLine::seq`].
+    pub seq: u64,
+
+    /// RFC3339 UTC: when THIS holt process observed the change, not
+    /// necessarily when it happened at the source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ts: Option<String>,
+    /// Which provider produced the event. v1 only ever writes `"registry"`;
+    /// absent on `ready`, which names no lane and no provider. Treat it as
+    /// an opaque string, not a closed enum.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Present on every kind except `ready` and `warning`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane: Option<Lane>,
+    /// Present only on `warning`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
 }

@@ -166,3 +166,53 @@ type WatchLine struct {
 // IsHello reports whether this line is the stream's version header rather
 // than a lifecycle event.
 func (l WatchLine) IsHello() bool { return l.Kind == WatchHello }
+
+// WatchEvent is every line of the stream EXCEPT the hello header: the
+// hello-only fields (Holt, Schema, Capabilities) are gone rather than left
+// zero, so a value of this type can't be a version header. WatchLane yields
+// these — a stream already scoped to one lane never carries a hello, and a
+// caller shouldn't have to re-prove that before reading Lane. This is the
+// same split the TS/Python SDKs get from `WatchLine = WatchHello |
+// WatchEvent` and Swift from its `WatchLine` enum.
+//
+// Kind stays a WatchKind rather than a narrower "every kind but hello"
+// type: Go has no literal-union types to express that set with, and
+// reusing WatchKind keeps `ev.Kind == holt.WatchCreated` compiling
+// unchanged. WatchHello simply never appears here.
+type WatchEvent struct {
+	Kind WatchKind `json:"kind"`
+	// Seq is monotonic across the WHOLE stream, hello included — so the
+	// first event on a filtered stream will not have Seq 0, and gaps are
+	// expected on a stream this narrow. See WatchLine.Seq.
+	Seq int `json:"seq"`
+
+	// Ts is RFC3339 UTC: when THIS holt process observed the change, not
+	// necessarily when it happened at the source.
+	Ts string `json:"ts,omitempty"`
+	// Source names which provider produced the event. v1 only ever writes
+	// "registry"; absent on ready, which names no lane and no provider.
+	// Treat it as an opaque string, not a closed enum.
+	Source string `json:"source,omitempty"`
+	// Lane is present on every kind except ready and warning.
+	Lane *Lane `json:"lane,omitempty"`
+	// Message is present only on warning.
+	Message string `json:"message,omitempty"`
+}
+
+// Event narrows a line from Watch to a WatchEvent, reporting false for the
+// one line that isn't an event — the hello header. It's the Go spelling of
+// the TS SDK's `isWatchHello(line) ? … : line as WatchEvent`, for callers
+// ranging over Watch who want the narrower type WatchLane hands out.
+func (l WatchLine) Event() (WatchEvent, bool) {
+	if l.Kind == WatchHello {
+		return WatchEvent{}, false
+	}
+	return WatchEvent{
+		Kind:    l.Kind,
+		Seq:     l.Seq,
+		Ts:      l.Ts,
+		Source:  l.Source,
+		Lane:    l.Lane,
+		Message: l.Message,
+	}, true
+}

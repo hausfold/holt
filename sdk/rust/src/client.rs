@@ -6,7 +6,7 @@ use futures_core::Stream;
 use crate::errors::HoltError;
 use crate::exec::{run, run_interactive, run_json};
 use crate::lease::{Lease, LeaseOptions};
-use crate::types::{Envelope, WatchLine};
+use crate::types::{Envelope, WatchEvent, WatchLine};
 use crate::watch;
 
 /// A thin client over the `holt` binary. Every method shells out — there is
@@ -92,10 +92,15 @@ impl HoltClient {
     /// THIS lane's state changes." Compare full paths, not names: names
     /// aren't unique across repos, but a checkout path is the registry's
     /// own primary key (SPEC.md §2.1).
+    ///
+    /// Yields [`WatchEvent`], not [`WatchLine`]: this stream has already
+    /// dropped the `hello` header, so the header-only fields can't be
+    /// populated and aren't in the type. Same contract as `watchLane` in
+    /// the TS/Python/Swift SDKs.
     pub fn watch_lane(
         &self,
         path: impl Into<String>,
-    ) -> impl Stream<Item = Result<WatchLine, HoltError>> + Send + 'static {
+    ) -> impl Stream<Item = Result<WatchEvent, HoltError>> + Send + 'static {
         watch::watch_lane(self.clone(), path.into())
     }
 
