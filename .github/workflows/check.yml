@@ -36,3 +36,55 @@ jobs:
       # gate now rather than a score — a PR that breaks any of the 77 fails.
       - name: acceptance suite
         run: make test
+
+  # The five SDKs are all in this repo but none of them are in the job above:
+  # `go test ./...` can't see sdk/go (its own go.mod, so consumers can `go get`
+  # it without inheriting holt's deps), and ts/python/rust need toolchains the
+  # Go job doesn't install. Until this job existed, the only thing keeping five
+  # published clients agreeing about one wire format was somebody remembering
+  # to run five suites by hand — and every one of them drives the SAME
+  # `fake-holt.sh` fixture, so a divergence is exactly what they catch.
+  #
+  # Swift is its own job because it wants a macOS runner; the other four share
+  # a Linux one.
+  sdks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: typescript
+        working-directory: sdk/ts
+        run: |
+          bun install --frozen-lockfile
+          bunx tsc --noEmit
+          bun test
+      - name: python
+        working-directory: sdk/python
+        run: |
+          python -m pip install --quiet pytest pytest-asyncio
+          PYTHONPATH=src python -m pytest -q
+      - name: go
+        working-directory: sdk/go
+        run: |
+          test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+          go vet ./...
+          go test ./...
+      - name: rust
+        working-directory: sdk/rust
+        run: cargo test --quiet
+
+  swift-sdk:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: swift
+        working-directory: sdk/swift
+        run: swift test

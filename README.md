@@ -95,8 +95,8 @@ cross-repo, and losing your work isn't their problem — it's holt's.*
 <details>
 <summary><strong>TypeScript</strong> — <code>@hausfold/holt</code></summary>
 
-[`sdk/ts`](sdk/ts) — `list()`, `watch()` as an async iterator over the
-NDJSON stream, `child`/`spawn` to create a lane without attaching an agent,
+[`sdk/ts`](sdk/ts) — `list()`, `watch()`/`watchLane()` as an async iterator
+over the NDJSON stream, `child`/`spawn` to create a lane without attaching an agent,
 `park`/`unpark`/`reap`/`reship`, and occupancy leases. Works from a
 Bun/Node TUI or a web backend; its types are safe to import into a browser
 bundle for the frontend.
@@ -124,8 +124,8 @@ See [`sdk/ts/README.md`](sdk/ts/README.md) for the full API.
 <summary><strong>Python</strong> — <code>hausfold-holt</code></summary>
 
 [`sdk/python`](sdk/python) — the same client, async-first
-(`asyncio.create_subprocess_exec`): `list()`, `watch()` as an async
-iterator, `child`/`spawn`, `park`/`unpark`/`reap`/`reship`, and occupancy
+(`asyncio.create_subprocess_exec`): `list()`, `watch()`/`watch_lane()` as an
+async iterator, `child`/`spawn`, `park`/`unpark`/`reap`/`reship`, and occupancy
 leases. Drops into a FastAPI/asyncio backend or a plain script equally.
 
 ```

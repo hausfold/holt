@@ -51,8 +51,8 @@ public struct HoltClient: Sendable {
     /// cancelled) to kill the underlying process.
     ///
     /// This is the primitive onOpen/onParked/…-style callback APIs are
-    /// built from (SPEC.md §14.2) — see the free function `watchLane` for
-    /// a version scoped to one lane's `path`.
+    /// built from (SPEC.md §14.2) — see `watchLane(path:)` for a version
+    /// scoped to one lane's `path`.
     ///
     /// ```swift
     /// for try await line in holt.watch() {
@@ -63,6 +63,23 @@ public struct HoltClient: Sendable {
     /// ```
     public func watch() -> AsyncThrowingStream<WatchLine, Error> {
         watchAll(options: opts)
+    }
+
+    /// `watch()`, filtered to events about ONE lane (`event.lane.path`) and
+    /// stripped of the `.hello`/`.ready` framing that names no lane — the
+    /// shape an embedder holding one session per lane usually wants: "tell
+    /// me when THIS lane's state changes." A `.sync` event for the lane
+    /// still passes through: it's how a caller that started watching after
+    /// the lane went live learns it exists at all.
+    ///
+    /// Compare full paths, not names: names aren't unique across repos, but
+    /// a checkout path is the registry's own primary key (SPEC.md §2.1).
+    ///
+    /// The free function `watchLane(path:options:)` does the same thing but
+    /// takes its own `RunOptions`; this one carries the client's
+    /// bin/cwd/env.
+    public func watchLane(path: String) -> AsyncThrowingStream<WatchEvent, Error> {
+        Holt.watchLane(path: path, options: opts)
     }
 
     /// `holt child <repo> [name]` — a lane on ANOTHER repo, registered as a

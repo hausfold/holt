@@ -6,8 +6,8 @@ from typing import Any, AsyncGenerator, Optional
 
 from .errors import HoltError
 from .exec import RunOptions, merged_env, run, run_json
-from .types import HoltEnvelope, WatchLine
-from .watch import watch_all
+from .types import HoltEnvelope, WatchEvent, WatchLine
+from .watch import watch_all, watch_lane
 
 
 @dataclass
@@ -56,8 +56,8 @@ class HoltClient:
         process.
 
         This is the primitive onOpen/onParked/... callback-style APIs are
-        built from (SPEC.md §14.2) — see `holt.watch.watch_lane` for a
-        version scoped to one lane's `path`.
+        built from (SPEC.md §14.2) — see {watch_lane} for a version scoped
+        to one lane's `path`.
 
         ```python
         async for line in holt.watch():
@@ -66,6 +66,23 @@ class HoltClient:
         ```
         """
         return watch_all(self._opts)
+
+    def watch_lane(self, path: str) -> AsyncGenerator[WatchEvent, None]:
+        """{watch}, filtered to events about ONE lane (`event.lane.path`)
+        and stripped of the `hello`/`ready` framing that names no lane —
+        the shape an embedder holding one session per lane usually wants:
+        "tell me when THIS lane's state changes." A `sync` event for the
+        lane still passes through: it's how a caller that started watching
+        after the lane went live learns it exists at all.
+
+        Compare full paths, not names: names aren't unique across repos,
+        but a checkout path is the registry's own primary key (SPEC.md
+        §2.1).
+
+        The module-level `holt.watch_lane` does the same thing but takes
+        its own `RunOptions`; this one carries the client's bin/cwd/env.
+        """
+        return watch_lane(path, self._opts)
 
     async def child(self, repo_path: str, name: Optional[str] = None) -> str:
         """`holt child <repo> [name]` — a lane on ANOTHER repo, registered

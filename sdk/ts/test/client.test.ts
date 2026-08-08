@@ -44,6 +44,27 @@ describe("watch", () => {
     }
     expect(seen).toEqual(["created"]);
   });
+
+  test("client.watchLane() filters the same way, on the client's own options", async () => {
+    const seen: string[] = [];
+    for await (const ev of client().watchLane("/repo/.holt/nebelhaus/fresh")) {
+      seen.push(ev.kind);
+      break;
+    }
+    expect(seen).toEqual(["created"]);
+  });
+
+  // `sync` names a lane, so it is data, not framing — it's the only way a
+  // caller that attached AFTER the lane went live learns the lane exists.
+  // Pinned because three docstrings used to claim the opposite.
+  test("watchLane passes a lane's sync through — only hello/ready are stripped", async () => {
+    const seen: string[] = [];
+    for await (const ev of client().watchLane("/repo/.holt/nebelhaus/sparkle")) {
+      seen.push(ev.kind);
+      break;
+    }
+    expect(seen).toEqual(["sync"]);
+  });
 });
 
 describe("child", () => {

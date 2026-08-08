@@ -75,11 +75,16 @@ export async function* watchAll(opts: RunOptions = {}): AsyncGenerator<WatchLine
 
 /**
  * {@link watchAll}, filtered to events about one lane (`event.lane.path`)
- * and stripped of `hello`/`ready`/`sync` framing — the shape an embedder
- * holding one session per lane usually wants: "tell me when THIS lane's
- * state changes." Compare full paths, not names: names aren't unique
- * across repos, but a checkout path is the registry's own primary key
- * (SPEC.md §2.1).
+ * and stripped of the `hello`/`ready` framing that names no lane — the
+ * shape an embedder holding one session per lane usually wants: "tell me
+ * when THIS lane's state changes."
+ *
+ * A `sync` event for the lane still passes through — it is NOT framing.
+ * It's how a caller that started watching after the lane went live learns
+ * the lane exists at all, so a switch over `event.kind` needs a `sync` arm.
+ *
+ * Compare full paths, not names: names aren't unique across repos, but a
+ * checkout path is the registry's own primary key (SPEC.md §2.1).
  */
 export async function* watchLane(path: string, opts: RunOptions = {}): AsyncGenerator<WatchEvent> {
   for await (const line of watchAll(opts)) {
