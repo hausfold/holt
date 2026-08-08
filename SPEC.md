@@ -406,7 +406,8 @@ via a branch name containing a space.
 kind    = "agent"
 id      = "amp"
 start   = ["amp", "--cwd", "{{.Path}}", "--prompt", "{{.Prompt}}"]
-resume  = ["amp", "--cwd", "{{.Path}}", "--continue"]
+resume  = ["amp", "--cwd", "{{.Path}}", "--sessions"]   # the client's PICKER
+last    = ["amp", "--cwd", "{{.Path}}", "--continue"]   # newest here, no picker
 has_chat = ["test", "-d", "{{.Path}}/.amp"]     # exit 0 ⇒ a transcript exists
 image_flag = "--image"                           # optional; omitted ⇒ name the file in the prompt
 ```
@@ -415,6 +416,26 @@ image_flag = "--image"                           # optional; omitted ⇒ name th
 test" special case: an adapter that omits it simply answers "unknown", and holt
 falls back to the client's own cwd-filtered picker, which is today's behaviour for
 Codex and OpenCode.
+
+**`resume` and `last` are two rungs, and which one fires is holt's decision, not
+the adapter's.** A lane's own checkout is a directory only that lane's agent ever
+ran in, so "the newest conversation here" *is* the lane's chat — presenting a
+picker there asks the user to answer a question with one answer, from a list
+whose entries are indistinguishable at a glance. `holt <name>` therefore runs
+`last` whenever the chat lives in the lane's own checkout, and `resume` only for
+the one case where holt genuinely cannot name the conversation: a spawned lane
+(`holt child`, a nested spawn) whose chat lives in a SHARED parent checkout full
+of unrelated sessions. `holt <name> --pick` forces the picker for when the newest
+isn't the one wanted. An adapter that omits `last` keeps the picker everywhere —
+`last` is the addition, not the default.
+
+Note what this deliberately does *not* do: record a session id. The id is
+derivable — it is whatever the client itself calls newest-in-this-cwd — and a
+recorded one goes stale the moment a session is forked or compacted, which is a
+worse failure than the picker because it fails silently into the wrong chat. If
+a future client makes newest-in-cwd unknowable, that is an adapter key
+(`session_of = [...]`) and a v1 registry field (§2.1), never a seventh TSV
+column.
 
 ### 5.4 Forge — six lines
 
@@ -605,6 +626,15 @@ three lines of shell without either having to become the other:
   `HOLT_BASE` is already the lane base *directory*, so the repo's default
   branch is **`HOLT_BASE_BRANCH`**.
 
+The two action seams that open a session — `resume` and `open` — carry three
+more, because a hook that spawns a pane has to reproduce a decision holt already
+made: `HOLT_CHAT` (the cwd the conversation lives in, which for a spawned lane
+is NOT `HOLT_PATH` — getting that wrong is how a resumed child lane opens an
+empty session), `HOLT_STATE`, and **`HOLT_COMMAND`** — the exact client
+invocation holt was about to exec, already resolved to continue-the-newest or
+open-the-picker per §5.3. A hook that re-derives it instead lands its new pane
+on the picker holt just spared the user.
+
 A predicate may print a JSON object on stdout to enrich its yes/no — a `landed`
 hook naming its own rule, so a reap stays attributable in `--json` (`via:
 "release-train"` beats `via: "hook"` when you are working out why a branch went
@@ -629,7 +659,7 @@ landed   = ["/nix/store/…-holt-landed", "--release-train"] # or an argv
 | `agent` | predicate | which client a new lane opens in | the `agent` key, then `HOLT_AGENT`, then claude |
 | `landed` | predicate | has this branch's work reached the default branch? | the §3 ladder |
 | `preserve` | predicate | does this dirty tree need a wip commit before removal? | yes, unless it's untracked scratch on a landed branch |
-| `resume` | action | reopen this lane's session | chdir + exec the client's resume |
+| `resume` | action | reopen this lane's session | chdir + exec the client — continuing the newest conversation there, or its picker for a shared parent (§5.3) |
 | `open` | action | open a session in a freshly-created lane | chdir + exec the client |
 
 Two things are **not** seams and will not become them, because they are about

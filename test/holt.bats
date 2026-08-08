@@ -405,7 +405,29 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
   [ "$status" -eq 0 ]
   [ -e "$dir/.git" ]
   [ "$(git -C "$dir" branch --show-current)" = worktree-back ]
-  [[ "$output" == *"claude --resume"* ]]     # no tty → prints the command, never execs
+  [[ "$output" == *"claude --continue"* ]]   # no tty → prints the command, never execs
+}
+
+@test "resume: a lane's own chat is CONTINUED, never offered as a picker" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" solo)"
+  git -C "$main" worktree remove --force "$dir"
+  wt_run resume solo
+  [ "$status" -eq 0 ]
+  # One checkout, one lane, one newest conversation: asking which is a question
+  # with a single answer, and holt is the one holding it.
+  [[ "$output" == *"claude --continue"* ]]
+  [[ "$output" != *"--resume"* ]] || fail "the picker came back: $output"
+}
+
+@test "resume: --pick asks for the picker anyway, either side of the name" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" choosy)"
+  git -C "$main" worktree remove --force "$dir"
+  wt_run resume choosy --pick
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"claude --resume"* ]]
+  wt_run resume --pick choosy
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"claude --resume"* ]]
 }
 
 @test "resume: a live worktree is reported live, not rebuilt" {
@@ -745,6 +767,10 @@ mkremote() { # mkremote <main> — give a repo a bare origin it can actually pus
   wt_run resume beta/par
   [ "$status" -eq 0 ]
   [[ "$output" == *"spawned from a pane in $dir"* ]]
+  # The parent is a SHARED checkout with many conversations in it, so "the
+  # newest one" isn't an answer holt is entitled to give — this is the one case
+  # the picker is right.
+  [[ "$output" == *"claude --resume"* ]] || fail "a shared parent needs the picker: $output"
 }
 
 # ── spawn ────────────────────────────────────────────────────────────────────
@@ -797,7 +823,7 @@ mkremote() { # mkremote <main> — give a repo a bare origin it can actually pus
   printf 'legacy\t%s\tworktree-legacy\t%s\t%s\n' "$main" "$dir" "$main" >"$REG"
   NEBELHAUS_AGENT_DEFAULT=codex run "$WT" resume legacy
   [ "$status" -eq 0 ]
-  [[ "$output" == *"claude --resume"* ]]
+  [[ "$output" == *"claude --continue"* ]]
 }
 
 @test "agent start: Codex receives a captured screenshot as an initial image" {
@@ -1378,6 +1404,7 @@ preserve = \"$hook\""
   local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" paned)"
   hook="$(mkhook resume '
     printf "%s %s %s\n" "$HOLT_NAME" "$HOLT_PATH" "$HOLT_AGENT" >"'"$TMP"'/opened"
+    printf "%s\n" "$HOLT_COMMAND" >"'"$TMP"'/cmd"
     exit 0')"
   setcfg "[hooks]
 resume = \"$hook\""
@@ -1385,6 +1412,9 @@ resume = \"$hook\""
   [ "$status" -eq 0 ]
   run cat "$TMP/opened"
   [ "$output" = "paned $dir claude" ] || fail "resume payload is wrong: $output"
+  # A hook that spawns a pane runs what holt WOULD have run, or the pane lands
+  # on the picker holt just spared the user.
+  [ "$(cat "$TMP/cmd")" = "claude --continue" ] || fail "wrong command: $(cat "$TMP/cmd")"
 }
 
 @test "hooks: resume — the checkout is rebuilt BEFORE the hook is asked to open it" {

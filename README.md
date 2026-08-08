@@ -66,6 +66,7 @@ Full lifecycle (states, invariants, landing rules, policy hooks) →
 ```
 holt                    list every live/parked lane, across all repos
 holt <name>             resume one: rebuild its checkout, reopen its agent
+                        --pick to choose the session instead of the newest
 holt new [name]         a lane on THIS repo, then open the default agent in it
 holt child <repo>       a lane on ANOTHER repo, as a child of this pane
 holt spawn <repo> <name>

@@ -75,6 +75,14 @@ resume = "/usr/local/bin/my-resume"
 landed = ["/usr/local/bin/my-landed", "--release-train"]
 ```
 
+The situation arrives as `HOLT_*` in the environment and as JSON on stdin.
+The `resume` and `open` seams also get `HOLT_CHAT` (the cwd the conversation
+lives in — for a lane spawned by `holt child` that is the *parent's* checkout,
+not the lane's) and `HOLT_COMMAND` (the exact client invocation holt was about
+to run). A hook that opens a pane should run `HOLT_COMMAND` in `HOLT_CHAT`
+rather than build its own, or it lands on a session picker `holt <name>` had
+already resolved.
+
 A broken or missing hook always falls back to the built-in. Two things no
 seam can override: the checkout holt is run **from** is never swept, and a
 **stray** directory is only ever reported.

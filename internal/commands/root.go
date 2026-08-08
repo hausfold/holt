@@ -16,6 +16,7 @@ A LANE is one agent's branch, checkout and pane, from create to reaped.
 
   holt                    list every live/parked lane, across all repos
   holt <name>             resume one: rebuild its checkout, reopen its agent
+                          --pick to choose the session instead of the newest
   holt new [name]         a lane on THIS repo, then open the default agent in it
   holt child <repo>       a lane on ANOTHER repo, as a child of this pane
   holt spawn <repo> <name>
@@ -87,7 +88,7 @@ func Run(args []string) error {
 		return env.Watch(args[1:])
 
 	case "resume":
-		return env.Resume(argAt(args, 1))
+		return env.Resume(firstBare(args[1:]), hasFlag(args, "--pick"))
 
 	case "new":
 		return env.New(argAt(args, 1), argAt(args, 2))
@@ -129,8 +130,20 @@ func Run(args []string) error {
 		if strings.HasPrefix(args[0], "-") {
 			return exitcode.Usagef("unknown flag %q — try `holt --help`", args[0])
 		}
-		return env.Resume(args[0])
+		return env.Resume(args[0], hasFlag(args, "--pick"))
 	}
+}
+
+// firstBare is the first argument that isn't a flag — `holt resume --pick back`
+// and `holt resume back --pick` have to mean the same thing, because both get
+// typed.
+func firstBare(args []string) string {
+	for _, a := range args {
+		if !strings.HasPrefix(a, "-") {
+			return a
+		}
+	}
+	return ""
 }
 
 func argAt(args []string, i int) string {
