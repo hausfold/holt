@@ -24,6 +24,9 @@ A LANE is one agent's branch, checkout and pane, from create to reaped.
   holt park [label]       set the working tree aside as a wip: commit on this branch
   holt unpark             put the last parked commit's changes back, uncommitted
   holt reap               sweep every LANDED lane that nobody is standing in
+  holt reaped             what holt has reaped, why, and the SHA to get it back
+  holt drop <name>        retire a lane whose work will never land (closed PR,
+                          archived repo) — recorded in holt reaped, undoable
   holt heartbeat [path]   hold the occupancy lease on a lane, so reap spares it
                           --pid N (0 = TTL-only) · --release to drop it
   holt watch --json       lifecycle events on stdout, one NDJSON object per line
@@ -80,6 +83,12 @@ func Run(args []string) error {
 
 	case "reap":
 		return env.Reap()
+
+	case "reaped":
+		return env.Ledger()
+
+	case "drop":
+		return env.Drop(argAt(args, 1))
 
 	case "heartbeat":
 		return env.Heartbeat(args[1:])

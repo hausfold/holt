@@ -23,29 +23,10 @@ func (e *Env) Resume(want string, pick bool) error {
 	if want == "" {
 		return e.List(false)
 	}
-	repo, name := "", want
-	if i := strings.Index(want, "/"); i >= 0 {
-		repo, name = want[:i], want[i+1:]
+	entry, err := e.matchLane(want)
+	if err != nil {
+		return err
 	}
-
-	var matches []Entry
-	for _, entry := range e.discover() {
-		if !e.branchAlive(entry) || entry.Name() != name {
-			continue
-		}
-		if repo != "" && filepath.Base(entry.Main) != repo {
-			continue
-		}
-		matches = append(matches, entry)
-	}
-	switch len(matches) {
-	case 0:
-		return exitcode.Usagef("no lane named '%s' — run: holt", want)
-	case 1:
-	default:
-		return exitcode.Usagef("'%s' exists in more than one repo — qualify it: holt <repo>/%s", name, name)
-	}
-	entry := matches[0]
 
 	// Resolve the client BEFORE the checkout is re-registered: a five-column
 	// registry row predates the client field and is Claude forever, even if the

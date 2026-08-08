@@ -33,6 +33,9 @@ func (e *Env) Reap() error {
 	for _, note := range res.Diverged {
 		ui.Say("kept %s", note)
 	}
+	for _, note := range res.DeadEnds {
+		ui.Say("kept %s", note)
+	}
 	for _, s := range res.Strays {
 		ui.Say("dangling checkout — git lost the link; `holt <name>` moves it aside and rebuilds: %s", s)
 	}

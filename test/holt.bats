@@ -82,8 +82,12 @@ printf 'gh %s\n' "$*" >>"${FAKE_GH_LOG:-/dev/null}"
 case "$1 $2" in
   "pr create") printf '%s\n' "${FAKE_GH_PR_URL:-https://github.com/acme/alpha/pull/9}"; exit 0 ;;
 esac
+case "$1 $2" in
+  "repo view") printf '%s' "${FAKE_GH_ARCHIVED:-false}"; exit 0 ;;
+esac
 case " $* " in
   *" --state open "*) printf '%s' "${FAKE_GH_OPEN_URL:-}"; exit 0 ;;
+  *" --state closed "*) printf '%s' "${FAKE_GH_CLOSED_PR:-}"; exit 0 ;;
   *" --head "*)
     [ "${FAKE_GH_MERGED:-0}" = 1 ] || exit 0
     printf 'MERGED %s %s\n' "${FAKE_GH_OID:-}" "${FAKE_GH_PR:-7}"; exit 0 ;;
@@ -718,6 +722,118 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
   git -C "$main" merge -q --no-edit worktree-sidequest   # landed on `detour`, NOT on main
   cd "$TMP"; wt_run reap
   git -C "$main" show-ref -q --verify refs/heads/worktree-sidequest
+}
+
+# ── dead ends: PR closed, repo archived ──────────────────────────────────────
+
+@test "reap: a lane whose PR was CLOSED unmerged is named, not swept" {
+  local main; main="$(mkrepo alpha)"; mkwt "$main" rejected >/dev/null
+  export FAKE_GH_CLOSED_PR=43
+  cd "$TMP"; wt_run reap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"PR #43 was closed unmerged"* ]] \
+    || fail "a lane nothing will ever land said nothing about it: $output"
+  [[ "$output" == *"holt drop rejected"* ]] || fail "reap named no way out of it: $output"
+  # The commits were REJECTED, not landed. An automatic sweep must never take them.
+  git -C "$main" show-ref -q --verify refs/heads/worktree-rejected \
+    || fail "reap deleted unlanded work because a PR was closed"
+}
+
+@test "reap: a lane in an ARCHIVED repo is named, not swept" {
+  local main; main="$(mkrepo alpha)"; mkwt "$main" frozen >/dev/null
+  export FAKE_GH_ARCHIVED=true
+  cd "$TMP"; wt_run reap
+  [[ "$output" == *"archived on the forge"* ]] \
+    || fail "an unlandable lane in an archived repo said nothing: $output"
+  git -C "$main" show-ref -q --verify refs/heads/worktree-frozen \
+    || fail "reap deleted work that can no longer be submitted anywhere"
+}
+
+@test "reap: a merged PR still reads as reship, never as a dead end" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" both)"
+  export FAKE_GH_MERGED=1 FAKE_GH_OID="$(git -C "$dir" rev-parse HEAD)" FAKE_GH_PR=12
+  export FAKE_GH_BRANCH=worktree-both FAKE_GH_CLOSED_PR=43
+  commit_in "$dir" post.txt "after the merge"
+  cd "$TMP"; wt_run reap
+  [[ "$output" == *"holt reship both"* ]] || fail "the merged PR lost to the closed one: $output"
+  [[ "$output" != *"closed unmerged"* ]] || fail "a branch that DID land was called a dead end: $output"
+}
+
+# ── drop + the reap ledger ───────────────────────────────────────────────────
+
+@test "drop: takes an unlanded lane reap won't, and prints the undo" {
+  local main; main="$(mkrepo alpha)"; mkwt "$main" doomed >/dev/null
+  local sha; sha="$(git -C "$main" rev-parse worktree-doomed)"
+  cd "$TMP"; wt_run drop doomed
+  [ "$status" -eq 0 ]
+  git -C "$main" show-ref -q --verify refs/heads/worktree-doomed \
+    && fail "drop left the branch behind"
+  [[ "$output" == *"${sha:0:12}"* ]] || fail "drop deleted a branch without printing the SHA back: $output"
+  [[ "$output" == *"undo:"* ]] || fail "drop named no way back"
+  [ "$(reg_rows)" -eq 0 ] || fail "drop left the registry row behind"
+}
+
+@test "drop: refuses a dirty checkout — an unlanded lane's dirt has no PR to fall back on" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" messy)"
+  echo scratch >"$dir/uncommitted.txt"
+  cd "$TMP"; wt_run drop messy
+  [ "$status" -eq 2 ] || fail "expected a refusal (exit 2), got $status: $output"
+  git -C "$main" show-ref -q --verify refs/heads/worktree-messy \
+    || fail "a refused drop still deleted the branch"
+  [ -f "$dir/uncommitted.txt" ] || fail "a refused drop still ate the working tree"
+}
+
+@test "drop: refuses a lane a pane is standing in" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" busy)"
+  export FAKE_LSOF_CWDS="$dir"
+  cd "$TMP"; wt_run drop busy
+  [ "$status" -eq 2 ] || fail "expected a refusal (exit 2), got $status: $output"
+  git -C "$main" show-ref -q --verify refs/heads/worktree-busy || fail "drop yanked an occupied lane"
+}
+
+@test "drop: an unknown name dies pointing at the listing" {
+  mkrepo alpha >/dev/null
+  cd "$TMP"; wt_run drop nosuchlane
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"holt"* ]] || fail "the refusal named no way to find the real names"
+}
+
+@test "reaped: every reap leaves a line saying what died and how to get it back" {
+  # The bug this exists for: a lane vanished mid-session and NOTHING could say
+  # why — `git branch -D` takes the branch's reflog with it, `git worktree
+  # remove` takes the admin dir, and holt kept no record of its own most
+  # destructive act.
+  local main; main="$(mkrepo alpha)"; mkwt "$main" gone >/dev/null
+  local sha; sha="$(git -C "$main" rev-parse worktree-gone)"
+  git -C "$main" merge -q --no-edit worktree-gone     # landed by ancestry
+  cd "$TMP"; "$WT" reap >/dev/null 2>&1
+  wt_run reaped
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"alpha/gone"* ]] || fail "the ledger doesn't name the lane: $output"
+  [[ "$output" == *"ancestry"* ]] || fail "the ledger doesn't say which rung justified it: $output"
+  [[ "$output" == *"${sha:0:12}"* ]] || fail "the ledger kept no SHA, so nothing is recoverable: $output"
+  [[ "$output" == *"branch worktree-gone"* ]] || fail "the ledger names no recovery command: $output"
+}
+
+@test "reaped: the recorded SHA really does restore the branch" {
+  local main; main="$(mkrepo alpha)"; mkwt "$main" undoable >/dev/null
+  local sha; sha="$(git -C "$main" rev-parse worktree-undoable)"
+  cd "$TMP"; wt_run drop undoable
+  git -C "$main" show-ref -q --verify refs/heads/worktree-undoable && fail "drop didn't delete"
+  # Read the SHA back out of the ledger, not out of the test's own variable —
+  # that is the path a human actually walks.
+  local recorded; recorded="$(awk -F'\t' '$3=="undoable"{print $5}' "$XDG_STATE_HOME/holt/reaped.log")"
+  [ "$recorded" = "$sha" ] || fail "ledger SHA $recorded != $sha"
+  git -C "$main" branch worktree-undoable "$recorded"
+  [ "$(git -C "$main" rev-parse worktree-undoable)" = "$sha" ] || fail "the branch came back wrong"
+}
+
+@test "reaped: an empty ledger says so and names its own path" {
+  mkrepo alpha >/dev/null
+  cd "$TMP"; wt_run reaped
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no lanes reaped"* ]] || fail "an empty ledger printed something else: $output"
+  [[ "$output" == *"reaped.log"* ]] || fail "an empty ledger didn't say where it would live"
 }
 
 @test "reap: is idempotent — a second run finds nothing and changes nothing" {

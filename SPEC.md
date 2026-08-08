@@ -271,6 +271,7 @@ existing signal and close the remaining holes explicitly.
 | Merged from a fork | ❌ | `headRefName` may be `owner:branch` | **gap → §3.3** |
 | PR merged >100 PRs ago | ❌ | outside the repo-wide `--limit 100` map | already safe: `branch_landed` keeps its own precise per-branch query, so the horizon only costs an annotation, never a wrong reap |
 | Forge unreachable / no `gh` / offline | ❌ | unknown | **not landed** — keep. Correct, and stays correct. |
+| PR closed unmerged, or the repo archived | ❌ | `CLOSED` / `isArchived` | **not landed, and never will be** — `reap` names it and keeps it; `holt drop` is the only thing that takes it (§6.4b) |
 
 The existing division of labour is right and must survive the port: the **listing**
 uses one repo-wide `merged_map` query (a per-branch query costs ~0.5 s each, which
@@ -583,6 +584,40 @@ filesystem supports reflink; whether a forge CLI is authenticated; whether `lsof
 or a heartbeat is available; submodules / LFS / sparse-checkout (§8); and the
 default branch resolution. It also *diagnoses* — stale registry rows, stray
 checkouts, orphan branches, disk used per repo.
+
+### 6.4b Dead ends, `drop`, and the reap ledger
+
+Two lanes can never land, and neither is "not landed yet":
+
+| shape | forge record | holt's answer |
+|---|---|---|
+| The branch's PR was **closed unmerged** | latest PR `CLOSED`, none `MERGED` | named by `reap`, never swept — the work was *rejected*, and those commits are the only copy |
+| The repo is **archived** on the forge | `isArchived: true` | named by `reap`, never swept — nothing can be submitted anywhere any more |
+
+Both read exactly like an in-flight branch, so before this they outlived
+everything around them with no signal at all. The obvious fix — let `reap` take
+them — is the wrong one, and the asymmetry is the whole design: **`reap` is
+automatic, so it may only ever take landed work; `drop` is a human typing one
+lane's name, so it may take anything.** Widening the automatic sweep to delete
+rejected work is precisely the thing holt exists to never do.
+
+`deadEnd` costs two forge calls, so it is asked **only of lanes a sweep has
+already declined to reap** — the listing (which the statusline runs several
+times a minute) never pays for it.
+
+**The ledger.** Every branch deletion — `reap`, the parked sweep, the remove
+hook, `drop` — writes one line to `$STATE/reaped.log` *before* the delete:
+`when, repo, name, branch, sha, via, pr`, tab-separated, append-only field
+order. `holt reaped` reads it back with the recovery command spelled out.
+
+This exists because a branch deletion destroys its own evidence: `git branch -D`
+takes the branch's reflog with it and `git worktree remove` takes
+`.git/worktrees/<name>`, so a lane that vanished between two listings left a
+repo where the only honest answer was "something deleted it, and the record of
+what died with the thing it recorded". `watch` emits a `reaped` event, but only
+to whoever happened to be streaming at that instant. The recorded SHA outlives
+git's own reflog entry, which makes every reap **reversible**, not merely
+attributable.
 
 ### 6.5 Policy seams — the hardcoded facts, and how to disagree with them
 
