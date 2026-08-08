@@ -9,8 +9,10 @@ Works from Bun or Node ≥18. Import just `types` for a browser bundle.
 
 ## Install
 
-Not published yet — reference it from within this repo or copy `sdk/ts`
-out. Once published: `bun add @hausfold/holt` / `npm i @hausfold/holt`.
+```sh
+bun add @hausfold/holt
+# or: npm install @hausfold/holt
+```
 
 `holt` itself must be on `PATH`, or pass `{ bin: "/path/to/holt" }`.
 

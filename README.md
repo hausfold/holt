@@ -92,13 +92,18 @@ cross-repo, and losing your work isn't their problem — it's holt's.*
 ## SDKs
 
 <details>
-<summary><strong>TypeScript</strong> — <code>@hausfold/holt</code> (not published yet)</summary>
+<summary><strong>TypeScript</strong> — <code>@hausfold/holt</code></summary>
 
 [`sdk/ts`](sdk/ts) — `list()`, `watch()` as an async iterator over the
 NDJSON stream, `child`/`spawn` to create a lane without attaching an agent,
 `park`/`unpark`/`reap`/`reship`, and occupancy leases. Works from a
 Bun/Node TUI or a web backend; its types are safe to import into a browser
 bundle for the frontend.
+
+```sh
+npm install @hausfold/holt
+# or: bun add @hausfold/holt
+```
 
 ```ts
 import { HoltClient } from "@hausfold/holt";
