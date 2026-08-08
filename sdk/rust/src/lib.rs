@@ -43,5 +43,5 @@ pub use errors::HoltError;
 pub use lease::{Lease, LeaseOptions};
 pub use types::{
     exit_code, landed_verdict, landed_via, lane_state, watch_kind, Envelope, Landed, Lane,
-    PostMergeAhead, WatchLine,
+    PostMergeAhead, WatchEvent, WatchLine,
 };

@@ -100,20 +100,25 @@ func (c *Client) Watch(ctx context.Context) iter.Seq2[WatchLine, error] {
 // it exists at all. Compare full paths, not names: names aren't unique
 // across repos, but a checkout path is the registry's own primary key
 // (SPEC.md §2.1).
-func (c *Client) WatchLane(ctx context.Context, path string) iter.Seq2[WatchLine, error] {
-	return func(yield func(WatchLine, error) bool) {
+//
+// It yields WatchEvent, not WatchLine: hello is filtered out here, so the
+// header-only fields can't be populated and shouldn't be in the type. Same
+// contract as watchLane in the TS/Python/Swift SDKs.
+func (c *Client) WatchLane(ctx context.Context, path string) iter.Seq2[WatchEvent, error] {
+	return func(yield func(WatchEvent, error) bool) {
 		for line, err := range c.Watch(ctx) {
 			if err != nil {
-				if !yield(line, err) {
+				if !yield(WatchEvent{}, err) {
 					return
 				}
 				continue
 			}
-			if line.Kind == WatchHello || line.Kind == WatchReady {
+			event, ok := line.Event()
+			if !ok || event.Kind == WatchReady {
 				continue
 			}
-			if line.Lane != nil && line.Lane.Path == path {
-				if !yield(line, nil) {
+			if event.Lane != nil && event.Lane.Path == path {
+				if !yield(event, nil) {
 					return
 				}
 			}

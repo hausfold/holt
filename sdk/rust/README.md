@@ -65,7 +65,24 @@ while let Some(line) = lines.next().await {
         notify_ui(line.lane);
     }
 }
+
+// Scoped to one lane: same stream, minus the hello/ready framing that
+// names no lane. Its item is `WatchEvent`, not `WatchLine` — hello is
+// already filtered out, so the header-only fields (`holt`, `schema`,
+// `capabilities`) aren't in the type at all. Same contract as `watchLane`
+// in the TS/Python/Swift SDKs.
+let mut events = Box::pin(client.watch_lane(&dir));
+while let Some(event) = events.next().await {
+    let event = event?;
+    // `sync` arrives here too, and is NOT framing: it's how a caller that
+    // started watching late learns the lane exists at all.
+    render(&event.kind, event.lane);
+}
 ```
+
+Consuming `watch()` and want the same narrower type? `line.into_event()`
+returns `None` for the hello header and `Some(WatchEvent)` for everything
+else.
 
 Dropping the `watch()`/`watch_lane()` stream kills the underlying `holt
 watch` process (`kill_on_drop`) — that's the only way to stop it, since
@@ -123,7 +140,7 @@ since `Drop` can't run async code.
 elsewhere:
 
 ```rust
-use holt::{Lane, WatchLine};
+use holt::{Lane, WatchEvent, WatchLine};
 ```
 
 `lane_state`, `landed_verdict`, and `watch_kind` are plain `&str` constant

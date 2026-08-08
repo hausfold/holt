@@ -2,6 +2,7 @@ package holt_test
 
 import (
 	"context"
+	"iter"
 	"strings"
 	"testing"
 
@@ -72,16 +73,49 @@ func TestWatch_YieldsHelloSyncReadyThenStopsOnBreak(t *testing.T) {
 }
 
 func TestWatchLane_FiltersToOneLane(t *testing.T) {
-	var seen []holt.WatchKind
-	for line, err := range newClient(t).WatchLane(context.Background(), "/repo/.holt/nebelhaus/fresh") {
+	var seen []holt.WatchEvent
+	// The element type is WatchEvent, not WatchLine — a lane-scoped stream
+	// has no hello to carry, so it doesn't hand out a type that could be
+	// one. This assignment is half the assertion: it stops compiling if
+	// WatchLane ever widens back.
+	var stream iter.Seq2[holt.WatchEvent, error] = newClient(t).WatchLane(context.Background(), "/repo/.holt/nebelhaus/fresh")
+	for event, err := range stream {
 		if err != nil {
 			t.Fatalf("WatchLane: %v", err)
 		}
-		seen = append(seen, line.Kind)
+		seen = append(seen, event)
 		break
 	}
-	if len(seen) != 1 || seen[0] != holt.WatchCreated {
-		t.Errorf("seen = %v, want [created]", seen)
+	if len(seen) != 1 || seen[0].Kind != holt.WatchCreated {
+		t.Fatalf("seen = %v, want one created event", seen)
+	}
+	if seen[0].Lane == nil || seen[0].Lane.Path != "/repo/.holt/nebelhaus/fresh" {
+		t.Errorf("seen[0].Lane = %v, want the fresh lane", seen[0].Lane)
+	}
+}
+
+func TestWatchLine_EventNarrowsEverythingButHello(t *testing.T) {
+	hello := holt.WatchLine{Kind: holt.WatchHello, Seq: 0, Holt: "0.1.0", Schema: 1}
+	if _, ok := hello.Event(); ok {
+		t.Error("hello.Event() ok = true, want false — the header is not an event")
+	}
+
+	line := holt.WatchLine{
+		Kind:   holt.WatchCreated,
+		Seq:    4,
+		Ts:     "2026-08-08T12:00:00Z",
+		Source: "registry",
+		Lane:   &holt.Lane{Name: "fresh", Path: "/repo/.holt/nebelhaus/fresh"},
+	}
+	event, ok := line.Event()
+	if !ok {
+		t.Fatal("created.Event() ok = false, want true")
+	}
+	if event.Kind != holt.WatchCreated || event.Seq != 4 || event.Ts != line.Ts || event.Source != "registry" {
+		t.Errorf("event = %+v, want the line's own scalars", event)
+	}
+	if event.Lane != line.Lane {
+		t.Errorf("event.Lane = %v, want the same lane pointer", event.Lane)
 	}
 }
 

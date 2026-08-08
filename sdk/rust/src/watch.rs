@@ -7,7 +7,7 @@ use tokio::process::Command;
 
 use crate::client::HoltClient;
 use crate::errors::HoltError;
-use crate::types::{exit_code, watch_kind, WatchLine};
+use crate::types::{exit_code, watch_kind, WatchEvent, WatchLine};
 
 /// `holt watch --json` as a stream of typed lines. One object per NDJSON
 /// line on stdout, in order: `hello`, a `sync` burst for every lane already
@@ -95,19 +95,26 @@ pub(crate) fn watch_all(
 /// changes." Compare full paths, not names: names aren't unique across
 /// repos, but a checkout path is the registry's own primary key (SPEC.md
 /// §2.1).
+///
+/// Yields [`WatchEvent`], not [`WatchLine`]: `hello` is filtered out here,
+/// so the header-only fields can't be populated and shouldn't be in the
+/// type. Same contract as `watchLane` in the TS/Python/Swift SDKs.
 pub(crate) fn watch_lane(
     client: HoltClient,
     path: String,
-) -> impl Stream<Item = Result<WatchLine, HoltError>> + Send + 'static {
+) -> impl Stream<Item = Result<WatchEvent, HoltError>> + Send + 'static {
     stream! {
         for await line in watch_all(client) {
             match line {
                 Ok(line) => {
-                    if line.kind == watch_kind::HELLO || line.kind == watch_kind::READY {
+                    if line.kind == watch_kind::READY {
                         continue;
                     }
-                    if line.lane.as_ref().is_some_and(|l| l.path == path) {
-                        yield Ok(line);
+                    let Some(event) = line.into_event() else {
+                        continue; // hello: framing, not an event
+                    };
+                    if event.lane.as_ref().is_some_and(|l| l.path == path) {
+                        yield Ok(event);
                     }
                 }
                 Err(e) => yield Err(e),

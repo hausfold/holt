@@ -65,7 +65,26 @@ for line, err := range c.Watch(ctx) {
 		notifyUI(line.Lane)
 	}
 }
+
+// Scoped to one lane: same stream, minus the hello/ready framing that
+// names no lane. It yields WatchEvent rather than WatchLine — hello is
+// already filtered out, so the header-only fields (Holt, Schema,
+// Capabilities) aren't in the type at all. Same contract as watchLane in
+// the TS/Python/Swift SDKs.
+for event, err := range c.WatchLane(ctx, dir) {
+	if err != nil {
+		log.Println("watch:", err)
+		break
+	}
+	// `sync` arrives here too, and is NOT framing: it's how a caller that
+	// started watching late learns the lane exists at all.
+	render(event.Kind, event.Lane)
+}
 ```
+
+Ranging over `Watch` and want the same narrower type? `line.Event()`
+returns `(WatchEvent, false)` for the hello header and `(event, true)` for
+everything else.
 
 **Interactive (a real terminal TUI).** `NewInteractive` / `ResumeInteractive`
 inherit the calling process's stdio, so when holt execs the configured
