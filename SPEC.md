@@ -178,7 +178,7 @@ the implied verb. One envelope, so they can version-check without sniffing:
       "ahead": 3,
       "behind": 12,
       "landed": { "verdict": "no", "via": null, "confidence": "certain" },
-      "post_merge_ahead": { "commits": 0, "pr": null },
+      "post_merge_ahead": { "commits": 0, "pr": null, "diverged": false },
       "pr": { "number": 189, "state": "OPEN", "url": "https://…", "checks": "passing" },
       "overlap": ["frost"]
     }
@@ -202,6 +202,13 @@ Contract points that matter:
   conflating those two.
 - `warnings[]` is where degraded-mode explanations go. Never silently degrade.
 - Field additions are non-breaking; consumers must ignore unknown keys.
+- `post_merge_ahead.diverged` disambiguates a case `commits` alone cannot: the
+  same nonzero count means "committed after the merge" (reshippable) when the
+  merged SHA is an ancestor of the tip, and "this tip never built on what
+  merged" (a stale or sideways checkout — a second local copy of the same
+  branch, a rebase, an amend) when it is not. `holt reship` refuses the latter
+  rather than pushing content the merge already superseded; the CLI marks it
+  `~N` in the state column, distinct from `+N`.
 
 ### 2.3 Hook protocol
 

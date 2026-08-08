@@ -39,6 +39,22 @@ func (e *Env) Reship(want string) error {
 		return exitcode.Refusedf("'%s' has nothing the %s branch doesn't already have.", branch, base)
 	}
 
+	// A branch whose tip does not build on its own merged PR is not "ahead" of
+	// it, it is STALE or SIDEWAYS: a second checkout of the same branch name
+	// that never pulled, a rebase, an amend. Pushing it would recreate a
+	// deleted remote branch and open a real PR whose diff reintroduces content
+	// the merge already superseded — confusing at best, a step backward at
+	// worst. Refuse and say why, rather than doing the wrong kind of "help".
+	if _, _, diverged := e.postMergeAhead(main, branch); diverged {
+		return exitcode.Refusedf(
+			"'%s' has already-merged content, but its tip does not build on that merged PR "+
+				"— this looks like a stale or sideways checkout, not new work. "+
+				"If this really is new work, rebase onto the merged commit first. "+
+				"If it's stale, the fix is removing the checkout, not reshipping it.",
+			branch,
+		)
+	}
+
 	ui.Say("pushing %s → origin (%s)", branch, slug)
 	if _, err := gitx.Run(main, "push", "-u", "origin", branch); err != nil {
 		return exitcode.Usagef("push failed — resolve it, then re-run: holt reship (%v)", err)
@@ -50,7 +66,7 @@ func (e *Env) Reship(want string) error {
 		return nil
 	}
 
-	ahead, prNum := e.postMergeAhead(main, branch)
+	ahead, prNum, _ := e.postMergeAhead(main, branch)
 	title := gitx.Subject(main, branch)
 	if title == "" {
 		title = "follow-up on " + branch
