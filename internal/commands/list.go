@@ -60,6 +60,7 @@ type listRow struct {
 	Ahead    int
 	AheadPR  int
 	Relanded bool
+	Diverged bool
 }
 
 func (e *Env) rows() []listRow {
@@ -74,14 +75,20 @@ func (e *Env) rows() []listRow {
 		// indistinguishable from an ordinary in-flight branch, which is exactly
 		// how un-shipped commits go unnoticed until someone tidies up by hand.
 		state := string(entry.State)
-		n, pr := e.postMergeAhead(entry.Main, entry.Branch)
+		n, pr, diverged := e.postMergeAhead(entry.Main, entry.Branch)
 		row := listRow{
 			Repo:  filepath.Base(entry.Main),
 			Name:  entry.Name(),
 			State: state,
 			Entry: entry,
 		}
-		if n > 0 {
+		switch {
+		case n > 0 && diverged:
+			// Distinct glyph on purpose: a "+N" reader reasonably assumes
+			// `holt reship` is the fix, and here it is the wrong one.
+			row.State = state + "~" + strconv.Itoa(n)
+			row.Ahead, row.AheadPR, row.Diverged = n, pr, true
+		case n > 0:
 			row.State = state + "+" + strconv.Itoa(n)
 			row.Ahead, row.AheadPR, row.Relanded = n, pr, true
 		}
@@ -142,30 +149,33 @@ func (e *Env) branchAlive(entry Entry) bool {
 // the lane kept committing. Those commits sit on a branch whose remote
 // counterpart the forge deleted at merge — no PR covers them, nothing is pushed,
 // and the only symptom used to be a lane that quietly declined to be reaped.
-// Returns (0, 0) when this isn't that case.
-func (e *Env) postMergeAhead(main, branch string) (ahead, pr int) {
+// Returns (0, 0, false) when this isn't that case.
+//
+// `diverged` is the other way a tip can differ from the merged SHA: not built
+// on top of it at all — a second local checkout of the same branch that never
+// pulled, a rebase, an amend. `ahead` still counts commits reachable from
+// branch but not from head for these, because that count is not FALSE, but it
+// answers a different question than "what should I reship" — those commits
+// are not new work sitting on the merge, they are a stale or sideways tip.
+// Reshipping one would push and PR content the merge already superseded.
+func (e *Env) postMergeAhead(main, branch string) (ahead, pr int, diverged bool) {
 	// Landed by ancestry beats everything: if the tip is already IN the default
 	// branch, those later commits landed too (a second PR, a direct merge) and
 	// there is nothing to ship. Local, cheap, and asked FIRST so the marker can
 	// never contradict the sweep that would reap this branch.
 	base := gitx.DefaultBranch(main)
 	if gitx.IsAncestor(main, branch, base) {
-		return 0, 0
+		return 0, 0, false
 	}
 	head, num := e.mergedMapLookup(main, branch)
 	if head == "" {
-		return 0, 0
+		return 0, 0, false
 	}
 	tip := gitx.Rev(main, branch)
 	if tip == "" || tip == head {
-		return 0, 0
+		return 0, 0, false
 	}
-	// The merged SHA is normally an ancestor of the tip (we committed on top of
-	// it), so this count is exact. When it isn't reachable at all — the branch
-	// was rebased or amended after the merge — say 1, because "at least one
-	// commit here is not what landed" is the part that is certainly true.
-	//
-	// `--not base` is what keeps the number honest. A long-lived lane pulls the
+	// `--not base` is what keeps the count honest. A long-lived lane pulls the
 	// default branch back in — a merge from main, a rebase onto it — and every
 	// commit that ride brings along is reachable from the tip but not from the
 	// merged head, so a bare `head..branch` counts other people's landed work as
@@ -180,12 +190,44 @@ func (e *Env) postMergeAhead(main, branch string) (ahead, pr int) {
 			if parsed == 0 {
 				// Every commit since the merge is on the default branch already:
 				// this lane has nothing un-shipped, whatever the raw count says.
-				return 0, 0
+				return 0, 0, false
 			}
 			n = parsed
 		}
 	}
-	return n, num
+	// The merged SHA is normally an ancestor of the tip (we committed on top of
+	// it) — that is the "outran its PR" case reship exists for. When it is not
+	// reachable, ancestry alone can't tell WHY: `git rebase main` to catch up
+	// (legitimate — the branch's own commit is still there, just replayed onto
+	// a new base under a new SHA) looks identical, by ancestry, to a second
+	// checkout that pushed a different tip under the same branch name first.
+	// `builtOnMerge` tells them apart the way `Landed`'s own ladder does for
+	// the same shape of problem (step 3): a rebase preserves the DIFF even
+	// though it changes the SHA, so if `head`'s patch already exists among
+	// commits unique to this branch, the branch built on the merge after all.
+	if !builtOnMerge(main, head, branch) {
+		return n, num, true
+	}
+	return n, num, false
+}
+
+// builtOnMerge reports whether branch's history — literally, or as an
+// equivalent patch after a rebase — includes what actually merged.
+func builtOnMerge(main, head, branch string) bool {
+	if gitx.IsAncestor(main, head, branch) {
+		return true
+	}
+	// "upstream" in git's terms, confusingly: this asks whether head's patch
+	// is already applied ON branch, marking it '-' if so. Uncertainty (cherry
+	// errors, or head's patch genuinely isn't there) resolves to "not built on
+	// the merge" — the same direction everything else in this file resolves
+	// uncertainty, because the cost of guessing wrong here is `reship` pushing
+	// content the merge already superseded.
+	out, err := gitx.Run(main, "cherry", branch, head)
+	if err != nil {
+		return false
+	}
+	return strings.HasPrefix(strings.TrimSpace(out), "-")
 }
 
 // mergedMapLookup asks ONE repo-wide question rather than one per branch.
@@ -231,13 +273,14 @@ func (e *Env) mergedMapLookup(main, branch string) (headOID string, pr int) {
 // listing stays one line per lane however narrow the terminal is.
 func renderTable(rows []listRow) {
 	rw, nw, sw, cw := 4, 4, 6, 5
-	relanded := false
+	relanded, diverged := false, false
 	for _, r := range rows {
 		rw = max(rw, len(r.Repo))
 		nw = max(nw, len(r.Name))
-		sw = max(sw, len(r.State)) // the +N marker makes this content-sized
+		sw = max(sw, len(r.State)) // the +N / ~N marker makes this content-sized
 		cw = max(cw, len(r.Agent))
 		relanded = relanded || r.Relanded
+		diverged = diverged || r.Diverged
 	}
 	rw = min(rw, 16)
 
@@ -289,6 +332,9 @@ func renderTable(rows []listRow) {
 	// normal day — and the day it isn't normal, the fix is one command away.
 	if relanded {
 		ui.Say("+N = commits landed AFTER that branch's PR merged — no PR covers them: holt reship <name>")
+	}
+	if diverged {
+		ui.Say("~N = the tip does not build on that branch's merged PR — a stale or sideways checkout, not new work. Its content already landed; remove the checkout instead of reshipping it.")
 	}
 }
 

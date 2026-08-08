@@ -24,6 +24,7 @@ type SweepResult struct {
 	Strays      []string
 	SkippedLive []string
 	Relanded    []string // landed PR, but the branch committed past it
+	Diverged    []string // landed PR, but the tip isn't built on what merged
 	Degraded    bool     // occupancy was unknowable, so live checkouts were spared
 }
 
@@ -103,14 +104,29 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 	return res
 }
 
-// noteRelanded records the "its PR merged but the branch moved on" case, so a
-// lane that declines to be reaped says why instead of silently persisting.
+// noteRelanded records why a lane declined to be reaped, so it says something
+// instead of silently persisting — and points at the right fix. "Moved on"
+// (real work after the merge) and "diverged" (a stale or sideways tip that
+// never built on what merged — a second checkout of the same branch that
+// pushed first, a rebase, an amend) produce the same nonzero commit count but
+// call for opposite remedies: `holt reship` for one, removing the checkout for
+// the other. Reshipping a diverged branch would push and PR content the merge
+// already superseded.
 func (e *Env) noteRelanded(res *SweepResult, entry Entry) {
-	if n, pr := e.postMergeAhead(entry.Main, entry.Branch); n > 0 {
-		res.Relanded = append(res.Relanded,
-			entry.Name()+" ("+filepath.Base(entry.Main)+") — merged PR #"+itoa(pr)+
-				", "+itoa(n)+" commit(s) since, covered by no PR: holt reship "+entry.Name())
+	n, pr, diverged := e.postMergeAhead(entry.Main, entry.Branch)
+	if n == 0 {
+		return
 	}
+	name := entry.Name() + " (" + filepath.Base(entry.Main) + ")"
+	if diverged {
+		res.Diverged = append(res.Diverged,
+			name+" — merged PR #"+itoa(pr)+", but the tip isn't built on what merged."+
+				" Its content already landed; remove the checkout instead of reshipping it.")
+		return
+	}
+	res.Relanded = append(res.Relanded,
+		name+" — merged PR #"+itoa(pr)+
+			", "+itoa(n)+" commit(s) since, covered by no PR: holt reship "+entry.Name())
 }
 
 // reapBranch deletes a branch, and ONLY once it has provably landed.

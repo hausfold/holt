@@ -611,6 +611,26 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
   [[ "$output" == *"holt reship outran"* ]] || fail "reap named no way out of it"
 }
 
+# A second checkout of the same branch name pushed a merge before this one ever
+# pulled: the local tip is real work, just not work built on top of what
+# actually merged. Same nonzero commit count as "outran", opposite remedy —
+# reshipping THIS tip would push content the merge already superseded.
+@test "reap: names a branch whose merged PR the tip never built on, not 'outran'" {
+  local main dir stale; main="$(mkrepo alpha)"; dir="$(mkwt "$main" diverged)"
+  commit_in "$main" elsewhere.txt "landed via a different checkout entirely"
+  stale="$(git -C "$main" rev-parse HEAD)"   # not reachable from worktree-diverged
+  export FAKE_GH_MERGED=1 FAKE_GH_OID="$stale" FAKE_GH_PR=12
+  export FAKE_GH_BRANCH=worktree-diverged
+  cd "$TMP"; wt_run reap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"kept diverged (alpha) — merged PR #12, but the tip isn't built on what merged"* ]] \
+    || fail "reap kept the branch but blamed the wrong cause: $output"
+  [[ "$output" != *"holt reship diverged"* ]] \
+    || fail "reap pointed a diverged (stale) branch at reship, which would push it: $output"
+  git -C "$main" show-ref -q --verify refs/heads/worktree-diverged \
+    || fail "the branch was deleted despite Landed() correctly saying no"
+}
+
 @test "list: a branch that outran its merged PR is marked +N" {
   local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" outran)"
   export FAKE_GH_MERGED=1 FAKE_GH_OID="$(git -C "$dir" rev-parse HEAD)" FAKE_GH_PR=12
@@ -621,6 +641,20 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
   [ "$status" -eq 0 ]
   [[ "$output" == *"live+2"* ]] || fail "the state column hid the un-shipped commits: $output"
   [[ "$output" == *"holt reship"* ]] || fail "the +N marker was printed with no legend"
+}
+
+@test "list: a branch diverged from its merged PR is marked ~N, not +N" {
+  local main dir stale; main="$(mkrepo alpha)"; dir="$(mkwt "$main" diverged)"
+  commit_in "$main" elsewhere.txt "landed via a different checkout entirely"
+  stale="$(git -C "$main" rev-parse HEAD)"
+  export FAKE_GH_MERGED=1 FAKE_GH_OID="$stale" FAKE_GH_PR=12
+  export FAKE_GH_BRANCH=worktree-diverged
+  cd "$TMP"; wt_run
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"live~1"* ]] || fail "a diverged tip was marked as though it outran its PR: $output"
+  [[ "$output" != *"live+1"* ]] || fail "diverged and outran share a marker: $output"
+  [[ "$output" == *"remove the checkout instead of reshipping"* ]] \
+    || fail "the ~N marker was printed with no legend, or the wrong one: $output"
 }
 
 @test "list: a branch whose post-merge commits ALSO landed is not marked" {
@@ -724,6 +758,22 @@ mkremote() { # mkremote <main> — give a repo a bare origin it can actually pus
     || fail "the branch was never pushed, so the follow-up PR would be empty"
   grep -q "pr create" "$FAKE_GH_LOG" || fail "no PR was opened: $output"
   [[ "$output" == *"follow-up PR open"* ]]
+}
+
+@test "reship: refuses a diverged tip instead of pushing stale content" {
+  local main dir bare stale; main="$(mkrepo alpha)"; dir="$(mkwt "$main" diverged)"
+  bare="$(mkremote "$main")"
+  commit_in "$main" elsewhere.txt "landed via a different checkout entirely"
+  stale="$(git -C "$main" rev-parse HEAD)"
+  export FAKE_GH_MERGED=1 FAKE_GH_OID="$stale" FAKE_GH_PR=12
+  export FAKE_GH_BRANCH=worktree-diverged
+  cd "$TMP"; wt_run reship diverged
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"does not build on that merged PR"* ]] \
+    || fail "reship refused for the wrong reason, or didn't refuse: $output"
+  git -C "$bare" show-ref -q --verify refs/heads/worktree-diverged \
+    && fail "reship pushed a diverged tip despite refusing"
+  no_pr_created || fail "a PR was opened for content the merge already superseded"
 }
 
 @test "reship: an already-open PR takes the push and no second PR" {

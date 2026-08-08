@@ -53,8 +53,9 @@ type jsonLanded struct {
 }
 
 type jsonPostMerge struct {
-	Commits int `json:"commits"`
-	PR      int `json:"pr"`
+	Commits  int  `json:"commits"`
+	PR       int  `json:"pr"`
+	Diverged bool `json:"diverged"` // true: the tip isn't built on the merged PR — stale/sideways, not new work
 }
 
 func (e *Env) listJSON(rows []listRow) error {
@@ -99,7 +100,7 @@ func (e *Env) toJSONLane(r listRow, occ occupancy.Report) jsonLane {
 		Agent:          r.Agent,
 		State:          string(entry.State),
 		Last:           r.Last,
-		PostMergeAhead: jsonPostMerge{Commits: r.Ahead, PR: r.AheadPR},
+		PostMergeAhead: jsonPostMerge{Commits: r.Ahead, PR: r.AheadPR, Diverged: r.Diverged},
 	}
 	if row, ok := e.Reg.Find(entry.Path); ok {
 		w.Parent = row.Parent
