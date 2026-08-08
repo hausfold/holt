@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
 import { run, runJSON, type RunOptions } from "./exec.js";
 import { HoltError } from "./errors.js";
-import { watchAll } from "./watch.js";
-import type { HoltEnvelope, WatchLine } from "./types.js";
+import { watchAll, watchLane } from "./watch.js";
+import type { HoltEnvelope, WatchEvent, WatchLine } from "./types.js";
 
 export interface HoltClientOptions {
   /** Path to the holt binary, or a bare name resolved on PATH. Defaults to
@@ -61,6 +61,24 @@ export class HoltClient {
    */
   watch(): AsyncGenerator<WatchLine> {
     return watchAll(this.opts);
+  }
+
+  /**
+   * {@link watch}, filtered to events about ONE lane (`event.lane.path`) and
+   * stripped of the `hello`/`ready` framing that names no lane — the shape an
+   * embedder holding one session per lane usually wants: "tell me when THIS
+   * lane's state changes." A `sync` event for the lane still passes through:
+   * it's how a caller that started watching after the lane went live learns it
+   * exists at all.
+   *
+   * Compare full paths, not names: names aren't unique across repos, but a
+   * checkout path is the registry's own primary key (SPEC.md §2.1).
+   *
+   * The module-level {@link watchLane} does the same thing but takes its own
+   * `RunOptions`; this one carries the client's `bin`/`cwd`/`env`.
+   */
+  watchLane(path: string): AsyncGenerator<WatchEvent> {
+    return watchLane(path, this.opts);
   }
 
   /**
@@ -224,11 +242,15 @@ export class Lease {
     private readonly path: string,
     private readonly options: { pid?: number; refreshMs?: number },
   ) {
-    const first = client.heartbeat(path, options.pid !== undefined ? { pid: options.pid } : {});
-    // Errors surface on the next refresh/release call rather than here —
-    // a constructor can't be awaited, and a lease that failed to take
-    // should not throw somewhere its caller can't catch it.
-    void first;
+    // Errors surface on the next refresh/release call rather than here — a
+    // constructor can't be awaited, and a lease that failed to take should not
+    // throw somewhere its caller can't catch it. The `.catch` is load-bearing,
+    // not decoration: `void`-ing a rejecting promise is still an UNHANDLED
+    // rejection, which Node terminates the process over by default — so a lane
+    // path holt refuses would take the embedder's whole server down with it.
+    void client
+      .heartbeat(path, options.pid !== undefined ? { pid: options.pid } : {})
+      .catch(() => {});
     if (options.pid === undefined) {
       const refreshMs = options.refreshMs ?? 60_000; // < 90s TTL, with margin
       this.timer = setInterval(() => {

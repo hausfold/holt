@@ -53,6 +53,12 @@ asyncio.run(main())
 async for line in holt.watch():
     if line.kind == "created" and line.lane is not None:
         notify_ui(line.lane)
+
+# Or scoped to the one lane this session holds — no hello/ready framing,
+# and nothing about anybody else's lanes.
+async for event in holt.watch_lane(lane_dir):
+    if event.kind == "reaped":
+        end_session()
 ```
 
 **Interactive.** `new_interactive` / `resume_interactive` inherit the

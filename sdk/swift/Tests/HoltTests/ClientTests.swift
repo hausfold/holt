@@ -48,6 +48,15 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(seen, ["created"])
     }
 
+    func testClientWatchLaneFiltersTheSameWayOnItsOwnOptions() async throws {
+        var seen: [String] = []
+        for try await event in client().watchLane(path: "/repo/.holt/nebelhaus/fresh") {
+            seen.append(event.kind.rawValue)
+            break
+        }
+        XCTAssertEqual(seen, ["created"])
+    }
+
     func testChildReturnsOnlyTheNewCheckoutPath() async throws {
         let dir = try await client().child("/repo/other")
         XCTAssertEqual(dir, "/repo/.holt/other/new-lane")

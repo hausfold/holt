@@ -48,6 +48,15 @@ async def test_watch_lane_filters_to_one_lanes_events_only() -> None:
     assert seen == ["created"]
 
 
+async def test_client_watch_lane_filters_the_same_way_on_its_own_options() -> None:
+    seen = []
+    async with aclosing(client().watch_lane("/repo/.holt/nebelhaus/fresh")) as stream:
+        async for ev in stream:
+            seen.append(ev.kind)
+            break
+    assert seen == ["created"]
+
+
 async def test_child_returns_only_the_new_checkout_path() -> None:
     directory = await client().child("/repo/other")
     assert directory == "/repo/.holt/other/new-lane"

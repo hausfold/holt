@@ -44,6 +44,15 @@ describe("watch", () => {
     }
     expect(seen).toEqual(["created"]);
   });
+
+  test("client.watchLane() filters the same way, on the client's own options", async () => {
+    const seen: string[] = [];
+    for await (const ev of client().watchLane("/repo/.holt/nebelhaus/fresh")) {
+      seen.push(ev.kind);
+      break;
+    }
+    expect(seen).toEqual(["created"]);
+  });
 });
 
 describe("child", () => {

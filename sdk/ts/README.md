@@ -45,6 +45,12 @@ const dir = await holt.child("/path/to/some-repo", "task-42");
 for await (const line of holt.watch()) {
   if (line.kind === "created") notifyUI(line.lane);
 }
+
+// Or scoped to the one lane this session holds — no hello/ready framing,
+// and nothing about anybody else's lanes.
+for await (const event of holt.watchLane(dir)) {
+  if (event.kind === "reaped") endSession();
+}
 ```
 
 **Interactive (a real terminal TUI).** `newInteractive` / `resumeInteractive`
