@@ -26,6 +26,18 @@
           vendorHash = "sha256-SAZpfeTKHC/OEgMUWScXYwx7RY6LrSHkHXLg4vArX+g=";
           ldflags = [ "-X github.com/nebelhaus/holt/internal/commands.Version=${version}" ];
 
+          # Build ONLY the CLI. Left unset, buildGoModule walks every directory
+          # holding .go files and builds each as `./dir` of the main module —
+          # which since the Go SDK landed (#18) includes `sdk/go`, and that is
+          # its OWN module (`sdk/go/go.mod`, so consumers can
+          # `go get github.com/nebelhaus/holt/sdk/go` without inheriting holt's
+          # deps). Go rightly refuses it:
+          #   main module (github.com/nebelhaus/holt) does not contain package
+          #   github.com/nebelhaus/holt/sdk/go
+          # internal/* still gets compiled — as dependencies of the CLI, which
+          # is the only thing this derivation installs.
+          subPackages = [ "cmd/holt" ];
+
           # The suite is black-box: it drives the built binary with shim gh/lsof
           # on PATH. That is what makes it portable across implementations, and
           # it is why it can run here rather than only in CI.
