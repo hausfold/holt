@@ -37,10 +37,17 @@ restart, no fullscreen TUI, no hosted anything, no knowledge of your build syste
 agent you run. "Substrate, not orchestrator" is the whole thesis — the actions at
 each transition belong to the user.
 
-**holt is repo-agnostic and client-agnostic.** Nothing hausfold-specific ships in
-it: no repo-local adapters, no `bench`, no rice paths, no assumption that the
-consumer is the family. Adapters are template-driven (`SPEC.md` §5); if a need
-can only be met by hardcoding one caller, it belongs in that caller.
+**holt is repo-agnostic and client-agnostic.** No repo-local adapters, no
+`bench`, no rice paths, no *new* code that assumes the consumer is the family.
+Adapters are template-driven (`SPEC.md` §5); if a need can only be met by
+hardcoding one caller, it belongs in that caller.
+
+The rule binds new behavior, not history. Two grandfathered exceptions exist on
+purpose — don't "enforce" them away: `NEBELHAUS_AGENT_DEFAULT` is still read as a
+fallback rung in `defaultAgent` (`internal/commands/env.go`), because pre-config
+rice builds set it and deleting it breaks their default agent; and `SPEC.md` §10
+is the cutover story for that one consumer, which is history rather than a
+dependency. Adding a *third* is the thing to argue hard against.
 
 ## Vocabulary (the overload was the bug)
 
@@ -70,9 +77,12 @@ number**. Five clients agreeing about one wire format is the invariant the SDK C
 job exists to protect, so a change to one SDK's surface is a change to all five.
 
 - **`sdk/swift` is the source; [`hausfold/holt-swift`](https://github.com/hausfold/holt-swift)
-  is a generated mirror** (`git subtree split`, synced by hand via
-  `sdk/swift/sync-mirror.sh`). Never edit the mirror — changes there are
-  overwritten on the next sync.
+  is a generated mirror** (`git subtree split`). Never edit the mirror — changes
+  there are overwritten on the next sync. `release.yml` runs
+  `sdk/swift/sync-mirror.sh --tag <version>` at every `v*` tag, and a tag on the
+  mirror *is* the SwiftPM release, so don't hand-run it after a release. The
+  bare form (no `--tag`) mirrors `main` only, and exists for one case: getting
+  an unreleased change in front of a consumer pinning a branch.
 - **The Go module path keeps the `nebelhaus` owner on purpose.** `go.mod`,
   `sdk/go/go.mod` and the `Makefile`'s `LDFLAGS` all say
   `github.com/nebelhaus/holt`. It is published on Go's immutable proxy at that
@@ -83,10 +93,19 @@ job exists to protect, so a change to one SDK's surface is a change to all five.
 ## Verify by running it
 
 ```sh
-make check        # gofmt + go vet + go test ./... + the bats acceptance suite
+make check        # gofmt -w + go vet + go test ./... + the bats acceptance suite
 make test         # just the suites
 make build        # ./holt
 ```
+
+⚠️ **`make check` covers the CLI only — never the SDKs.** `sdk/go` has its own
+`go.mod`, so `go test ./...` structurally can't see it, and ts/python/rust/swift
+have no Make target at all. CI runs two more jobs (`sdks` on Linux, `swift-sdk`
+on macOS), so a green `make check` on an SDK edit means nothing. Run that SDK's
+own suite from its directory — `bun test`, `pytest`, `cargo test`, `swift test`,
+`go test ./...` — before you open the PR. Note also that `make check`'s `fmt`
+step is `gofmt -w`: it **rewrites** your tree, while CI gates on `gofmt -l`. A
+suddenly-dirty tree after `make check` is that, not a bug.
 
 The acceptance suite (`test/holt.bats`) is **black-box**: it drives the built
 binary with shim `gh`/`lsof` on `PATH`, inherited from the bash predecessor so
@@ -101,7 +120,7 @@ only passes on one is not done.
 **Never tag by hand.** Releases are cut from the workshop:
 
 ```sh
-bench release holt 0.2.0        # stamps every manifest, commits, tags, watches CI
+bench release holt <X.Y.Z>      # stamps every manifest, commits, tags, watches CI
 ```
 
 holt is the family's **one semver repo**, and it's forced, not chosen: three of
@@ -131,12 +150,15 @@ Standing rules for any agent working here:
 ## Where holt sits in the family
 
 The rice ([hausfold/hausfold](https://github.com/hausfold/hausfold)) takes holt
-as a flake input and ships it on `PATH`; `⌘A` runs `holt new`, and Claude Code's
+as a flake input and ships it on `PATH`. `⌘A` runs `holt new` for codex and
+opencode; on a Claude machine it runs `claude --worktree`, whose
 `WorktreeCreate`/`WorktreeRemove` hooks call `holt hook create` / `holt hook
-remove`. Its bash predecessor `wt.sh` is retired — there is no fallback.
+remove` — so either way this repo is the plumbing. Its bash predecessor `wt.sh`
+is retired; there is no fallback.
 
 holt IS a family repo for *shipping* purposes — it's in the workshop's `FAMILY`,
 so a merged commit here is invisible to the rice until `bench ship` bumps that
-lock. But the dependency runs **one way only**: the rice consumes holt, and
-nothing in this repo may know the rice exists. Keep it that way; the day holt
-needs a hausfold-shaped special case is the day the abstraction was wrong.
+lock. But the dependency runs **one way only**: the rice consumes holt, and new
+code here doesn't get to know the rice exists (the two grandfathered exceptions
+are named above). The day holt needs a *third* hausfold-shaped special case is
+the day the abstraction was wrong.

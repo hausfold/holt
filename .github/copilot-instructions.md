@@ -24,8 +24,12 @@ The short version:
   rename. Everything else says `hausfold`.
 - **`sdk/swift` is the source; `hausfold/holt-swift` is a generated mirror** —
   never propose edits to the mirror.
-- Verify with `make check` (gofmt, vet, `go test ./...`, and the black-box bats
-  acceptance suite). CI runs it on macOS and Linux; passing only one isn't done.
+- Verify the CLI with `make check` (gofmt, vet, `go test ./...`, and the
+  black-box bats acceptance suite), on macOS **and** Linux — CI runs both.
+  `make check` does **not** cover the SDKs: `sdk/go` has its own `go.mod` and the
+  other four have no Make target, so an SDK change is verified by that SDK's own
+  suite (`bun test`, `pytest`, `cargo test`, `swift test`) and by CI's separate
+  `sdks` / `swift-sdk` jobs.
 - **Land through a PR** — never a direct push or a local `git merge` into `main`.
 
 For review comments, the same bar applies as anywhere else here: correctness and

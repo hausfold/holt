@@ -46,9 +46,10 @@ the workshop. If holt ever grows a flow of its own it goes in
 - **`.claude/settings.local.json` is not part of this layer.** It's a
   machine-local tool allowlist — permission state, not a project rule.
 - **A Linux container can build and test holt** (Go + bats), unlike the family's
-  macOS app repos. What it can't do is exercise the macOS-only paths: APFS
-  reflink cloning (`Clonefileat`) and anything that shells out to a mac client.
-  CI runs the suite on both OSes for exactly that reason.
+  macOS app repos. What it can't exercise is anything that shells out to a mac
+  client, or the macOS side of the occupancy/`lsof` probing — which is why CI
+  runs the acceptance suite on both OSes, and why a green Linux run alone isn't
+  a pass.
 - **Codex repo-local hooks** have historically not fired in every interactive
   session ([openai/codex#17532](https://github.com/openai/codex/issues/17532)),
   and some builds want an absolute path for `hooks`. If `/hooks` doesn't list
