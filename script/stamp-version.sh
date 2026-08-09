@@ -17,7 +17,7 @@
 #              drag in holt's deps), so the tag is PREFIXED with the path:
 #              `sdk/go/v<version>`. release.yml pushes it.
 #   sdk/swift  SwiftPM needs Package.swift at a repo root, so sdk/swift is
-#              mirrored to nebelhaus/holt-swift and the version is a tag on the
+#              mirrored to hausfold/holt-swift and the version is a tag on the
 #              MIRROR. sync-mirror.sh pushes it; release.yml calls that.
 #
 # Usage:

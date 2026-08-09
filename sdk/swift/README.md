@@ -12,14 +12,14 @@ subprocess there. Linux works too — `Process` is part of
 
 ## Install
 
-Ships from a generated mirror — [`nebelhaus/holt-swift`](https://github.com/nebelhaus/holt-swift),
+Ships from a generated mirror — [`hausfold/holt-swift`](https://github.com/hausfold/holt-swift),
 kept in sync via [`sync-mirror.sh`](sync-mirror.sh) — since SwiftPM
 requires `Package.swift` to sit at a repo's root. Send changes here, to
 `sdk/swift`, never to the mirror directly — it's overwritten on the next
 sync.
 
 ```swift
-.package(url: "https://github.com/nebelhaus/holt-swift", from: "0.1.0")
+.package(url: "https://github.com/hausfold/holt-swift", from: "0.1.0")
 ```
 
 For working on the SDK itself from within this repo, reference it as a

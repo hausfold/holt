@@ -10,7 +10,7 @@ they all carry the same version number. One tag publishes all of them.
 | `sdk/python` | PyPI `hausfold-holt` | `gh-action-pypi-publish` over OIDC |
 | `sdk/rust` | crates.io `hausfold-holt` | `cargo publish` over OIDC |
 | `sdk/go` | `github.com/nebelhaus/holt/sdk/go` | a `sdk/go/v<version>` tag — Go's proxy needs nothing else |
-| `sdk/swift` | `github.com/nebelhaus/holt-swift` | a `<version>` tag on the mirror — SwiftPM likewise |
+| `sdk/swift` | `github.com/hausfold/holt-swift` | a `<version>` tag on the mirror — SwiftPM likewise |
 
 ## Cutting one
 
@@ -90,13 +90,13 @@ has to be told to trust this repo and workflow **once**, in a browser:
 
 | registry | where | what to enter |
 |---|---|---|
-| npm | npmjs.com → `@hausfold/holt` → Settings → Trusted Publisher | GitHub Actions, org `nebelhaus`, repo `holt`, workflow `release.yml` |
-| PyPI | pypi.org → `hausfold-holt` → Publishing → Add a trusted publisher | owner `nebelhaus`, repo `holt`, workflow `release.yml` |
-| crates.io | crates.io → `hausfold-holt` → Settings → Trusted Publishing | repo `nebelhaus/holt`, workflow `release.yml` |
+| npm | npmjs.com → `@hausfold/holt` → Settings → Trusted Publisher | GitHub Actions, org `hausfold`, repo `holt`, workflow `release.yml` |
+| PyPI | pypi.org → `hausfold-holt` → Publishing → Add a trusted publisher | owner `hausfold`, repo `holt`, workflow `release.yml` |
+| crates.io | crates.io → `hausfold-holt` → Settings → Trusted Publishing | repo `hausfold/holt`, workflow `release.yml` |
 
 The Swift mirror is the one that can't use OIDC — pushing to *another* repository
 is outside what this workflow's `GITHUB_TOKEN` can ever be scoped to. Mint a
-fine-grained PAT with `Contents: read and write` on `nebelhaus/holt-swift` and
+fine-grained PAT with `Contents: read and write` on `hausfold/holt-swift` and
 store it as the repo secret `MIRROR_TOKEN`.
 
 ## When a publish fails
@@ -106,7 +106,7 @@ rate-limits, or one whose trusted publisher wasn't wired yet, fails alone — th
 other five still land. Fix the cause and:
 
 ```sh
-gh run rerun --failed --repo nebelhaus/holt <run-id>
+gh run rerun --failed --repo hausfold/holt <run-id>
 ```
 
 Each job re-checks whether its version is already out there and no-ops if so, so
