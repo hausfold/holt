@@ -9,7 +9,7 @@ name: release
 #   sdk/python   PyPI           hausfold-holt
 #   sdk/rust     crates.io      hausfold-holt
 #   sdk/go       a `sdk/go/v<version>` tag — Go's proxy needs nothing else
-#   sdk/swift    a tag on the nebelhaus/holt-swift mirror — SwiftPM likewise
+#   sdk/swift    a tag on the hausfold/holt-swift mirror — SwiftPM likewise
 #
 # Cut tags with `bench release holt <version>` from the workshop; it stamps the
 # version everywhere (script/stamp-version.sh), commits, pushes, tags, and then
@@ -26,15 +26,15 @@ name: release
 # told to trust this repo + workflow ONCE, in a browser:
 #
 #   npm       npmjs.com -> @hausfold/holt -> Settings -> Trusted Publisher
-#             GitHub Actions, org `nebelhaus`, repo `holt`, workflow `release.yml`
+#             GitHub Actions, org `hausfold`, repo `holt`, workflow `release.yml`
 #   PyPI      pypi.org -> hausfold-holt -> Publishing -> Add a trusted publisher
-#             owner `nebelhaus`, repo `holt`, workflow `release.yml`
+#             owner `hausfold`, repo `holt`, workflow `release.yml`
 #   crates.io crates.io -> hausfold-holt -> Settings -> Trusted Publishing
-#             repo `nebelhaus/holt`, workflow `release.yml`
+#             repo `hausfold/holt`, workflow `release.yml`
 #
 # The Swift mirror is the one that can't use OIDC — pushing to ANOTHER repo is
 # outside what this workflow's GITHUB_TOKEN can ever be scoped to. It needs a
-# fine-grained PAT with Contents: read+write on nebelhaus/holt-swift, stored as
+# fine-grained PAT with Contents: read+write on hausfold/holt-swift, stored as
 # the repo secret MIRROR_TOKEN.
 #
 # Until a registry is wired, its job fails and the others still publish — the
@@ -161,7 +161,7 @@ jobs:
         id: pub
         run: |
           V="${{ needs.stamp.outputs.version }}"
-          if curl -sf -H 'User-Agent: nebelhaus-holt-release' \
+          if curl -sf -H 'User-Agent: hausfold-holt-release' \
                "https://crates.io/api/v1/crates/hausfold-holt/$V" >/dev/null; then
             echo "hausfold-holt $V is already on crates.io — nothing to do"
             echo "skip=1" >> "$GITHUB_OUTPUT"
@@ -236,5 +236,5 @@ jobs:
           fi
           git config user.name  haus-release
           git config user.email haus-release@users.noreply.github.com
-          MIRROR_URL="https://x-access-token:$MIRROR_TOKEN@github.com/nebelhaus/holt-swift.git" \
+          MIRROR_URL="https://x-access-token:$MIRROR_TOKEN@github.com/hausfold/holt-swift.git" \
             sdk/swift/sync-mirror.sh --tag "${{ needs.stamp.outputs.version }}"

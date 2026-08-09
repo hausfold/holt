@@ -1,3 +1,9 @@
+// The module path keeps the `nebelhaus` owner ON PURPOSE — it is not a missed
+// hit from the 2026-08-09 org move to `hausfold`. `sdk/go` is published on
+// Go's immutable proxy at this path, the root module is a binary so its path
+// is nobody's API, and changing it is a 60-import sweep coupled to a five-SDK
+// version contract. Decided in the rename plan's §6; the GitHub redirect from
+// the (deliberately never deleted) old org is what keeps `go get` resolving.
 module github.com/nebelhaus/holt
 
 go 1.26

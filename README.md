@@ -164,11 +164,11 @@ macOS + Linux — not iOS/tvOS/watchOS, since `Process` can't spawn a
 subprocess there.
 
 Ships from a generated mirror,
-[`nebelhaus/holt-swift`](https://github.com/nebelhaus/holt-swift) — send
+[`hausfold/holt-swift`](https://github.com/hausfold/holt-swift) — send
 changes to `sdk/swift` here, never to the mirror directly.
 
 ```swift
-.package(url: "https://github.com/nebelhaus/holt-swift", from: "0.1.0")
+.package(url: "https://github.com/hausfold/holt-swift", from: "0.1.0")
 ```
 
 ```swift
@@ -198,6 +198,12 @@ The one SDK with zero setup: its own nested `go.mod`
 (`github.com/nebelhaus/holt/sdk/go`) means `go get` resolves it straight
 from this repo — no publish step, no separate mirror. No tagged release
 yet, so `go get github.com/nebelhaus/holt/sdk/go@<commit-sha>` for now.
+
+> The `nebelhaus` owner in that path is deliberate, and the one place in this
+> repo that still carries it. Everything else moved to `hausfold` in the
+> 2026-08-09 org migration; a Go module path can't, because it is already
+> published under this name on an immutable proxy. GitHub's redirect from the
+> old org — which is never deleted — is what keeps `go get` resolving.
 
 ```go
 import (

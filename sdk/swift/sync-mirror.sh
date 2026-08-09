@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pushes sdk/swift to the nebelhaus/holt-swift mirror via `git subtree split`,
+# Pushes sdk/swift to the hausfold/holt-swift mirror via `git subtree split`,
 # since SwiftPM needs Package.swift at a repo's root for a remote git
 # dependency (see this dir's README's "Install" section).
 #
@@ -19,7 +19,7 @@
 # scoped to THIS repo and cannot push to the mirror.
 set -euo pipefail
 
-MIRROR_URL="${MIRROR_URL:-https://github.com/nebelhaus/holt-swift.git}"
+MIRROR_URL="${MIRROR_URL:-https://github.com/hausfold/holt-swift.git}"
 
 tag=""
 while [ $# -gt 0 ]; do

@@ -97,7 +97,7 @@ that is exactly what `occupied` reports.
 | Why not `wt` | Already worktrunk's binary name, and Windows Terminal's. Non-negotiable rename. |
 | Language | **Go.** Subprocess orchestrator, zero CPU-bound work — Rust/Zig buy nothing. CGo-free cross-compilation dominates for prebuilt-binary distribution. `x/sys/unix` has `Clonefileat` + `FICLONE` so reflink needs no CGo. charm (`fang`, `huh`, `lipgloss`) makes `doctor` and styled output good. Bun `--compile` measured 60 MB / 9 ms — startup fine, size not. |
 | License | **Apache-2.0.** A commercial GUI must be able to embed the substrate (that's the thesis), and the patent grant matters for that. |
-| Install CTA | `bun i -g holt` — an npm wrapper that downloads a prebuilt binary (the esbuild/biome pattern), **not** a bun-runtime tool. Also `brew install nebelhaus/tap/holt`, `curl … | sh`, and `go install`. |
+| Install CTA | `bun i -g holt` — an npm wrapper that downloads a prebuilt binary (the esbuild/biome pattern), **not** a bun-runtime tool. Also `brew install hausfold/tap/holt`, `curl … | sh`, and `go install`. |
 | Tests | The bash predecessor's `nebelhaus/test/wt.bats` (1026 lines, 77 tests) is black-box — it drives the CLI with shim `gh`/`lsof` on `PATH`, and already has a `WT_UNDER_TEST` seam for pointing it at another implementation. It becomes holt's acceptance suite on day one, and is the single best de-risking asset in the extraction. **Not quite unchanged:** four call sites drop `bash` (a Go binary isn't sourced), and three assertions on user-facing strings carry the new command name. No test *body* changes — which is the property that matters, because it means the contract is unmoved. |
 
 ---
