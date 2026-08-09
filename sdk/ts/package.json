@@ -1,6 +1,6 @@
 {
   "name": "@hausfold/holt",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "TypeScript SDK for holt, the worktree-lifecycle substrate. Shells out to the holt binary; works from Bun or Node, and its types are safe to ship to a browser bundle.",
   "type": "module",
   "license": "Apache-2.0",

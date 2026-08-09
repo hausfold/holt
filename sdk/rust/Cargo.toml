@@ -1,6 +1,6 @@
 [package]
 name = "hausfold-holt"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 rust-version = "1.75"
 description = "Rust SDK for holt, the worktree-lifecycle substrate. Shells out to the holt binary; async (tokio) so it drops into an axum/tonic backend or an orchestrator equally."
