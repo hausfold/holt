@@ -250,14 +250,18 @@ func (e *Env) freeName(main, want string) (name, dir string, err error) {
 // doesn't ask for one.
 func randomName() string {
 	adjectives := []string{
-		"amber", "brisk", "calm", "dusky", "eager", "fleet", "glassy", "hushed",
-		"inky", "jade", "keen", "lucid", "misty", "noble", "opal", "quiet",
-		"rusty", "slate", "tidal", "umber", "vivid",
+		"cozy", "plucky", "snug", "spry", "zippy", "dozy", "bouncy", "chipper",
+		"wiggly", "sunny", "peppy", "drowsy", "giddy", "mellow", "perky", "cuddly",
+		"jaunty", "breezy", "fuzzy", "merry", "scrappy", "tiny", "dapper", "silly",
+		"cheeky", "nimble", "sleepy", "jolly", "spunky", "tidy", "wobbly", "snappy",
+		"dainty", "husky", "plump", "sprightly", "frisky", "pudgy", "gentle", "nifty",
 	}
 	nouns := []string{
-		"alder", "beacon", "cinder", "delta", "ember", "fjord", "grove",
-		"harbor", "inlet", "juniper", "kelp", "lantern", "meadow", "nimbus",
-		"orchid", "pebble", "quarry", "ridge", "summit", "thicket",
+		"otter", "heron", "puffin", "badger", "wombat", "gecko", "finch", "marmot",
+		"weasel", "lemur", "vole", "shrew", "mole", "hedgehog", "ferret", "stoat",
+		"lynx", "mink", "civet", "quokka", "pika", "chipmunk", "squirrel", "raccoon",
+		"possum", "beaver", "sparrow", "wren", "robin", "swift", "tern", "plover",
+		"kestrel", "falcon", "osprey", "egret", "crane", "stork", "ibis", "loon",
 	}
 	return adjectives[rand.IntN(len(adjectives))] + "-" + nouns[rand.IntN(len(nouns))]
 }
