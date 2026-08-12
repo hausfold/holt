@@ -149,7 +149,7 @@ Standing rules for any agent working here:
 
 ## Where holt sits in the family
 
-The rice ([hausfold/hausfold](https://github.com/hausfold/hausfold)) takes holt
+The layer ([hausfold/haus](https://github.com/hausfold/haus)) takes holt
 as a flake input and ships it on `PATH`. `⌘A` runs `holt new` for codex and
 opencode; on a Claude machine it runs `claude --worktree`, whose
 `WorktreeCreate`/`WorktreeRemove` hooks call `holt hook create` / `holt hook
