@@ -3,6 +3,8 @@
 **The worktree-lifecycle substrate for parallel coding agents.**
 *Never loses work. Never reaps what's in use. The registry — not the filesystem — is truth.*
 
+<sub>**pre-1.0** · Nothing here takes something it can't give back: a dirty tree is parked as a commit, and only merged, unoccupied lanes are ever reaped. That's the intent, not a warranty — keep a backup, and tell us what breaks.</sub>
+
 Every vendor now ships worktree *creation* — `claude --worktree`, the Claude
 Agent SDK's `isolation: worktree`, Cursor, Copilot CLI — and every one of
 them stops there. Nobody owns the rest of the life: **the branch that's
