@@ -414,12 +414,18 @@ via a branch name containing a space.
 ```toml
 kind    = "agent"
 id      = "amp"
-start   = ["amp", "--cwd", "{{.Path}}", "--prompt", "{{.Prompt}}"]
+start   = ["amp", "--cwd", "{{.Path}}", "--prompt={{.Prompt}}"]
 resume  = ["amp", "--cwd", "{{.Path}}", "--sessions"]   # the client's PICKER
 last    = ["amp", "--cwd", "{{.Path}}", "--continue"]   # newest here, no picker
 has_chat = ["test", "-d", "{{.Path}}/.amp"]     # exit 0 ⇒ a transcript exists
 image_flag = "--image"                           # optional; omitted ⇒ name the file in the prompt
 ```
+
+**`start` must end its client's option parsing before `{{.Prompt}}`** — with a
+`--` for a positional prompt, or the `--flag={{.Prompt}}` spelling for a valued
+one. Prompts are routinely markdown lists, so the first character is a dash, and
+a bare `{{.Prompt}}` argv element is read as a flag: the client exits with
+`unknown option '- …'` before the pane draws. The built-in three do this today.
 
 `has_chat` replaces the hardcoded "only Claude exposes a cheap cwd → transcript
 test" special case: an adapter that omits it simply answers "unknown", and holt

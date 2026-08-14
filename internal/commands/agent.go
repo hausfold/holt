@@ -23,6 +23,18 @@ import (
 // why the per-client knowledge is concentrated in three small switches rather
 // than spread through the commands that call them.
 
+// ── the prompt is DATA, and every client's parser has to be told so ──────────
+//
+// A task typed into Pounce's Spawn Agent box is very often a markdown list, so
+// its first character is `-`. Handed to a client as a bare argv element, that is
+// a FLAG: `claude "- update the README"` dies with `error: unknown option '-
+// update the README'` before the pane has drawn anything, and the same is true
+// of any prompt starting with a dash. So every client's argv here ends its
+// option parsing before the prompt — `--` for the two positional-prompt clients
+// (commander and clap both honour it), and `--prompt=<text>` for opencode, whose
+// yargs would read a dashed VALUE after a separate `--prompt` as another flag.
+// Never go back to appending the prompt bare.
+
 // agentSpec is what holt needs to know about a client. The 0.2 adapter loader
 // produces exactly this struct from a TOML file.
 type agentSpec struct {
@@ -51,7 +63,7 @@ func specFor(id string) (agentSpec, bool) {
 	case "claude":
 		return agentSpec{
 			id:     "claude",
-			start:  func(_, prompt string) []string { return []string{"claude", prompt} },
+			start:  func(_, prompt string) []string { return []string{"claude", "--", prompt} },
 			open:   []string{"claude"},
 			resume: []string{"claude", "--resume"},
 			last:   []string{"claude", "--continue"},
@@ -61,9 +73,9 @@ func specFor(id string) (agentSpec, bool) {
 			id: "codex",
 			start: func(image, prompt string) []string {
 				if image != "" {
-					return []string{"codex", "-i", image, prompt}
+					return []string{"codex", "-i", image, "--", prompt}
 				}
-				return []string{"codex", prompt}
+				return []string{"codex", "--", prompt}
 			},
 			open:      []string{"codex"},
 			resume:    []string{"codex", "resume"},
@@ -73,7 +85,7 @@ func specFor(id string) (agentSpec, bool) {
 	case "opencode":
 		return agentSpec{
 			id:    "opencode",
-			start: func(_, prompt string) []string { return []string{"opencode", "--prompt", prompt} },
+			start: func(_, prompt string) []string { return []string{"opencode", "--prompt=" + prompt} },
 			open:  []string{"opencode"},
 			// opencode's `--continue` is already continue-the-last-session; it
 			// has no separate picker flag (its TUI lists sessions in-app), so

@@ -177,3 +177,54 @@ func TestTrustWorktreeIsIdempotent(t *testing.T) {
 		t.Error("a second call rewrote a file it had nothing to add to")
 	}
 }
+
+// ── the prompt is data, not flags ────────────────────────────────────────────
+//
+// The regression this pins: a Spawn Agent prompt pasted as a markdown list
+// starts with `- `, and a bare argv element starting with a dash is an OPTION to
+// every one of these clients. Pounce's box produced exactly that and the pane
+// died on `error: unknown option '- https://…'` before the agent ever ran.
+
+func TestStartArgvEndsOptionParsingBeforeThePrompt(t *testing.T) {
+	const dashed = "- update the README\n- and its footer"
+
+	cases := []struct {
+		agent string
+		image string
+		want  []string
+	}{
+		{"claude", "", []string{"claude", "--", dashed}},
+		{"codex", "", []string{"codex", "--", dashed}},
+		{"codex", "/tmp/shot.png", []string{"codex", "-i", "/tmp/shot.png", "--", dashed}},
+		{"opencode", "", []string{"opencode", "--prompt=" + dashed}},
+	}
+	for _, tc := range cases {
+		spec, ok := specFor(tc.agent)
+		if !ok {
+			t.Fatalf("no spec for %q", tc.agent)
+		}
+		got := spec.start(tc.image, dashed)
+		if strings.Join(got, "\x00") != strings.Join(tc.want, "\x00") {
+			t.Errorf("%s start argv = %q, want %q", tc.agent, got, tc.want)
+		}
+	}
+}
+
+// Whatever the prompt, it must never arrive as an argv element a parser could
+// still read as a flag — the property, not the four spellings above.
+func TestStartNeverHandsAClientABareDashedPrompt(t *testing.T) {
+	for _, agent := range []string{"claude", "codex", "opencode"} {
+		spec, _ := specFor(agent)
+		argv := spec.start("", "-x")
+		for i, arg := range argv {
+			if arg != "-x" {
+				continue
+			}
+			if i == 0 || !terminatesOptions(argv[i-1]) {
+				t.Errorf("%s: prompt at argv[%d] of %q is still option-parsed", agent, i, argv)
+			}
+		}
+	}
+}
+
+func terminatesOptions(prev string) bool { return prev == "--" }

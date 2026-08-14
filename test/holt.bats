@@ -1038,7 +1038,29 @@ EOF
   local image="$TMP/shot.png"; : >"$image"
   run "$WT" agent start codex --image "$image" -- "inspect this"
   [ "$status" -eq 0 ]
-  [ "$output" = "$(printf '%s\n%s\n%s' -i "$image" "inspect this")" ]
+  [ "$output" = "$(printf '%s\n%s\n%s\n%s' -i "$image" -- "inspect this")" ]
+}
+
+# A prompt is DATA. Pounce's Spawn Agent box takes a paragraph, and a task typed
+# there is very often a markdown list — so its first character is `-`, and a bare
+# argv element starting with a dash is a FLAG to every one of these clients. This
+# used to kill the pane on `error: unknown option '- …'` before the agent ran.
+@test "agent start: a prompt starting with a dash reaches the client as text" {
+  local prompt='- update the README
+- and its footer'
+  for client in claude codex opencode; do
+    cat >"$BIN/$client" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@"
+EOF
+    chmod +x "$BIN/$client"
+    run "$WT" agent start "$client" -- "$prompt"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"- update the README"* ]]
+    [[ "$output" == *"- and its footer"* ]]
+    # …and it arrived somewhere a parser can no longer read as an option.
+    [[ "$output" == *"--"* ]]
+  done
 }
 
 # ── new (the client-agnostic ⌘C) ─────────────────────────────────────────────
