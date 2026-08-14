@@ -1,6 +1,6 @@
 # Holt (Swift SDK)
 
-A thin Swift client over the [`holt`](../../README.md) binary — the
+A thin Swift client over the [`holt`](https://github.com/hausfold/holt) binary — the
 worktree-lifecycle substrate for parallel coding agents. Shells out to
 `holt` (`Process` + `--json`, `watch --json` for a live NDJSON stream)
 rather than talking to a daemon.
@@ -12,18 +12,20 @@ subprocess there. Linux works too — `Process` is part of
 
 ## Install
 
-Ships from a generated mirror — [`hausfold/holt-swift`](https://github.com/hausfold/holt-swift),
-kept in sync via [`sync-mirror.sh`](sync-mirror.sh) — since SwiftPM
-requires `Package.swift` to sit at a repo's root. Send changes here, to
-`sdk/swift`, never to the mirror directly — it's overwritten on the next
-sync.
+This README lives at `sdk/swift` in
+[`hausfold/holt`](https://github.com/hausfold/holt) and is mirrored to
+[`hausfold/holt-swift`](https://github.com/hausfold/holt-swift) by
+[`sync-mirror.sh`](sync-mirror.sh), because SwiftPM requires
+`Package.swift` to sit at a repo's root. Send changes to `sdk/swift` in
+`hausfold/holt` — never to the mirror, which is overwritten wholesale on
+the next sync.
 
 ```swift
 .package(url: "https://github.com/hausfold/holt-swift", from: "0.1.0")
 ```
 
-For working on the SDK itself from within this repo, reference it as a
-local package instead: `.package(path: "../holt/sdk/swift")`.
+To work on the SDK itself, reference it as a local package against a
+`hausfold/holt` checkout instead: `.package(path: "../holt/sdk/swift")`.
 
 `holt` itself must be on `PATH`, or pass `HoltClientOptions(bin: "/path/to/holt")`.
 
