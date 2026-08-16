@@ -70,6 +70,44 @@ them — the rice's statusline, the workshop's `bench status`, pounce's Spawn
 Agent, and every SDK. Changing one is a semver **major** conversation, not a
 refactor. The same goes for user-facing command names and flags.
 
+**`ai/SKILL.md` quotes three of those four**, so it is now downstream of the
+same freeze — see below.
+
+## The agent surface (`ai/SKILL.md`)
+
+**Don't confuse it with this file.** `AGENTS.md` is for an agent working **on**
+holt, from a checkout. [`ai/SKILL.md`](./ai/SKILL.md) is for an agent **using**
+it — on a stranger's machine, with no checkout, when their human says *"what
+worktrees do I have open?"* or *"park this"*. It is the routing document that
+makes those work first try: the verbs, the six exit codes, the `--json` fields,
+and when the answer is to do nothing.
+
+It is bound by the family standard, [the workshop's
+`notes/agent-surface.md`](https://github.com/hausfold/workshop/blob/main/notes/agent-surface.md) —
+≤150 lines, no flag dumps (that's `holt --help`), and the `description`
+frontmatter names **the phrases a user says**, not the features holt has. A
+description written as a feature summary is true, well written, and never loads.
+
+Two things it carries that no other family skill does, and both are the whole
+point of holt existing:
+
+- **`holt park`, never `git stash`.** The stash stack is shared across every
+  worktree of a repo, so parallel agents pop each other's entries. The skill's
+  `description` says this out loud precisely so it loads on the word "stash".
+- **Exit 2 is holt working, not holt failing.** An agent that reads "refused for
+  safety" as an error and reaches for `git worktree remove` has defeated
+  invariant 2 from the outside. The skill says so twice.
+
+`nix/skill.nix` ships it as `pkgs.holt-skill` (`$out/holt/SKILL.md`) — its own
+derivation, so a prose edit can't invalidate the Go build's hash — and the build
+fails if the frontmatter is missing, because a skill without it is installed,
+listed, and never loaded.
+
+**Every claim in it must be runnable.** A verb, flag, exit code or `--json` key
+that changes changes `ai/SKILL.md` in the same PR. That file quotes the frozen
+contracts above, so it is not merely documentation that drifted — it is a
+downstream consumer of them.
+
 ## The five SDKs are one product
 
 `sdk/{ts,python,rust,swift,go}` all wrap the same CLI and **share one version
