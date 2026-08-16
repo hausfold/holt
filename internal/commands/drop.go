@@ -5,9 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nebelhaus/holt/internal/exitcode"
-	"github.com/nebelhaus/holt/internal/gitx"
-	"github.com/nebelhaus/holt/internal/ui"
+	"github.com/hausfold/holt/internal/exitcode"
+	"github.com/hausfold/holt/internal/gitx"
+	"github.com/hausfold/holt/internal/ui"
 )
 
 // This file is holt's answer to the lanes `reap` will never take: the ones

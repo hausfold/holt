@@ -4,11 +4,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nebelhaus/holt/internal/config"
-	"github.com/nebelhaus/holt/internal/gitx"
-	"github.com/nebelhaus/holt/internal/occupancy"
-	"github.com/nebelhaus/holt/internal/registry"
-	"github.com/nebelhaus/holt/internal/ui"
+	"github.com/hausfold/holt/internal/config"
+	"github.com/hausfold/holt/internal/gitx"
+	"github.com/hausfold/holt/internal/occupancy"
+	"github.com/hausfold/holt/internal/registry"
+	"github.com/hausfold/holt/internal/ui"
 )
 
 // Env is the resolved environment one holt invocation runs in.
@@ -89,7 +89,7 @@ func leasesAreSole() bool { return os.Getenv("HOLT_OCCUPANCY") == "lease" }
 // The ladder, most explicit first: HOLT_AGENT is a one-invocation override; the
 // `agent` hook is a program, for a machine that picks per repo or per time of
 // day; the `agent` config key is the static answer, which is what almost
-// everyone wants and costs no process; NEBELHAUS_AGENT_DEFAULT is a cutover
+// everyone wants and costs no process; HAUS_AGENT_DEFAULT is a cutover
 // fallback for pre-config rice builds; claude is the last word.
 //
 // A value that names a client holt has never heard of is ignored at every rung
@@ -109,7 +109,7 @@ func (e *Env) defaultAgent() string {
 	if registry.KnownAgent(e.Cfg.Agent) {
 		return e.Cfg.Agent
 	}
-	if a := os.Getenv("NEBELHAUS_AGENT_DEFAULT"); registry.KnownAgent(a) {
+	if a := os.Getenv("HAUS_AGENT_DEFAULT"); registry.KnownAgent(a) {
 		return a
 	}
 	return "claude"

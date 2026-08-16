@@ -14,9 +14,9 @@ package main
 import (
 	"os"
 
-	"github.com/nebelhaus/holt/internal/commands"
-	"github.com/nebelhaus/holt/internal/exitcode"
-	"github.com/nebelhaus/holt/internal/ui"
+	"github.com/hausfold/holt/internal/commands"
+	"github.com/hausfold/holt/internal/exitcode"
+	"github.com/hausfold/holt/internal/ui"
 )
 
 func main() {

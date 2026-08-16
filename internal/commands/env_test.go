@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nebelhaus/holt/internal/config"
+	"github.com/hausfold/holt/internal/config"
 )
 
 // writeConfig plants a machine config for the test and returns an Env holding
@@ -28,7 +28,7 @@ func envWith(t *testing.T, body string) *Env {
 
 func TestDefaultAgentPrefersConfigOverLegacyEnv(t *testing.T) {
 	t.Setenv("HOLT_AGENT", "")
-	t.Setenv("NEBELHAUS_AGENT_DEFAULT", "claude")
+	t.Setenv("HAUS_AGENT_DEFAULT", "claude")
 
 	e := envWith(t, "agent = \"codex\"\n")
 	if got := e.defaultAgent(); got != "codex" {
@@ -45,7 +45,7 @@ func TestDefaultAgentPrefersConfigOverLegacyEnv(t *testing.T) {
 // to pick has more to say than one that wrote a constant.
 func TestDefaultAgentHookBeatsConfigKey(t *testing.T) {
 	t.Setenv("HOLT_AGENT", "")
-	t.Setenv("NEBELHAUS_AGENT_DEFAULT", "")
+	t.Setenv("HAUS_AGENT_DEFAULT", "")
 
 	hook := writeHook(t, "agent-hook", `#!/bin/sh
 echo '{"agent": "codex"}'
@@ -61,7 +61,7 @@ exit 0
 // property that makes an override safe to add to a working machine.
 func TestDefaultAgentHookDeferFallsThrough(t *testing.T) {
 	t.Setenv("HOLT_AGENT", "")
-	t.Setenv("NEBELHAUS_AGENT_DEFAULT", "")
+	t.Setenv("HAUS_AGENT_DEFAULT", "")
 
 	hook := writeHook(t, "defer-hook", "#!/bin/sh\nexit 3\n")
 	e := envWith(t, "agent = \"opencode\"\n\n[hooks]\nagent = \""+hook+"\"\n")
@@ -74,7 +74,7 @@ func TestDefaultAgentHookDeferFallsThrough(t *testing.T) {
 // in the path of every pane open, and a stale store path must not close that door.
 func TestDefaultAgentBrokenHookWarnsAndFallsBack(t *testing.T) {
 	t.Setenv("HOLT_AGENT", "")
-	t.Setenv("NEBELHAUS_AGENT_DEFAULT", "")
+	t.Setenv("HAUS_AGENT_DEFAULT", "")
 
 	e := envWith(t, "agent = \"codex\"\n\n[hooks]\nagent = \"/nonexistent/holt-agent-hook\"\n")
 	if got := e.defaultAgent(); got != "codex" {

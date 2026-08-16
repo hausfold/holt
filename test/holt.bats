@@ -56,7 +56,7 @@ setup() {
   # path as a scratch FILE to record that they ran, and a directory of the same
   # name makes their `cat` fail in a way that reads as a hook bug.
   export XDG_STATE_HOME="$TMP/xdg-state"
-  unset HOLT_AGENT NEBELHAUS_AGENT_DEFAULT # machine choices must not leak into the fixture
+  unset HOLT_AGENT HAUS_AGENT_DEFAULT # machine choices must not leak into the fixture
   unset HOLT_STATE HOLT_OCCUPANCY          # ditto — the lease dir and its sole-provider switch
   export CLAUDE_WT_BASE="$TMP/wtbase"
   REG="$CLAUDE_WT_BASE/registry.tsv"
@@ -1013,7 +1013,7 @@ mkremote() { # mkremote <main> — give a repo a bare origin it can actually pus
   local b dir; b="$(mkrepo beta)"
   dir="$("$WT" spawn "$b" codex-task codex 2>/dev/null)"
   [ "$(awk -F'\t' -v p="$dir" '$4==p{print $6}' "$REG")" = codex ]
-  NEBELHAUS_AGENT_DEFAULT=opencode run "$WT" resume codex-task
+  HAUS_AGENT_DEFAULT=opencode run "$WT" resume codex-task
   [ "$status" -eq 0 ]
   [[ "$output" == *"codex resume"* ]]
   [[ "$output" != *"opencode --continue"* ]]
@@ -1024,7 +1024,7 @@ mkremote() { # mkremote <main> — give a repo a bare origin it can actually pus
   git -C "$main" branch worktree-legacy
   mkdir -p "$(dirname "$REG")"
   printf 'legacy\t%s\tworktree-legacy\t%s\t%s\n' "$main" "$dir" "$main" >"$REG"
-  NEBELHAUS_AGENT_DEFAULT=codex run "$WT" resume legacy
+  HAUS_AGENT_DEFAULT=codex run "$WT" resume legacy
   [ "$status" -eq 0 ]
   [[ "$output" == *"claude --continue"* ]]
 }
@@ -1134,7 +1134,7 @@ EOF
   #
   # Without both, this test passes in CI (no codex there) and silently fails on
   # any machine that has one — which is exactly what it did, in this suite and in
-  # nebelhaus's copy, for as long as it existed.
+  # haus's copy, for as long as it existed.
   mkdir -p "$TMP/onlygit"
   ln -sf "$(command -v git)" "$TMP/onlygit/git"
   run env HOLT_PATH_RESCUE=0 PATH="$BIN:$TMP/onlygit" "$WT" new stranded codex

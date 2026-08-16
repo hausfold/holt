@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nebelhaus/holt/internal/config"
-	"github.com/nebelhaus/holt/internal/exitcode"
-	"github.com/nebelhaus/holt/internal/gitx"
-	"github.com/nebelhaus/holt/internal/registry"
-	"github.com/nebelhaus/holt/internal/ui"
+	"github.com/hausfold/holt/internal/config"
+	"github.com/hausfold/holt/internal/exitcode"
+	"github.com/hausfold/holt/internal/gitx"
+	"github.com/hausfold/holt/internal/registry"
+	"github.com/hausfold/holt/internal/ui"
 )
 
 // Resume rebuilds a lane's checkout and reopens the agent chat that made it.

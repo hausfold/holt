@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"github.com/nebelhaus/holt/internal/ui"
+	"github.com/hausfold/holt/internal/ui"
 )
 
 // Reap sweeps every LANDED lane now — parked ones, plus clean, landed checkouts

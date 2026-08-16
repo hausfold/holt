@@ -5,7 +5,7 @@ worktree-lifecycle substrate for parallel coding agents. It shells out to
 `holt` (`os/exec` + `--json`, `watch --json` for a live NDJSON stream)
 rather than talking to a daemon.
 
-This directory is its own Go module (`github.com/nebelhaus/holt/sdk/go`),
+This directory is its own Go module (`github.com/hausfold/holt/sdk/go`),
 separate from the CLI's at the repo root, so importing it doesn't pull in
 holt's own dependencies (fsnotify, the CLI framework) — only the standard
 library.
@@ -13,11 +13,11 @@ library.
 ## Install
 
 ```sh
-go get github.com/nebelhaus/holt/sdk/go
+go get github.com/hausfold/holt/sdk/go
 ```
 
 Versions come from pushed tags shaped `sdk/go/vX.Y.Z`. None exist yet —
-for now, use `go get github.com/nebelhaus/holt/sdk/go@<commit-sha>` or a
+for now, use `go get github.com/hausfold/holt/sdk/go@<commit-sha>` or a
 `replace` directive pointing at a local checkout.
 
 `holt` itself must be on `PATH`, or set `Client.Bin` to its path.
@@ -32,7 +32,7 @@ zero value is a complete client:
 ```go
 import (
 	"context"
-	holt "github.com/nebelhaus/holt/sdk/go"
+	holt "github.com/hausfold/holt/sdk/go"
 )
 
 c := &holt.Client{}

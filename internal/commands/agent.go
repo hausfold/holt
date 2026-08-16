@@ -9,10 +9,10 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/nebelhaus/holt/internal/exitcode"
-	"github.com/nebelhaus/holt/internal/gitx"
-	"github.com/nebelhaus/holt/internal/registry"
-	"github.com/nebelhaus/holt/internal/ui"
+	"github.com/hausfold/holt/internal/exitcode"
+	"github.com/hausfold/holt/internal/gitx"
+	"github.com/hausfold/holt/internal/registry"
+	"github.com/hausfold/holt/internal/ui"
 )
 
 // This is the ONE client-specific seam in holt, and it is deliberately narrow.

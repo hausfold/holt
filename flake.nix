@@ -24,16 +24,16 @@
           # holt picked up its first dependency (fsnotify, for `holt watch`) —
           # see go.mod.
           vendorHash = "sha256-SAZpfeTKHC/OEgMUWScXYwx7RY6LrSHkHXLg4vArX+g=";
-          ldflags = [ "-X github.com/nebelhaus/holt/internal/commands.Version=${version}" ];
+          ldflags = [ "-X github.com/hausfold/holt/internal/commands.Version=${version}" ];
 
           # Build ONLY the CLI. Left unset, buildGoModule walks every directory
           # holding .go files and builds each as `./dir` of the main module —
           # which since the Go SDK landed (#18) includes `sdk/go`, and that is
           # its OWN module (`sdk/go/go.mod`, so consumers can
-          # `go get github.com/nebelhaus/holt/sdk/go` without inheriting holt's
+          # `go get github.com/hausfold/holt/sdk/go` without inheriting holt's
           # deps). Go rightly refuses it:
-          #   main module (github.com/nebelhaus/holt) does not contain package
-          #   github.com/nebelhaus/holt/sdk/go
+          #   main module (github.com/hausfold/holt) does not contain package
+          #   github.com/hausfold/holt/sdk/go
           # internal/* still gets compiled — as dependencies of the CLI, which
           # is the only thing this derivation installs.
           subPackages = [ "cmd/holt" ];
@@ -67,7 +67,7 @@
         holt-skill = pkgs.callPackage ./nix/skill.nix { };
       });
 
-      # The family convention: every nebelhaus flake exports an overlay so a
+      # The family convention: every haus flake exports an overlay so a
       # consumer writes `pkgs.holt` rather than reaching into
       # `inputs.holt.packages.${system}`. Same shape as pounce/trill/perch.
       # `final.system` is a deprecated nixpkgs alias — reading it makes every

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nebelhaus/holt/internal/config"
-	"github.com/nebelhaus/holt/internal/gitx"
+	"github.com/hausfold/holt/internal/config"
+	"github.com/hausfold/holt/internal/gitx"
 )
 
 // This file answers the one question the whole safety story rests on: has this

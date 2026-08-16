@@ -1,13 +1,13 @@
 # holt — design spec
 
-**The worktree-lifecycle substrate.** A rewrite of the nebelhaus rice's old
-worktree tool (`nebelhaus/modules/den/wt.sh`, 1295 lines of bash) as a
+**The worktree-lifecycle substrate.** A rewrite of the haus rice's old
+worktree tool (`haus/modules/den/wt.sh`, 1295 lines of bash) as a
 standalone, repo-agnostic, client-agnostic Go binary — a dev-focused sister to
-pounce / perch / trill, with `nebelhaus` and `bench` demoted to consumers.
+pounce / perch / trill, with `haus` and `bench` demoted to consumers.
 
 This is the design doc; it stays the authority on *what* holt is even as the code
 lands beside it. **Update, post-cutover:** the bash predecessor has since been
-retired entirely (nebelhaus#245) — every caller this doc describes as
+retired entirely (haus#245) — every caller this doc describes as
 transitional now points at `holt` alone, with no fallback to roll back to.
 
 Status: ejected from the workshop incubator to its own repo (2026-08-03), with
@@ -98,14 +98,14 @@ that is exactly what `occupied` reports.
 | Language | **Go.** Subprocess orchestrator, zero CPU-bound work — Rust/Zig buy nothing. CGo-free cross-compilation dominates for prebuilt-binary distribution. `x/sys/unix` has `Clonefileat` + `FICLONE` so reflink needs no CGo. charm (`fang`, `huh`, `lipgloss`) makes `doctor` and styled output good. Bun `--compile` measured 60 MB / 9 ms — startup fine, size not. |
 | License | **Apache-2.0.** A commercial GUI must be able to embed the substrate (that's the thesis), and the patent grant matters for that. |
 | Install CTA | `bun i -g holt` — an npm wrapper that downloads a prebuilt binary (the esbuild/biome pattern), **not** a bun-runtime tool. Also `brew install hausfold/tap/holt`, `curl … | sh`, and `go install`. |
-| Tests | The bash predecessor's `nebelhaus/test/wt.bats` (1026 lines, 77 tests) is black-box — it drives the CLI with shim `gh`/`lsof` on `PATH`, and already has a `WT_UNDER_TEST` seam for pointing it at another implementation. It becomes holt's acceptance suite on day one, and is the single best de-risking asset in the extraction. **Not quite unchanged:** four call sites drop `bash` (a Go binary isn't sourced), and three assertions on user-facing strings carry the new command name. No test *body* changes — which is the property that matters, because it means the contract is unmoved. |
+| Tests | The bash predecessor's `haus/test/wt.bats` (1026 lines, 77 tests) is black-box — it drives the CLI with shim `gh`/`lsof` on `PATH`, and already has a `WT_UNDER_TEST` seam for pointing it at another implementation. It becomes holt's acceptance suite on day one, and is the single best de-risking asset in the extraction. **Not quite unchanged:** four call sites drop `bash` (a Go binary isn't sourced), and three assertions on user-facing strings carry the new command name. No test *body* changes — which is the property that matters, because it means the contract is unmoved. |
 
 ---
 
 ## 2. Public contracts — freeze these before anyone pins them
 
 Everything in this section is versioned and breaking-change-gated once 0.1 ships,
-because `bench`, the nebelhaus statusline, and pounce's "Spawn Agent" command all
+because `bench`, the haus statusline, and pounce's "Spawn Agent" command all
 pin them within a day of cutover.
 
 ### 2.1 Registry schema
@@ -131,10 +131,10 @@ Proposed v1 (post-cutover, opt-in, `holt migrate`):
 # $HOLT_STATE/registry/<sha256(checkout-path)[:12]>.toml   — one file per lane
 schema   = 1
 name     = "sparkle"
-repo     = "nebelhaus/nebelhaus"   # remote slug — see §4
-main     = "/Users/j/code/workshop/nebelhaus"
+repo     = "hausfold/haus"   # remote slug — see §4
+main     = "/Users/j/code/workshop/haus"
 branch   = "worktree-sparkle"
-path     = "/Users/j/.cache/holt/nebelhaus-nebelhaus/sparkle"
+path     = "/Users/j/.cache/holt/hausfold-haus/sparkle"
 parent   = "/Users/j/code/workshop"
 agent    = "claude"
 created  = 2026-08-03T10:04:00Z
@@ -166,10 +166,10 @@ the implied verb. One envelope, so they can version-check without sniffing:
   "lanes": [
     {
       "name": "sparkle",
-      "repo": "nebelhaus/nebelhaus",
-      "main": "/Users/j/code/workshop/nebelhaus",
+      "repo": "hausfold/haus",
+      "main": "/Users/j/code/workshop/haus",
       "branch": "worktree-sparkle",
-      "path": "/Users/j/.cache/holt/nebelhaus-nebelhaus/sparkle",
+      "path": "/Users/j/.cache/holt/hausfold-haus/sparkle",
       "parent": "/Users/j/code/workshop",
       "agent": "claude",
       "state": "live",
@@ -332,7 +332,7 @@ Silent degradation is how a user learns to distrust the tool.
 Today the bucket under `$WT_BASE` is `basename "$main"`, with one special case in
 the bash predecessor's `child` command that falls back to the owner-repo slug **only** when the child's
 basename collides with the spawning pane's. That's a patch on a specific collision
-(workshop `nebelhaus` vs rice `nebelhaus/nebelhaus`), and the original "fix" was
+(a workshop dir vs the repo `hausfold/haus`), and the original "fix" was
 renaming a directory on one machine — which does not survive contact with
 strangers' filesystems, where two `api` checkouts under different orgs are the
 common case, not the exotic one.
@@ -515,7 +515,7 @@ for the repo. **The split on repo-local config is by execution, not by file:**
 The machine config's implemented top-level default is `agent = "claude"` (or
 `codex` / `opencode`), plus the `[hooks]` table of §6.5. Agent resolution is
 `HOLT_AGENT`, then the `agent` **hook**, then this key, then the legacy
-`NEBELHAUS_AGENT_DEFAULT` environment fallback, then Claude. This keeps the
+`HAUS_AGENT_DEFAULT` environment fallback, then Claude. This keeps the
 default stable for long-running callers while retaining a one-invocation
 override for standalone use — and the hook rung exists because "which client"
 is a decision on some machines and a constant on most.
@@ -637,7 +637,7 @@ user who wants a new pane rather than a hijacked one.
 
 The fix is not more configuration keys. It is to name each decision, ship holt's
 answer as the *default* rather than the *mechanism*, and let a consumer replace
-it. That is the difference between a tool and a substrate: nebelhaus should be
+it. That is the difference between a tool and a substrate: haus should be
 able to say "here is what resuming means on my machine" without holt having ever
 heard of zellij.
 
@@ -807,7 +807,7 @@ holt overlap [--json] [--committed-only] [--pair A B]
 - Output: conflicting file list per pair, plus the matrix. Exit 4 on conflicts
   found (a finding, not an error).
 - **Passive surfaces, not blocking ones.** An `overlap` column in `holt list` and
-  a token in the nebelhaus statusline. Optionally a *non-blocking* advisory hook
+  a token in the haus statusline. Optionally a *non-blocking* advisory hook
   that prints to the transcript. A blocking `PreToolUse` gate is available but is
   strictly opt-in and never the documented default.
 
@@ -826,7 +826,7 @@ See §8.
 
 ## 8. `batch` — the differentiating feature
 
-Generalises nebelhaus's `bench try-batch`. The problem it solves: the normal
+Generalises haus's `bench try-batch`. The problem it solves: the normal
 review flow is merge-then-test, which puts unverified code on `main` before anyone
 has felt it. `batch` inverts that.
 
@@ -938,7 +938,7 @@ provider set is already the right shape to receive it.
 
 ---
 
-## 10. The nebelhaus consumer story
+## 10. The haus consumer story
 
 ### Keeps
 
@@ -954,10 +954,10 @@ provider set is already the right shape to receive it.
 ### Deletes
 
 - `modules/den/wt.sh` (1295 lines) in its entirety. **Done** — deleted in
-  nebelhaus#245, along with its test suite and the nix package that put it on
+  haus#245, along with its test suite and the nix package that put it on
   `PATH`.
-- `test/wt.bats` moves *out* of nebelhaus and into holt (it's holt's acceptance
-  suite now; nebelhaus keeps only integration smoke tests for the hook wiring).
+- `test/wt.bats` moves *out* of haus and into holt (it's holt's acceptance
+  suite now; haus keeps only integration smoke tests for the hook wiring).
 - The hand-maintained shell-side client list.
 
 ### `modules/lib/agents.nix` stops being a duplicate
@@ -993,8 +993,8 @@ and `bench`. The plan was:
 
 1. **holt reads the existing `registry.tsv` unchanged.** No format migration on
    cutover day (§2.1). This is the hard requirement.
-2. The hook switch is **one nebelhaus option** —
-   `nebelhaus.agents.worktreeBackend = "wt" | "holt"` — so the revert is
+2. The hook switch is **one haus option** —
+   `haus.agents.worktreeBackend = "wt" | "holt"` — so the revert is
    `haus rollback`, not a code change.
 3. Run both for a week: `holt` installed, option still on the bash predecessor,
    and a `holt list --json` diff check in `bench status`. Flip when they agree.
@@ -1003,9 +1003,9 @@ and `bench`. The plan was:
 
 **What actually happened:** the cutover skipped the dual-run option entirely —
 every caller (the terminal room's `⌘A`, pounce's Spawn Agent, the Claude Code hooks) was
-repointed straight at `holt` in nebelhaus#201, with the bash predecessor left
+repointed straight at `holt` in haus#201, with the bash predecessor left
 on `PATH` as an unused rollback. That rollback was never needed and the bash
-predecessor has since been deleted outright (nebelhaus#245); there is no
+predecessor has since been deleted outright (haus#245); there is no
 `worktreeBackend` option and no fallback to revert to.
 
 ---
@@ -1014,7 +1014,7 @@ predecessor has since been deleted outright (nebelhaus#245); there is no
 
 The passoff describes a 1092-line bash predecessor. It's **1295** now (and,
 since retired, frozen at that count). These changes were all general-purpose
-and belong in holt 0.1, not just in nebelhaus:
+and belong in holt 0.1, not just in haus:
 
 | Change | PR | Impact on this spec |
 |---|---|---|
@@ -1032,7 +1032,7 @@ and belong in holt 0.1, not just in nebelhaus:
 
 | | Scope | Done when |
 |---|---|---|
-| **0.1** | Everything in §2 (contracts), §3 (landed, incl. patch-equivalence), §4 (slug identity), §5 (adapters), §10 (cutover). Commands: `list`, `new`, `child`, `spawn`, `resume`, `park`, `unpark`, `reap`, `reship`, `hook create/remove`, `doctor`. | The ported acceptance suite passes unmodified against `holt`; every nebelhaus caller is repointed at it (done, nebelhaus#201/#245) with no bash predecessor left to fall back to. |
+| **0.1** | Everything in §2 (contracts), §3 (landed, incl. patch-equivalence), §4 (slug identity), §5 (adapters), §10 (cutover). Commands: `list`, `new`, `child`, `spawn`, `resume`, `park`, `unpark`, `reap`, `reship`, `hook create/remove`, `doctor`. | The ported acceptance suite passes unmodified against `holt`; every haus caller is repointed at it (done, haus#201/#245) with no bash predecessor left to fall back to. |
 | **0.2** | §6 bootstrap (reflink, ports, secrets, trust), §7 `overlap`. | `holt doctor --write` produces a usable `.holt.toml` on a stranger's Node repo; `overlap` sees parked branches. |
 | **0.3** | §8 `batch` with queue bisection; `bench try-batch` becomes a wrapper. | It names a culprit *pair* on a real red queue. |
 | **0.4** | §14 SDKs: `holt watch --json`, then TS, then Python/Swift, plus §14.5's `holt docs agent` + adapter `instructions_file` + `bootstrap.agent_instructions`. holt stays a binary — SDKs shell out. | A third party ships an agent UI whose only worktree logic is `holt` — and whose spawned agent knows `holt child`/`holt park` without a hand-written CLAUDE.md stanza. |
@@ -1279,6 +1279,6 @@ it."
 transport, no new invariant, consistent with §14.1's "SDKs are thin."
 
 None of this is mandatory: an embedder can ignore it and hand-write their own
-stanza, the way nebelhaus does today. What it buys the ones who don't want to
+stanza, the way haus does today. What it buys the ones who don't want to
 is the same thing adapters buy for clients — one canonical, versioned copy
 instead of N drifting hand-copied ones.

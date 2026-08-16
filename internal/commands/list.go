@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nebelhaus/holt/internal/gitx"
-	"github.com/nebelhaus/holt/internal/ui"
+	"github.com/hausfold/holt/internal/gitx"
+	"github.com/hausfold/holt/internal/ui"
 )
 
 // List renders every live/parked lane across every repo holt can reach, and

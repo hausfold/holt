@@ -190,7 +190,7 @@ jobs:
       # There is no registry to publish to: a Go module IS its tag. sdk/go has
       # its own go.mod, so the tag carries the subdirectory as a prefix —
       # `sdk/go/v0.2.0`, not `v0.2.0` — which is what makes
-      # `go get github.com/nebelhaus/holt/sdk/go@v0.2.0` resolve.
+      # `go get github.com/hausfold/holt/sdk/go@v0.2.0` resolve.
       - name: tag the module
         run: |
           # An annotated tag needs a tagger; actions/checkout doesn't set one.
@@ -212,7 +212,7 @@ jobs:
           cd "$(mktemp -d)" && go mod init probe
           for _ in 1 2 3 4 5; do
             GOPROXY=https://proxy.golang.org GOFLAGS=-mod=mod \
-              go get "github.com/nebelhaus/holt/sdk/go@v$V" && exit 0
+              go get "github.com/hausfold/holt/sdk/go@v$V" && exit 0
             echo "proxy hasn't seen v$V yet — retrying in 20s"; sleep 20
           done
           exit 1

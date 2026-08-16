@@ -3,8 +3,8 @@ package commands
 import (
 	"path/filepath"
 
-	"github.com/nebelhaus/holt/internal/gitx"
-	"github.com/nebelhaus/holt/internal/registry"
+	"github.com/hausfold/holt/internal/gitx"
+	"github.com/hausfold/holt/internal/registry"
 )
 
 type sweepMode int

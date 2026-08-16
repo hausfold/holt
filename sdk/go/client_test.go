@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	holt "github.com/nebelhaus/holt/sdk/go"
+	holt "github.com/hausfold/holt/sdk/go"
 )
 
 // testdata/fake-holt.sh stands in for the real binary so tests don't need
@@ -78,7 +78,7 @@ func TestWatchLane_FiltersToOneLane(t *testing.T) {
 	// has no hello to carry, so it doesn't hand out a type that could be
 	// one. This assignment is half the assertion: it stops compiling if
 	// WatchLane ever widens back.
-	var stream iter.Seq2[holt.WatchEvent, error] = newClient(t).WatchLane(context.Background(), "/repo/.holt/nebelhaus/fresh")
+	var stream iter.Seq2[holt.WatchEvent, error] = newClient(t).WatchLane(context.Background(), "/repo/.holt/haus/fresh")
 	for event, err := range stream {
 		if err != nil {
 			t.Fatalf("WatchLane: %v", err)
@@ -89,7 +89,7 @@ func TestWatchLane_FiltersToOneLane(t *testing.T) {
 	if len(seen) != 1 || seen[0].Kind != holt.WatchCreated {
 		t.Fatalf("seen = %v, want one created event", seen)
 	}
-	if seen[0].Lane == nil || seen[0].Lane.Path != "/repo/.holt/nebelhaus/fresh" {
+	if seen[0].Lane == nil || seen[0].Lane.Path != "/repo/.holt/haus/fresh" {
 		t.Errorf("seen[0].Lane = %v, want the fresh lane", seen[0].Lane)
 	}
 }
@@ -105,7 +105,7 @@ func TestWatchLine_EventNarrowsEverythingButHello(t *testing.T) {
 		Seq:    4,
 		Ts:     "2026-08-08T12:00:00Z",
 		Source: "registry",
-		Lane:   &holt.Lane{Name: "fresh", Path: "/repo/.holt/nebelhaus/fresh"},
+		Lane:   &holt.Lane{Name: "fresh", Path: "/repo/.holt/haus/fresh"},
 	}
 	event, ok := line.Event()
 	if !ok {
@@ -141,7 +141,7 @@ func TestResume_CapturedStdoutNeverExecs(t *testing.T) {
 
 func TestLease_ReleaseCallsHeartbeatRelease(t *testing.T) {
 	c := newClient(t)
-	lease := c.Lease(context.Background(), "/repo/.holt/nebelhaus/sparkle", holt.LeaseOptions{PID: 12345})
+	lease := c.Lease(context.Background(), "/repo/.holt/haus/sparkle", holt.LeaseOptions{PID: 12345})
 	if err := lease.Release(context.Background()); err != nil {
 		t.Fatalf("Release: %v", err) // fake-holt's heartbeat branch accepts --release silently
 	}

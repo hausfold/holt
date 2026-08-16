@@ -43,7 +43,7 @@ Adapters are template-driven (`SPEC.md` §5); if a need can only be met by
 hardcoding one caller, it belongs in that caller.
 
 The rule binds new behavior, not history. Two grandfathered exceptions exist on
-purpose — don't "enforce" them away: `NEBELHAUS_AGENT_DEFAULT` is still read as a
+purpose — don't "enforce" them away: `HAUS_AGENT_DEFAULT` is still read as a
 fallback rung in `defaultAgent` (`internal/commands/env.go`), because pre-config
 rice builds set it and deleting it breaks their default agent; and `SPEC.md` §10
 is the cutover story for that one consumer, which is history rather than a
@@ -141,12 +141,13 @@ job exists to protect, so a change to one SDK's surface is a change to all five.
   mirror *is* the SwiftPM release, so don't hand-run it after a release. The
   bare form (no `--tag`) mirrors `main` only, and exists for one case: getting
   an unreleased change in front of a consumer pinning a branch.
-- **The Go module path keeps the `nebelhaus` owner on purpose.** `go.mod`,
-  `sdk/go/go.mod` and the `Makefile`'s `LDFLAGS` all say
-  `github.com/nebelhaus/holt`. It is published on Go's immutable proxy at that
-  path and cannot move; GitHub's never-deleted org redirect is what keeps
-  `go get` resolving. It is **not** a missed hit from the 2026-08-09 org move —
-  don't "fix" it. Everything else in this repo says `hausfold`.
+- **The Go module path is `github.com/hausfold/holt`**, in `go.mod`,
+  `sdk/go/go.mod` and the `Makefile`'s `LDFLAGS`. ⚠️ It moved there on
+  2026-08-16, and Go's proxy is immutable: `sdk/go` up to `v0.2.8` is published
+  under the previous owner and stays resolvable there forever, while nothing
+  released after is. An importer edits its import line or pins v0.2.8. Keep the
+  three spellings in step — a mismatch between `go.mod` and `LDFLAGS` builds
+  fine and reports the wrong version.
 
 ## Verify by running it
 

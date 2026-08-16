@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/nebelhaus/holt/internal/exitcode"
+	"github.com/hausfold/holt/internal/exitcode"
 )
 
 // Watch is holt's lifecycle event stream — one NDJSON object per line on

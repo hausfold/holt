@@ -72,7 +72,7 @@ func Lines(s string) []string {
 // that, the caller resolves an empty path against its own cwd, and a stale
 // registry row pointing at a deleted checkout makes holt list the current
 // repo's branches a second time under a repo literally named ".". That was a
-// real bug in the bash version (nebelhaus#131) and the fix belongs here, once.
+// real bug in the bash version (haus#131) and the fix belongs here, once.
 func MainCheckout(dir string) (string, error) {
 	common, err := Run(dir, "rev-parse", "--path-format=absolute", "--git-common-dir")
 	if err != nil {

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nebelhaus/holt/internal/gitx"
+	"github.com/hausfold/holt/internal/gitx"
 )
 
 // State is what a lane's checkout is doing on disk.
