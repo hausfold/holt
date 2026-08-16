@@ -52,7 +52,7 @@ SDKs below wrap it.
 | `branch` | full branch name |
 | `path` | checkout path on disk — empty once `parked` |
 | `parent` | the pane that spawned it via `holt child`, or `""` |
-| `agent` | `claude` \| `codex` \| `opencode` |
+| `agent` | `claude` \| `codex` \| `opencode` \| `jcode` |
 | `state` | `live` \| `parked` \| `stray` |
 | `occupied` | is anything actually standing in it right now |
 | `dirty` | uncommitted changes |
@@ -92,7 +92,7 @@ How the CLI and all five SDKs are cut from one version number →
 ---
 
 *Why not your agent's built-in worktrees? No vendor ships cross-client
-(`claude` **and** `codex` **and** `opencode`, one registry), none ship
+(`claude` **and** `codex` **and** `opencode` **and** `jcode`, one registry), none ship
 cross-repo, and losing your work isn't their problem — it's holt's.*
 
 ## SDKs

@@ -40,7 +40,7 @@ import (
 func (e *Env) New(want, agentID string) error {
 	agentID = orDefault(agentID, e.Agent)
 	if _, ok := specFor(agentID); !ok {
-		return exitcode.Usagef("unknown agent %q (expected claude, codex, or opencode)", agentID)
+		return exitcode.Usagef("unknown agent %q (expected claude, codex, opencode, or jcode)", agentID)
 	}
 	main, err := e.mainCheckoutOf(e.Cwd, true)
 	if err != nil {
@@ -146,7 +146,7 @@ func (e *Env) Spawn(target, want, agentID string) error {
 	}
 	agentID = orDefault(agentID, e.Agent)
 	if _, ok := specFor(agentID); !ok {
-		return exitcode.Usagef("unknown agent %q (expected claude, codex, or opencode)", agentID)
+		return exitcode.Usagef("unknown agent %q (expected claude, codex, opencode, or jcode)", agentID)
 	}
 	if fi, err := os.Stat(target); err != nil || !fi.IsDir() {
 		return exitcode.Usagef("no such directory: %s", target)

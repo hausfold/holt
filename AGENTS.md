@@ -57,7 +57,7 @@ A **lane** is the unit — one agent's branch, checkout and pane, `create` →
 | word | means, and only this |
 |---|---|
 | **worktree** | git's — the checkout on disk. A *parked* lane has none, so it can't name the unit. |
-| **agent** | the **client**: `claude`, `codex`, `opencode`. A lane *runs* an agent; it is not one. |
+| **agent** | the **client**: `claude`, `codex`, `opencode`, `jcode`. A lane *runs* an agent; it is not one. |
 | **session** | somebody else's — the multiplexer's, or a client's transcript. holt never names its own unit this. |
 
 `pane` is available, and is exactly what `occupied` reports.
@@ -209,8 +209,8 @@ Standing rules for any agent working here:
 ## Where holt sits in the family
 
 The layer ([hausfold/haus](https://github.com/hausfold/haus)) takes holt
-as a flake input and ships it on `PATH`. `⌘A` runs `holt new` for codex and
-opencode; on a Claude machine it runs `claude --worktree`, whose
+as a flake input and ships it on `PATH`. `⌘A` runs `holt new` for codex,
+opencode and jcode; on a Claude machine it runs `claude --worktree`, whose
 `WorktreeCreate`/`WorktreeRemove` hooks call `holt hook create` / `holt hook
 remove` — so either way this repo is the plumbing. Its bash predecessor `wt.sh`
 is retired; there is no fallback.
