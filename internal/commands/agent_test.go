@@ -197,6 +197,8 @@ func TestStartArgvEndsOptionParsingBeforeThePrompt(t *testing.T) {
 		{"codex", "", []string{"codex", "--", dashed}},
 		{"codex", "/tmp/shot.png", []string{"codex", "-i", "/tmp/shot.png", "--", dashed}},
 		{"opencode", "", []string{"opencode", "--prompt=" + dashed}},
+		// jcode takes no prompt at all — see the spec, and the test below.
+		{"jcode", "", []string{"jcode"}},
 	}
 	for _, tc := range cases {
 		spec, ok := specFor(tc.agent)
@@ -213,7 +215,7 @@ func TestStartArgvEndsOptionParsingBeforeThePrompt(t *testing.T) {
 // Whatever the prompt, it must never arrive as an argv element a parser could
 // still read as a flag — the property, not the four spellings above.
 func TestStartNeverHandsAClientABareDashedPrompt(t *testing.T) {
-	for _, agent := range []string{"claude", "codex", "opencode"} {
+	for _, agent := range []string{"claude", "codex", "opencode", "jcode"} {
 		spec, _ := specFor(agent)
 		argv := spec.start("", "-x")
 		for i, arg := range argv {
@@ -228,3 +230,18 @@ func TestStartNeverHandsAClientABareDashedPrompt(t *testing.T) {
 }
 
 func terminatesOptions(prev string) bool { return prev == "--" }
+
+// jcode drops the prompt, and that is a decision rather than an oversight: its
+// CLI has no way to open the TUI on a first message (no positional prompt, no
+// --prompt, no stdin — v0.76.0), so anything holt appended would be parsed as a
+// flag or ignored. Pinned here so a future "fix" that quietly starts passing the
+// text has to come with a jcode that can accept it.
+func TestJcodeStartTakesNoPrompt(t *testing.T) {
+	spec, ok := specFor("jcode")
+	if !ok {
+		t.Fatal("no spec for jcode")
+	}
+	if got := spec.start("/tmp/shot.png", "do the thing"); len(got) != 1 || got[0] != "jcode" {
+		t.Errorf("jcode start argv = %q, want [jcode] alone", got)
+	}
+}
