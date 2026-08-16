@@ -70,6 +70,64 @@ them — the rice's statusline, the workshop's `bench status`, pounce's Spawn
 Agent, and every SDK. Changing one is a semver **major** conversation, not a
 refactor. The same goes for user-facing command names and flags.
 
+**`ai/SKILL.md` quotes two of those four** — `--json` output and exit codes —
+plus the frozen command names, so it is now downstream of the same freeze. See
+below.
+
+## The agent surface (`ai/SKILL.md`)
+
+**Don't confuse it with this file.** `AGENTS.md` is for an agent working **on**
+holt, from a checkout. [`ai/SKILL.md`](./ai/SKILL.md) is for an agent **using**
+it — on a stranger's machine, with no checkout, when their human says *"what
+worktrees do I have open?"* or *"park this"*. It is the routing document that
+makes those work first try: the verbs, the six exit codes, the `--json` fields,
+and when the answer is to do nothing.
+
+It is bound by the family standard, [the workshop's
+`notes/agent-surface.md`](https://github.com/hausfold/workshop/blob/main/notes/agent-surface.md) —
+≤150 lines, no flag dumps (that's `holt --help`), and the `description`
+frontmatter names **the phrases a user says**, not the features holt has. A
+description written as a feature summary is true, well written, and never loads.
+
+The vocabulary rule above still binds it: holt's own unit is a **lane**, never a
+"session". The exception is the quoted user phrases — *"resume that session from
+yesterday"* is what a person says, and matching it is the whole job of the
+`description`.
+
+Two things it carries that no other family skill does, and both are the whole
+point of holt existing:
+
+- **`holt park`, never `git stash`.** The stash stack is shared across every
+  worktree of a repo, so parallel agents pop each other's entries. The skill's
+  `description` says this out loud precisely so it loads on the word "stash".
+- **Exit 2 is holt working, not holt failing.** An agent that reads "refused for
+  safety" as an error and reaches for `git worktree remove` has defeated
+  invariant 2 from the outside. The skill says so twice.
+
+It also spends space on the `--json` payload's three traps — `state`'s closed
+set, `occupied`/`dirty` being nullable with `null` meaning *undetermined*, and
+`warnings` being the only channel a degraded run has under `--json`. Those are
+SPEC 2.2's own warnings, aimed at the newest consumer.
+
+`nix/skill.nix` ships it as `pkgs.holt-skill` (`$out/holt/SKILL.md`) — its own
+derivation so a consumer can install the skill with no Go toolchain and no
+binary. It does **not** isolate the Go build's hash: `src = ./.` is unfiltered,
+so `ai/` is inside that closure and a prose edit moves holt's drvPath either way
+(measured, not assumed). The build fails if the frontmatter is missing or
+unterminated, or if the file passes 150 lines — each of those produces a skill
+that installs, lists, and is never loaded.
+
+⚠️ **The verb's name is not settled.** This file and the family standard say
+`holt skill`; `SPEC.md` §14.5 already reserves the same capability as `holt docs
+agent [--format=md|json]`, with a `{version, body}` envelope. Different verb,
+different output shape, same job — resolve it before either is implemented,
+not by whichever lands first.
+
+**Every claim in it must be runnable.** A verb, flag, exit code or `--json` key
+that changes changes `ai/SKILL.md` in the same PR. That file quotes the frozen
+contracts above, so it is not merely documentation that drifted — it is a
+downstream consumer of them.
+
 ## The five SDKs are one product
 
 `sdk/{ts,python,rust,swift,go}` all wrap the same CLI and **share one version

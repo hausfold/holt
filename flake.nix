@@ -58,6 +58,13 @@
             mainProgram = "holt";
           };
         };
+
+        # The agent skill (ai/SKILL.md), so a consumer can install it without
+        # installing holt at all — no Go toolchain, no binary. (It does NOT
+        # isolate the binary's hash: `src = ./.` is unfiltered, so `ai/` is in
+        # the Go derivation's closure and a prose edit rebuilds it regardless.)
+        # See nix/skill.nix.
+        holt-skill = pkgs.callPackage ./nix/skill.nix { };
       });
 
       # The family convention: every nebelhaus flake exports an overlay so a
@@ -68,6 +75,7 @@
       # 'stdenv.hostPlatform.system'". Use the real attribute.
       overlays.default = final: _prev: {
         holt = self.packages.${final.stdenv.hostPlatform.system}.default;
+        holt-skill = self.packages.${final.stdenv.hostPlatform.system}.holt-skill;
       };
 
       devShells = forAll (pkgs: {
