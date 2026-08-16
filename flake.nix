@@ -60,9 +60,9 @@
         };
 
         # The agent skill (ai/SKILL.md), so a consumer can install it without
-        # installing holt — haus's AI room drops it into every agent client on
-        # the machine. Its own derivation rather than a file inside the Go
-        # build, so a sentence of prose can't invalidate the binary's hash.
+        # installing holt at all — no Go toolchain, no binary. (It does NOT
+        # isolate the binary's hash: `src = ./.` is unfiltered, so `ai/` is in
+        # the Go derivation's closure and a prose edit rebuilds it regardless.)
         # See nix/skill.nix.
         holt-skill = pkgs.callPackage ./nix/skill.nix { };
       });

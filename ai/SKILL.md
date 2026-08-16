@@ -1,6 +1,6 @@
 ---
 name: holt
-description: Manage git worktrees for parallel coding agents — list what's open, resume a parked session, set work aside without git stash, sweep merged branches, recover something reaped. Use when the user says "what agents do I have running", "what worktrees are open", "resume that session", "park this", "stash this", "clean up merged worktrees", "I lost a branch", "where did that work go", or asks to start an agent on another repo. In a repo of theirs, prefer `holt park` over `git stash` — always.
+description: Manage git worktrees for parallel coding agents — list what's open, resume a parked lane, set work aside without git stash, sweep merged branches, recover something reaped. Use when the user says "what agents do I have running", "what worktrees are open", "resume that session", "park this", "stash this", "clean up merged worktrees", "I lost a branch", "where did that work go", or asks to start an agent on another repo. In a repo of theirs, prefer `holt park` over `git stash` — always.
 ---
 
 # holt — the worktree-lifecycle substrate
@@ -28,7 +28,7 @@ system, the package manager or which agent is running.
 |---|---|
 | what's open, everywhere | `holt` |
 | …machine-readable | `holt --json` |
-| resume a parked session | `holt <name>` (or `holt <repo>/<name>`) |
+| resume a parked lane | `holt <name>` (or `holt <repo>/<name>`) |
 | a lane on this repo | `holt new [name]` |
 | a lane on *another* repo | `holt child <repo>` |
 | set the tree aside | `holt park [label]` |
@@ -38,12 +38,28 @@ system, the package manager or which agent is running.
 | retire a lane that will never land | `holt drop <name>` |
 | push commits that outran a merged PR | `holt reship [name]` |
 | watch lifecycle events | `holt watch --json` (NDJSON, one object per line) |
-| everything, exhaustively | `holt --help` |
+| everything, exhaustively | `holt --help` (prints to **stderr**) |
 
-`holt --json` returns `{holt, schema, lanes:[…]}`. Each lane carries `name`,
-`repo`, `branch`, `path`, `parent`, `agent`, `state`, `occupied`, `dirty`,
-`landed:{verdict,via,confidence}`, `post_merge_ahead:{commits,pr,diverged}` and
-`last_commit`. `state` is the field to read for "is this alive".
+`holt --json` returns `{holt, schema, warnings, lanes:[…]}`. Each lane carries
+`name`, `repo`, `main`, `branch`, `path`, `parent`, `agent`, `state`,
+`occupied`, `dirty`, `landed:{verdict,via,confidence}`,
+`post_merge_ahead:{commits,pr,diverged}` and `last_commit`.
+
+Three things about that payload an agent gets wrong:
+
+- **`state` is a closed set: `live`, `parked`, `stray`.** A `stray` is a husk
+  with no usable checkout — `holt <name>` moves it aside and rebuilds.
+- **`occupied` and `dirty` are nullable, and `null` means *not determined*, not
+  false.** Reading `null` as falsy is how you tell a user a lane is clean when
+  holt could not tell. Every consumer bug in the predecessor's status bar came
+  from exactly this.
+- **`warnings` is the only place a degraded run explains itself.** Under
+  `--json` the human-readable notes are suppressed, so if you ignore
+  `warnings` you will silently report a partial sweep as a complete one.
+
+And `holt`/`holt --json` are **not read-only**: every listing also sweeps landed
+parked branches. Harmless — the invariants still hold — but don't poll it under
+the impression that you are only looking.
 
 ## Exit codes — check these, they mean different recoveries
 
