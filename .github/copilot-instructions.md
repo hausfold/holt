@@ -19,7 +19,7 @@ The short version:
 - **`SPEC.md` §2 is frozen** — registry schema, `--json` output, hook protocol,
   exit codes. Downstreams pin them, so changing one is a semver *major*
   conversation, not a refactor.
-- **The `github.com/nebelhaus/holt` module path is deliberate.** It's published
+- **The `github.com/hausfold/holt` module path is deliberate.** It's published
   on Go's immutable proxy and can't move; it is not a missed hit from the org
   rename. Everything else says `hausfold`.
 - **`sdk/swift` is the source; `hausfold/holt-swift` is a generated mirror** —

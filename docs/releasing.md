@@ -9,7 +9,7 @@ they all carry the same version number. One tag publishes all of them.
 | `sdk/ts` | npm `@hausfold/holt` | `npm publish` over OIDC |
 | `sdk/python` | PyPI `hausfold-holt` | `gh-action-pypi-publish` over OIDC |
 | `sdk/rust` | crates.io `hausfold-holt` | `cargo publish` over OIDC |
-| `sdk/go` | `github.com/nebelhaus/holt/sdk/go` | a `sdk/go/v<version>` tag — Go's proxy needs nothing else |
+| `sdk/go` | `github.com/hausfold/holt/sdk/go` | a `sdk/go/v<version>` tag — Go's proxy needs nothing else |
 | `sdk/swift` | `github.com/hausfold/holt-swift` | a `<version>` tag on the mirror — SwiftPM likewise |
 
 ## Cutting one

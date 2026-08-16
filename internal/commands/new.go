@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/nebelhaus/holt/internal/config"
-	"github.com/nebelhaus/holt/internal/exitcode"
-	"github.com/nebelhaus/holt/internal/gitx"
-	"github.com/nebelhaus/holt/internal/registry"
-	"github.com/nebelhaus/holt/internal/ui"
+	"github.com/hausfold/holt/internal/config"
+	"github.com/hausfold/holt/internal/exitcode"
+	"github.com/hausfold/holt/internal/gitx"
+	"github.com/hausfold/holt/internal/registry"
+	"github.com/hausfold/holt/internal/ui"
 )
 
 // New, Spawn and Child are three answers to "who is asking", and they differ in
@@ -198,8 +198,8 @@ func (e *Env) mainCheckoutOf(path string, here bool) (string, error) {
 // bucketFor is the directory a repo's worktrees live under.
 //
 // The repo's basename, EXCEPT when that would collide with the spawning pane's
-// own repo basename (the nested case: a workshop named `nebelhaus` holding a
-// rice also named `nebelhaus`) — then the full owner-repo slug, so the child
+// own repo basename (the nested case: a workshop named `haus` holding a
+// rice also named `haus`) — then the full owner-repo slug, so the child
 // never lands on the parent's own checkout path.
 //
 // Buckets are COSMETIC: every command re-derives a worktree's main checkout from

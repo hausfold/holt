@@ -38,7 +38,7 @@ describe("watch", () => {
   test("watchLane filters to one lane's events only", async () => {
     const { watchLane } = await import("../src/watch.js");
     const seen: string[] = [];
-    for await (const ev of watchLane("/repo/.holt/nebelhaus/fresh", { bin })) {
+    for await (const ev of watchLane("/repo/.holt/haus/fresh", { bin })) {
       seen.push(ev.kind);
       break;
     }
@@ -47,7 +47,7 @@ describe("watch", () => {
 
   test("client.watchLane() filters the same way, on the client's own options", async () => {
     const seen: string[] = [];
-    for await (const ev of client().watchLane("/repo/.holt/nebelhaus/fresh")) {
+    for await (const ev of client().watchLane("/repo/.holt/haus/fresh")) {
       seen.push(ev.kind);
       break;
     }
@@ -59,7 +59,7 @@ describe("watch", () => {
   // Pinned because three docstrings used to claim the opposite.
   test("watchLane passes a lane's sync through — only hello/ready are stripped", async () => {
     const seen: string[] = [];
-    for await (const ev of client().watchLane("/repo/.holt/nebelhaus/sparkle")) {
+    for await (const ev of client().watchLane("/repo/.holt/haus/sparkle")) {
       seen.push(ev.kind);
       break;
     }
@@ -99,7 +99,7 @@ describe("error mapping", () => {
 describe("heartbeat / lease", () => {
   test("lease.release() calls heartbeat --release", async () => {
     const c = client();
-    const lease = c.lease("/repo/.holt/nebelhaus/sparkle", { pid: 12345 });
+    const lease = c.lease("/repo/.holt/haus/sparkle", { pid: 12345 });
     await lease.release();
     // No throw: fake-holt's heartbeat branch accepts --release silently.
   });

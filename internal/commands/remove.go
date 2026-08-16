@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nebelhaus/holt/internal/config"
-	"github.com/nebelhaus/holt/internal/exitcode"
-	"github.com/nebelhaus/holt/internal/gitx"
-	"github.com/nebelhaus/holt/internal/ui"
+	"github.com/hausfold/holt/internal/config"
+	"github.com/hausfold/holt/internal/exitcode"
+	"github.com/hausfold/holt/internal/gitx"
+	"github.com/hausfold/holt/internal/ui"
 )
 
 // HookRemove implements the WorktreeRemove hook: retire a lane WITHOUT losing

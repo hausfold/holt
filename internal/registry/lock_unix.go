@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nebelhaus/holt/internal/exitcode"
+	"github.com/hausfold/holt/internal/exitcode"
 )
 
 // lockTimeout bounds how long we wait for another holt to finish a mutation.

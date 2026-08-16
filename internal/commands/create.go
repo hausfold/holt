@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nebelhaus/holt/internal/exitcode"
-	"github.com/nebelhaus/holt/internal/gitx"
-	"github.com/nebelhaus/holt/internal/registry"
-	"github.com/nebelhaus/holt/internal/ui"
+	"github.com/hausfold/holt/internal/exitcode"
+	"github.com/hausfold/holt/internal/gitx"
+	"github.com/hausfold/holt/internal/registry"
+	"github.com/hausfold/holt/internal/ui"
 )
 
 // hookField reads the first present key from a hook payload.

@@ -41,7 +41,7 @@ async def test_watch_yields_hello_sync_ready_then_live_changes_and_stops_on_brea
 
 async def test_watch_lane_filters_to_one_lanes_events_only() -> None:
     seen = []
-    async with aclosing(watch_lane("/repo/.holt/nebelhaus/fresh", RunOptions(bin=FAKE_HOLT))) as stream:
+    async with aclosing(watch_lane("/repo/.holt/haus/fresh", RunOptions(bin=FAKE_HOLT))) as stream:
         async for ev in stream:
             seen.append(ev.kind)
             break
@@ -50,7 +50,7 @@ async def test_watch_lane_filters_to_one_lanes_events_only() -> None:
 
 async def test_client_watch_lane_filters_the_same_way_on_its_own_options() -> None:
     seen = []
-    async with aclosing(client().watch_lane("/repo/.holt/nebelhaus/fresh")) as stream:
+    async with aclosing(client().watch_lane("/repo/.holt/haus/fresh")) as stream:
         async for ev in stream:
             seen.append(ev.kind)
             break
@@ -62,7 +62,7 @@ async def test_client_watch_lane_filters_the_same_way_on_its_own_options() -> No
 # three docstrings used to claim the opposite.
 async def test_watch_lane_passes_a_lanes_sync_through() -> None:
     seen = []
-    async with aclosing(client().watch_lane("/repo/.holt/nebelhaus/sparkle")) as stream:
+    async with aclosing(client().watch_lane("/repo/.holt/haus/sparkle")) as stream:
         async for ev in stream:
             seen.append(ev.kind)
             break
@@ -90,6 +90,6 @@ async def test_error_mapping_nonzero_exit_raises_holt_error_carrying_the_real_ex
 
 async def test_lease_release_calls_heartbeat_release() -> None:
     c = client()
-    lease = await c.lease("/repo/.holt/nebelhaus/sparkle", pid=12345)
+    lease = await c.lease("/repo/.holt/haus/sparkle", pid=12345)
     await lease.release()
     # No raise: fake-holt's heartbeat branch accepts --release silently.

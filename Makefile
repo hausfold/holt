@@ -1,5 +1,5 @@
 VERSION := $(shell cat VERSION)
-LDFLAGS := -X github.com/nebelhaus/holt/internal/commands.Version=$(VERSION)
+LDFLAGS := -X github.com/hausfold/holt/internal/commands.Version=$(VERSION)
 
 .PHONY: build test fmt vet check clean score
 

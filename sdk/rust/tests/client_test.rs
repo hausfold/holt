@@ -76,13 +76,13 @@ async fn watch_lane_filters_to_one_lane() {
     // one. The annotation is half the assertion: it stops compiling if
     // `watch_lane` ever widens back.
     let mut stream: Pin<Box<dyn Stream<Item = Result<WatchEvent, HoltError>> + Send>> =
-        Box::pin(client.watch_lane("/repo/.holt/nebelhaus/fresh"));
+        Box::pin(client.watch_lane("/repo/.holt/haus/fresh"));
 
     let event = stream.next().await.expect("one event").expect("ok");
     assert_eq!(event.kind, watch_kind::CREATED);
     assert_eq!(
         event.lane.as_ref().map(|l| l.path.as_str()),
-        Some("/repo/.holt/nebelhaus/fresh")
+        Some("/repo/.holt/haus/fresh")
     );
 }
 
@@ -138,7 +138,7 @@ async fn resume_captured_stdout_never_execs() {
 async fn lease_release_calls_heartbeat_release() {
     let client = new_client();
     let mut lease = client.lease(
-        "/repo/.holt/nebelhaus/sparkle",
+        "/repo/.holt/haus/sparkle",
         LeaseOptions {
             pid: Some(12345),
             ..Default::default()

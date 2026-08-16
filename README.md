@@ -190,27 +190,27 @@ See [`sdk/swift/README.md`](sdk/swift/README.md) for the full API.
 </details>
 
 <details>
-<summary><strong>Go</strong> — <code>github.com/nebelhaus/holt/sdk/go</code></summary>
+<summary><strong>Go</strong> — <code>github.com/hausfold/holt/sdk/go</code></summary>
 
 [`sdk/go`](sdk/go) — the same client over `os/exec`: `List`,
 `Watch`/`WatchLane` as Go 1.23 range-over-func iterators, `Child`/`Spawn`,
 `Park`/`Unpark`/`Reap`/`Reship`, and occupancy leases via `Client.Lease`.
 
 The one SDK with zero setup: its own nested `go.mod`
-(`github.com/nebelhaus/holt/sdk/go`) means `go get` resolves it straight
+(`github.com/hausfold/holt/sdk/go`) means `go get` resolves it straight
 from this repo — no publish step, no separate mirror. No tagged release
-yet, so `go get github.com/nebelhaus/holt/sdk/go@<commit-sha>` for now.
+yet, so `go get github.com/hausfold/holt/sdk/go@<commit-sha>` for now.
 
-> The `nebelhaus` owner in that path is deliberate, and the one place in this
-> repo that still carries it. Everything else moved to `hausfold` in the
-> 2026-08-09 org migration; a Go module path can't, because it is already
-> published under this name on an immutable proxy. GitHub's redirect from the
-> old org — which is never deleted — is what keeps `go get` resolving.
+> ⚠️ **The module path moved.** Versions up to `v0.2.8` are published on Go's
+> immutable proxy under the pre-2026-08-16 owner and stay resolvable there
+> forever; everything from the next release on is at
+> `github.com/hausfold/holt/sdk/go`. An existing importer has to edit its
+> import line to pick up anything newer.
 
 ```go
 import (
 	"context"
-	holt "github.com/nebelhaus/holt/sdk/go"
+	holt "github.com/hausfold/holt/sdk/go"
 )
 
 c := &holt.Client{}

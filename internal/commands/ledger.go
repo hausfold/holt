@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nebelhaus/holt/internal/gitx"
-	"github.com/nebelhaus/holt/internal/ui"
+	"github.com/hausfold/holt/internal/gitx"
+	"github.com/hausfold/holt/internal/ui"
 )
 
 // This file answers the one question holt could not answer about its own most

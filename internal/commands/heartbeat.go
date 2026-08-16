@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/nebelhaus/holt/internal/exitcode"
-	"github.com/nebelhaus/holt/internal/gitx"
-	"github.com/nebelhaus/holt/internal/occupancy"
-	"github.com/nebelhaus/holt/internal/ui"
+	"github.com/hausfold/holt/internal/exitcode"
+	"github.com/hausfold/holt/internal/gitx"
+	"github.com/hausfold/holt/internal/occupancy"
+	"github.com/hausfold/holt/internal/ui"
 )
 
 // Heartbeat takes, refreshes, or drops the occupancy lease on a checkout.

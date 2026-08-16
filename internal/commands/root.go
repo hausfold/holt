@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/nebelhaus/holt/internal/exitcode"
+	"github.com/hausfold/holt/internal/exitcode"
 )
 
 // Version is stamped at build time (-ldflags "-X …commands.Version=…").

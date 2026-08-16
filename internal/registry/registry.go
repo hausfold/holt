@@ -46,7 +46,7 @@ type Registry struct {
 }
 
 // DefaultAgent is used when a row names no client and none is supplied. It is
-// overridden by the caller (which knows about NEBELHAUS_AGENT_DEFAULT and the
+// overridden by the caller (which knows about HAUS_AGENT_DEFAULT and the
 // adapter set); this is only the floor.
 var DefaultAgent = "claude"
 

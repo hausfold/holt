@@ -41,7 +41,7 @@ final class ClientTests: XCTestCase {
 
     func testWatchLaneFiltersToOneLanesEventsOnly() async throws {
         var seen: [String] = []
-        for try await event in watchLane(path: "/repo/.holt/nebelhaus/fresh", options: RunOptions(bin: bin)) {
+        for try await event in watchLane(path: "/repo/.holt/haus/fresh", options: RunOptions(bin: bin)) {
             seen.append(event.kind.rawValue)
             break
         }
@@ -50,7 +50,7 @@ final class ClientTests: XCTestCase {
 
     func testClientWatchLaneFiltersTheSameWayOnItsOwnOptions() async throws {
         var seen: [String] = []
-        for try await event in client().watchLane(path: "/repo/.holt/nebelhaus/fresh") {
+        for try await event in client().watchLane(path: "/repo/.holt/haus/fresh") {
             seen.append(event.kind.rawValue)
             break
         }
@@ -62,7 +62,7 @@ final class ClientTests: XCTestCase {
     /// Pinned because three doc comments used to claim the opposite.
     func testWatchLanePassesALanesSyncThrough() async throws {
         var seen: [String] = []
-        for try await event in client().watchLane(path: "/repo/.holt/nebelhaus/sparkle") {
+        for try await event in client().watchLane(path: "/repo/.holt/haus/sparkle") {
             seen.append(event.kind.rawValue)
             break
         }
@@ -91,7 +91,7 @@ final class ClientTests: XCTestCase {
     }
 
     func testLeaseReleaseCallsHeartbeatRelease() async throws {
-        let lease = try await client().lease(path: "/repo/.holt/nebelhaus/sparkle", pid: 12345)
+        let lease = try await client().lease(path: "/repo/.holt/haus/sparkle", pid: 12345)
         await lease.release()
         // No throw: fake-holt's heartbeat branch accepts --release silently.
     }

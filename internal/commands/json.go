@@ -5,12 +5,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nebelhaus/holt/internal/gitx"
-	"github.com/nebelhaus/holt/internal/occupancy"
+	"github.com/hausfold/holt/internal/gitx"
+	"github.com/hausfold/holt/internal/occupancy"
 )
 
 // The --json envelope is a frozen public contract (SPEC.md §2.2): `bench`, the
-// nebelhaus statusline and pounce's Spawn Agent command all pin it within a day
+// haus statusline and pounce's Spawn Agent command all pin it within a day
 // of cutover. Field ADDITIONS are non-breaking and consumers must ignore unknown
 // keys; removals and meaning changes are not.
 //

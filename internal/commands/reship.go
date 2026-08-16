@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nebelhaus/holt/internal/exitcode"
-	"github.com/nebelhaus/holt/internal/gitx"
-	"github.com/nebelhaus/holt/internal/ui"
+	"github.com/hausfold/holt/internal/exitcode"
+	"github.com/hausfold/holt/internal/gitx"
+	"github.com/hausfold/holt/internal/ui"
 )
 
 // Reship pushes a branch that outran its merged PR, and opens the follow-up.
