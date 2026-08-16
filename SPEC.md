@@ -1002,7 +1002,7 @@ and `bench`. The plan was:
    backs up the TSV first.
 
 **What actually happened:** the cutover skipped the dual-run option entirely —
-every caller (hearth's `⌘A`, pounce's Spawn Agent, the Claude Code hooks) was
+every caller (the terminal room's `⌘A`, pounce's Spawn Agent, the Claude Code hooks) was
 repointed straight at `holt` in nebelhaus#201, with the bash predecessor left
 on `PATH` as an unused rollback. That rollback was never needed and the bash
 predecessor has since been deleted outright (nebelhaus#245); there is no
