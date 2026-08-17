@@ -17,7 +17,9 @@ A LANE is one agent's branch, checkout and pane, from create to reaped.
   holt                    list every live/parked lane, across all repos
   holt <name>             resume one: rebuild its checkout, reopen its agent
                           --pick to choose the session instead of the newest
-  holt new [name]         a lane on THIS repo, then open the default agent in it
+  holt new [name]         a lane on THIS repo; prints its path: cd "$(holt new)"
+                          --open [agent] open a session in it (--agent <id>)
+                          --cmd '<command>' run something else in it instead
   holt child <repo>       a lane on ANOTHER repo, as a child of this pane
   holt spawn <repo> <name>
                           a named lane for a spawner with no pane of its own
@@ -100,7 +102,7 @@ func Run(args []string) error {
 		return env.Resume(firstBare(args[1:]), hasFlag(args, "--pick"))
 
 	case "new":
-		return env.New(argAt(args, 1), argAt(args, 2))
+		return env.NewCmd(args[1:])
 
 	case "child":
 		return env.Child(argAt(args, 1), argAt(args, 2))

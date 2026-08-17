@@ -40,7 +40,8 @@ One agent's **branch, checkout and pane**, from create to reaped. Not a
 "session" — that's your multiplexer's word.
 
 ```sh
-holt new fix-flaky-test    # a lane on this repo: new checkout, new branch, agent opens in it
+cd "$(holt new fix-flaky-test)"  # a lane on this repo: new checkout, new branch, path on stdout
+holt new fix --open        # …or hand the pane straight to your agent (--open codex, --cmd 'nvim')
 holt                       # every lane you've got going, live or parked, across every repo
 holt fix-flaky-test        # back later — rebuild the checkout, reopen the agent, where you left off
 holt reap                  # sweep every lane whose branch landed and nobody's standing in
@@ -79,7 +80,7 @@ failing. Don't reach for `git worktree remove`; ask it why.
 |---|---|
 | `holt` | list every live/parked lane, across all repos · `--json` for machines |
 | `holt <name>` | resume one — rebuild its checkout, reopen its agent |
-| `holt new [name]` | a lane on **this** repo |
+| `holt new [name]` | a lane on **this** repo — prints its path · `--open [agent]` / `--cmd '…'` to run something in it |
 | `holt child <repo>` | a lane on **another** repo, as a child of this pane |
 | `holt spawn <repo> <name>` | a named lane, for a spawner with no pane of its own |
 | `holt park [label]` / `unpark` | set the tree aside as a `wip:` commit, and put it back |

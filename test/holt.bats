@@ -1094,6 +1094,39 @@ EOF
   [[ "$output" == *"ran opencode"* ]]
 }
 
+@test "new: by default it just makes the lane and prints the path" {
+  local b dir; b="$(mkrepo beta)"
+  shim_agent claude
+  cd "$b"
+  run "$WT" new quiet-one
+  [ "$status" -eq 0 ]
+  dir="$CLAUDE_WT_BASE/beta/quiet-one"
+  [ -e "$dir/.git" ]
+  # Only the path on stdout, so `cd "$(holt new)"` works — and NO client ran:
+  # a lane is a checkout, and what you open in it is your business.
+  [ "$(printf '%s\n' "$output" | tail -1)" = "$dir" ]
+  [[ "$output" != *"ran claude"* ]]
+}
+
+@test "new: --open hands the pane to the client, --cmd to anything else" {
+  local b; b="$(mkrepo beta)"
+  shim_agent codex
+  cd "$b"
+  run "$WT" new opened --open codex
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ran codex"* ]]
+
+  run "$WT" new scripted --cmd 'echo ran-cmd-in "$PWD"'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ran-cmd-in"* ]]
+  [[ "$output" == *"beta/scripted"* ]]
+
+  # The two endings contradict each other; saying both is a typo, not a plan.
+  run "$WT" new both --open --cmd 'true'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"pick one"* ]]
+}
+
 @test "new: an unnamed spawn names itself, and a taken name takes a suffix" {
   local b first second; b="$(mkrepo beta)"
   shim_agent claude
@@ -1683,7 +1716,7 @@ resume = \"$hook\""
   hook="$(mkhook open 'printf "%s %s\n" "$HOLT_NAME" "$HOLT_AGENT" >"'"$TMP"'/opened"; exit 0')"
   setcfg "[hooks]
 open = \"$hook\""
-  cd "$main"; wt_run new fresh
+  cd "$main"; wt_run new fresh --open
   [ "$status" -eq 0 ]
   [ "$(cat "$TMP/opened")" = "fresh claude" ] || fail "open payload is wrong: $(cat "$TMP/opened")"
   [ -e "$CLAUDE_WT_BASE/alpha/fresh/.git" ]

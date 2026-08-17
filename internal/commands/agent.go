@@ -157,6 +157,16 @@ func execClient(argv []string) error {
 	return syscall.Exec(path, argv, os.Environ())
 }
 
+// shellOf is the shell `holt new --cmd` runs a command string through: the
+// user's own $SHELL when they have one, /bin/sh otherwise. Their shell, because
+// the command was typed by them and may lean on their aliases and functions.
+func shellOf() string {
+	if sh := os.Getenv("SHELL"); sh != "" {
+		return sh
+	}
+	return "/bin/sh"
+}
+
 // AgentCmd is the public client seam: `holt agent <default|start|open|resume> …`.
 func (e *Env) AgentCmd(args []string) error {
 	switch argAt(args, 0) {

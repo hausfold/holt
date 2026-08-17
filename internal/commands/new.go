@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/hausfold/holt/internal/config"
 	"github.com/hausfold/holt/internal/exitcode"
@@ -31,14 +32,80 @@ import (
 //	         palette has nobody to tell and a dead end there is a command that
 //	         silently did nothing.
 
-// New opens a lane on THIS repo and starts the default client in it.
+// NewOpts is how `holt new` was asked to finish.
+//
+// The DEFAULT is to create the lane and print its path, nothing more — a lane is
+// a checkout, and what runs in it is the caller's business (`cd "$(holt new)"`,
+// the same shape as `holt child`). Opening a session is opt-in: "make me a lane"
+// and "make me a lane and become claude inside it" are different asks, and only
+// the second one takes the terminal away from you.
+type NewOpts struct {
+	Agent string // client id; implies Open when set explicitly
+	Open  bool   // exec a session in the lane instead of printing its path
+	Cmd   string // command to exec in the lane instead of a client
+}
+
+// NewCmd parses `holt new [name] [agent] [--open [agent]] [--agent id] [--cmd …]`.
+//
+// The second POSITIONAL is still an agent id, and it still implies --open: that
+// is the spelling the rice's spawn bind and every shipped hook config use
+// (`holt new <name> codex`), and breaking it would break the headline keybind on
+// every machine that hasn't rebuilt yet.
+func (e *Env) NewCmd(args []string) error {
+	var name string
+	var opts NewOpts
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; a {
+		case "--open":
+			opts.Open = true
+			// `--open codex` reads naturally and is what people type.
+			if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") && registry.KnownAgent(args[i+1]) {
+				i++
+				opts.Agent = args[i]
+			}
+		case "--agent":
+			if i+1 >= len(args) {
+				return exitcode.Usagef("--agent needs a client id (claude, codex, opencode, jcode)")
+			}
+			i++
+			opts.Agent, opts.Open = args[i], true
+		case "--cmd":
+			if i+1 >= len(args) {
+				return exitcode.Usagef("--cmd needs a command to run in the lane")
+			}
+			i++
+			opts.Cmd = args[i]
+		default:
+			switch {
+			case strings.HasPrefix(a, "--agent="):
+				opts.Agent, opts.Open = a[len("--agent="):], true
+			case strings.HasPrefix(a, "--cmd="):
+				opts.Cmd = a[len("--cmd="):]
+			case strings.HasPrefix(a, "-"):
+				return exitcode.Usagef("unknown flag %q — try `holt --help`", a)
+			case name == "":
+				name = a
+			case opts.Agent == "":
+				opts.Agent, opts.Open = a, true
+			default:
+				return exitcode.Usagef("usage: holt new [name] [--open [agent]] [--cmd '<command>']")
+			}
+		}
+	}
+	if opts.Cmd != "" && opts.Open {
+		return exitcode.Usagef("--cmd and --open/--agent do different things with the same pane — pick one")
+	}
+	return e.New(name, opts)
+}
+
+// New opens a lane on THIS repo.
 //
 // This is the client-agnostic spawn bind. Claude Code has a native --worktree
 // flag that fires the create hook; Codex and OpenCode have nothing like it, so a
 // machine whose default is one of those had a headline keybind that launched a
 // client it may not even have installed.
-func (e *Env) New(want, agentID string) error {
-	agentID = orDefault(agentID, e.Agent)
+func (e *Env) New(want string, opts NewOpts) error {
+	agentID := orDefault(opts.Agent, e.Agent)
 	if _, ok := specFor(agentID); !ok {
 		return exitcode.Usagef("unknown agent %q (expected claude, codex, opencode, or jcode)", agentID)
 	}
@@ -60,6 +127,22 @@ func (e *Env) New(want, agentID string) error {
 	})
 	trustWorktree(agentID, main, dir)
 	ui.Say("created %s lane '%s' → %s", filepath.Base(main), name, dir)
+
+	// The default ending: ONLY the path on stdout, so: cd "$(holt new)".
+	if !opts.Open && opts.Cmd == "" {
+		ui.Out("%s\n", dir)
+		return nil
+	}
+
+	// --cmd is the escape hatch for anything that isn't a client holt knows: a
+	// multiplexer pane, a shell, a build. It skips the open hook, because the
+	// caller has already said exactly what to run.
+	if opts.Cmd != "" {
+		if err := os.Chdir(dir); err != nil {
+			return exitcode.Usagef("could not enter %s", dir)
+		}
+		return execClient([]string{shellOf(), "-c", opts.Cmd})
+	}
 
 	// How a fresh lane gets its session is the machine's business, same as
 	// `resume`. holt's own answer is to become the client; a machine with a

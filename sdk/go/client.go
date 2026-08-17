@@ -248,7 +248,7 @@ func (c *Client) ReleaseHeartbeat(ctx context.Context, path string) error {
 	return err
 }
 
-// NewInteractive runs `holt new [name] [agent]` with stdio INHERITED from
+// NewInteractive runs `holt new [name] --open [agent]` with stdio INHERITED from
 // the calling process. holt execs the configured agent client
 // unconditionally here (unlike Resume, `new` doesn't check for a TTY) —
 // appropriate for a real terminal app (a TUI) that wants to hand off the
@@ -261,6 +261,9 @@ func (c *Client) NewInteractive(ctx context.Context, name, agent string) error {
 	if name != "" {
 		args = append(args, name)
 	}
+	// --open is explicit: bare `holt new` only prints the lane's path, and
+	// this method's whole contract is "become the agent session".
+	args = append(args, "--open")
 	if agent != "" {
 		args = append(args, agent)
 	}
