@@ -195,14 +195,15 @@ class HoltClient:
         return Lease(self, path, pid=pid, refresh_seconds=refresh_seconds)
 
     async def new_interactive(self, name: Optional[str] = None, agent: Optional[str] = None) -> None:
-        """`holt new [name] [agent]` with stdio INHERITED from the calling
+        """`holt new [name] --open [agent]` with stdio INHERITED from the calling
         process. holt execs the configured agent client unconditionally
         here (unlike `resume`, `new` doesn't check for a TTY) —
         appropriate for a real terminal app (a TUI) that wants to hand off
         the screen and get control back when the agent session ends, and
         WRONG for a server: it will block until the agent process exits,
         with your stdio attached to whatever the agent expects."""
-        args = ["new", *([name] if name else []), *([agent] if agent else [])]
+        # --open is explicit: bare `holt new` only prints the lane's path.
+        args = ["new", *([name] if name else []), "--open", *([agent] if agent else [])]
         await _run_interactive(args, self._opts)
 
     async def resume_interactive(self, name: str) -> None:

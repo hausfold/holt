@@ -191,7 +191,7 @@ export class HoltClient {
   }
 
   /**
-   * `holt new [name] [agent]` with stdio INHERITED from the calling
+   * `holt new [name] --open [agent]` with stdio INHERITED from the calling
    * process. holt execs the configured agent client unconditionally here
    * (unlike `resume`, `new` doesn't check for a TTY) — appropriate for a
    * real terminal app (a TUI) that wants to hand off the screen and get
@@ -200,7 +200,8 @@ export class HoltClient {
    * whatever the agent expects.
    */
   async newInteractive(name?: string, agent?: string): Promise<void> {
-    await runInteractive(["new", ...(name ? [name] : []), ...(agent ? [agent] : [])], this.opts);
+    // --open is explicit: bare `holt new` only prints the lane's path.
+    await runInteractive(["new", ...(name ? [name] : []), "--open", ...(agent ? [agent] : [])], this.opts);
   }
 
   /** `holt resume <name>` / `holt <name>` with stdio INHERITED, so a real

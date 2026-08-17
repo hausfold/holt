@@ -201,7 +201,7 @@ public struct HoltClient: Sendable {
         return Lease(client: self, path: path, pid: pid, refreshInterval: refreshInterval)
     }
 
-    /// `holt new [name] [agent]` with stdio INHERITED from the calling
+    /// `holt new [name] --open [agent]` with stdio INHERITED from the calling
     /// process. holt execs the configured agent client unconditionally
     /// here (unlike `resume`, `new` doesn't check for a TTY) — appropriate
     /// for a real terminal app (a TUI) that wants to hand off the screen
@@ -211,6 +211,8 @@ public struct HoltClient: Sendable {
     public func newInteractive(_ name: String? = nil, agent: String? = nil) async throws {
         var args = ["new"]
         if let name { args.append(name) }
+        // --open is explicit: bare `holt new` only prints the lane's path.
+        args.append("--open")
         if let agent { args.append(agent) }
         try await runInteractive(args, options: opts)
     }

@@ -29,7 +29,8 @@ system, the package manager or which agent is running.
 | what's open, everywhere | `holt` |
 | …machine-readable | `holt --json` |
 | resume a parked lane | `holt <name>` (or `holt <repo>/<name>`) |
-| a lane on this repo | `holt new [name]` |
+| a lane on this repo | `cd "$(holt new [name])"` |
+| …and open an agent in it | `holt new [name] --open [agent]` |
 | a lane on *another* repo | `holt child <repo>` |
 | set the tree aside | `holt park [label]` |
 | put it back | `holt unpark` |
