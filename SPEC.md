@@ -671,15 +671,20 @@ three lines of shell without either having to become the other:
   may be interactive.)
 - **environment** — `HOLT_HOOK`, plus `HOLT_<FIELD>` for every §5.2 variable:
   `HOLT_PATH`, `HOLT_MAIN`, `HOLT_REPO`, `HOLT_NAME`, `HOLT_BRANCH`,
-  `HOLT_AGENT`, `HOLT_PARENT`, `HOLT_CWD`. One collision to know about:
-  `HOLT_BASE` is already the lane base *directory*, so the repo's default
-  branch is **`HOLT_BASE_BRANCH`**.
+  `HOLT_PARENT`, `HOLT_CWD`. Three collisions to know about, all the same
+  shape — holt's own environment got to the name first, and a hook leaks its
+  environment into every pane it spawns, so a field spelled as one of these
+  hands holt back its own input: `HOLT_BASE` is the lane base *directory*, so
+  the repo's default branch is **`HOLT_BASE_BRANCH`**; `HOLT_STATE` is the
+  state *directory* (§9.1) and `HOLT_AGENT` is the one-invocation client
+  override (§5.3), so the lane's are **`HOLT_LANE_STATE`** and
+  **`HOLT_LANE_AGENT`**.
 
 The two action seams that open a session — `resume` and `open` — carry three
 more, because a hook that spawns a pane has to reproduce a decision holt already
 made: `HOLT_CHAT` (the cwd the conversation lives in, which for a spawned lane
 is NOT `HOLT_PATH` — getting that wrong is how a resumed child lane opens an
-empty session), `HOLT_STATE`, and **`HOLT_COMMAND`** — the exact client
+empty session), `HOLT_LANE_STATE`, and **`HOLT_COMMAND`** — the exact client
 invocation holt was about to exec, already resolved to continue-the-newest or
 open-the-picker per §5.3. A hook that re-derives it instead lands its new pane
 on the picker holt just spared the user.
@@ -903,6 +908,13 @@ unknown still resolves to **keep**, exactly as when `lsof` was the only answer.
 *not* `$BASE`, which is globbed for checkouts, and pointedly not where the
 registry lives, because no state-dir knob may be able to relocate the file
 cutover day has to read (§10).
+
+A **relative** `$HOLT_STATE` is refused — holt warns and uses the default. This
+state is machine-global, so resolving it against the process cwd scatters the
+lease and the ledger into whatever directory holt was run from, routinely a git
+checkout, where they surface as an untracked dir and can be swept into a `wip:`
+commit by holt's own park path. Nobody has ever meant that; an operator who
+wants state elsewhere says so absolutely.
 
 ```
 holt heartbeat [path]            take or refresh; held by the CALLING process

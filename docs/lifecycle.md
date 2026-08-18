@@ -78,8 +78,15 @@ landed = ["/usr/local/bin/my-landed", "--release-train"]
 The situation arrives as `HOLT_*` in the environment and as JSON on stdin.
 The `resume` and `open` seams also get `HOLT_CHAT` (the cwd the conversation
 lives in — for a lane spawned by `holt child` that is the *parent's* checkout,
-not the lane's) and `HOLT_COMMAND` (the exact client invocation holt was about
-to run). A hook that opens a pane should run `HOLT_COMMAND` in `HOLT_CHAT`
+not the lane's), `HOLT_LANE_STATE` (the lane's lifecycle state) and
+`HOLT_COMMAND` (the exact client invocation holt was about to run).
+
+The lane's own fields are spelled `HOLT_LANE_*` where holt already reads the
+plain name for itself — `HOLT_LANE_STATE` beside holt's `HOLT_STATE` (its state
+directory), `HOLT_LANE_AGENT` beside `HOLT_AGENT` (its one-invocation client
+override), `HOLT_BASE_BRANCH` beside `HOLT_BASE` (its checkout base). A hook
+leaks its whole environment into any pane it spawns, so a field that reused one
+of those names would hand every later `holt` in that pane its own input back. A hook that opens a pane should run `HOLT_COMMAND` in `HOLT_CHAT`
 rather than build its own, or it lands on a session picker `holt <name>` had
 already resolved.
 

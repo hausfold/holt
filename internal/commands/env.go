@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -52,9 +53,34 @@ func baseDir() string {
 // file bash `wt` wrote, and no state-dir knob may be able to relocate it
 // (SPEC.md §10). Registry v1 is what moves it, once, on purpose.
 func stateDir() string {
+	dir, _ := resolveStateDir()
+	return dir
+}
+
+// resolveStateDir is stateDir plus the reason it ignored an override, so the
+// caller that can warn (NewEnv) does, exactly once per invocation.
+//
+// A RELATIVE $HOLT_STATE is refused rather than honoured, and that refusal is
+// load-bearing: this state is machine-global, so resolving it against the
+// process cwd scatters it into whatever directory holt happened to be run
+// from — routinely a git checkout, where it shows up as an untracked dir and
+// can be swept into a `wip:` commit by holt's own park path. An operator who
+// wants state somewhere else can always say where absolutely; nobody has ever
+// meant "put the machine's lease and ledger under my cwd".
+func resolveStateDir() (dir, warning string) {
 	if s := os.Getenv("HOLT_STATE"); s != "" {
-		return s
+		if filepath.IsAbs(s) {
+			return s, ""
+		}
+		warning = fmt.Sprintf(
+			"HOLT_STATE=%q is not an absolute path — ignoring it and using %s. "+
+				"State is machine-global; a relative path would write it under the current directory.",
+			s, defaultStateDir())
 	}
+	return defaultStateDir(), warning
+}
+
+func defaultStateDir() string {
 	if s := os.Getenv("XDG_STATE_HOME"); s != "" {
 		return filepath.Join(s, "holt")
 	}
@@ -127,13 +153,17 @@ func NewEnv() (*Env, error) {
 		cwd = "."
 	}
 	cfg, cfgWarnings := config.Load()
+	state, stateWarning := resolveStateDir()
 	e := &Env{
 		Base:      base,
 		Reg:       reg,
 		Cfg:       cfg,
 		Cwd:       cwd,
-		LeaseDir:  filepath.Join(stateDir(), "live"),
+		LeaseDir:  filepath.Join(state, "live"),
 		LeaseSole: leasesAreSole(),
+	}
+	if stateWarning != "" {
+		e.Warn(stateWarning)
 	}
 	// Through Warn, not straight into the field: a line of the config that
 	// didn't parse is a seam the operator believes is in force and isn't, which

@@ -93,3 +93,59 @@ func writeHook(t *testing.T, name, body string) string {
 	}
 	return path
 }
+
+// A relative HOLT_STATE is refused, not honoured: this state is machine-global,
+// so resolving it against the cwd scatters leases and the reap ledger into
+// whatever directory holt was run from — which is how `holt reap` in an agent
+// pane created an untracked `live/` inside a git checkout.
+func TestStateDirRefusesRelativeOverride(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", home)
+	t.Setenv("HOLT_STATE", "live")
+
+	dir, warning := resolveStateDir()
+	if want := filepath.Join(home, "holt"); dir != want {
+		t.Errorf("state dir = %q, want the default %q", dir, want)
+	}
+	if warning == "" {
+		t.Error("a silently ignored HOLT_STATE is worse than an honoured one — want a warning")
+	}
+}
+
+// The guard has to hold where it is actually consumed, not only in the helper:
+// LeaseDir and the ledger are the two things a relative override scattered.
+func TestNewEnvKeepsStateOutOfTheCwdAndSaysSo(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("CLAUDE_WT_BASE", t.TempDir())
+	t.Setenv("HOLT_STATE", "live")
+
+	e, err := NewEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(state, "holt")
+	if got := e.LeaseDir; got != filepath.Join(want, "live") {
+		t.Errorf("LeaseDir = %q, want %q", got, filepath.Join(want, "live"))
+	}
+	if got := e.ledgerFile(); got != filepath.Join(want, "reaped.log") {
+		t.Errorf("ledger = %q, want %q", got, filepath.Join(want, "reaped.log"))
+	}
+	if len(e.Warnings) != 1 {
+		t.Errorf("warnings = %v, want exactly one — a silently ignored override is the worse failure", e.Warnings)
+	}
+}
+
+func TestStateDirHonoursAbsoluteOverride(t *testing.T) {
+	abs := t.TempDir()
+	t.Setenv("HOLT_STATE", abs)
+
+	dir, warning := resolveStateDir()
+	if dir != abs {
+		t.Errorf("state dir = %q, want %q", dir, abs)
+	}
+	if warning != "" {
+		t.Errorf("unexpected warning for an absolute override: %q", warning)
+	}
+}

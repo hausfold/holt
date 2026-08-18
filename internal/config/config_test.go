@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -151,5 +152,41 @@ func TestAskIgnoresNonJSONStdout(t *testing.T) {
 	res := hook(t, "#!/bin/sh\necho looks landed to me\nexit 0\n").Ask("landed", nil)
 	if res.Answer != Yes || res.Data != nil {
 		t.Fatalf("got %+v, want Yes with no data", res)
+	}
+}
+
+// A hook's env must never hand a lane's lifecycle state to holt as its state
+// DIRECTORY. It did once: `open` exported HOLT_STATE=live, the pane it spawned
+// inherited it, and every holt run in that pane wrote its machine-global state
+// to the relative path "live" under the cwd — routinely a git checkout.
+func TestHookEnvRenamesStateAwayFromHoltsOwnStateDir(t *testing.T) {
+	env := hookEnv("open", map[string]string{
+		"state": "live",
+		"agent": "claude",
+		"base":  "main",
+		"path":  "/tmp/lane",
+	})
+	got := map[string]string{}
+	for _, kv := range env {
+		k, v, _ := strings.Cut(kv, "=")
+		got[k] = v
+	}
+	if _, ok := got["HOLT_STATE"]; ok {
+		t.Errorf("HOLT_STATE is holt's state DIRECTORY — a hook must not set it; got %q", got["HOLT_STATE"])
+	}
+	if got["HOLT_LANE_STATE"] != "live" {
+		t.Errorf("HOLT_LANE_STATE = %q, want %q", got["HOLT_LANE_STATE"], "live")
+	}
+	if _, ok := got["HOLT_AGENT"]; ok {
+		t.Errorf("HOLT_AGENT is holt's one-invocation client override — a hook must not set it; got %q", got["HOLT_AGENT"])
+	}
+	if got["HOLT_LANE_AGENT"] != "claude" {
+		t.Errorf("HOLT_LANE_AGENT = %q, want %q", got["HOLT_LANE_AGENT"], "claude")
+	}
+	if got["HOLT_BASE_BRANCH"] != "main" {
+		t.Errorf("HOLT_BASE_BRANCH = %q, want %q", got["HOLT_BASE_BRANCH"], "main")
+	}
+	if got["HOLT_PATH"] != "/tmp/lane" {
+		t.Errorf("HOLT_PATH = %q, want %q", got["HOLT_PATH"], "/tmp/lane")
 	}
 }
