@@ -1661,7 +1661,7 @@ preserve = \"$hook\""
 @test "hooks: resume — the hook reopens the session instead of holt exec'ing a client" {
   local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" paned)"
   hook="$(mkhook resume '
-    printf "%s %s %s\n" "$HOLT_NAME" "$HOLT_PATH" "$HOLT_AGENT" >"'"$TMP"'/opened"
+    printf "%s %s %s\n" "$HOLT_NAME" "$HOLT_PATH" "$HOLT_LANE_AGENT" >"'"$TMP"'/opened"
     printf "%s\n" "$HOLT_COMMAND" >"'"$TMP"'/cmd"
     exit 0')"
   setcfg "[hooks]
@@ -1713,13 +1713,40 @@ resume = \"$hook\""
 
 @test "hooks: open — a fresh lane's session is the machine's business too" {
   local main hook; main="$(mkrepo alpha)"
-  hook="$(mkhook open 'printf "%s %s\n" "$HOLT_NAME" "$HOLT_AGENT" >"'"$TMP"'/opened"; exit 0')"
+  hook="$(mkhook open 'printf "%s %s\n" "$HOLT_NAME" "$HOLT_LANE_AGENT" >"'"$TMP"'/opened"; exit 0')"
   setcfg "[hooks]
 open = \"$hook\""
   cd "$main"; wt_run new fresh --open
   [ "$status" -eq 0 ]
   [ "$(cat "$TMP/opened")" = "fresh claude" ] || fail "open payload is wrong: $(cat "$TMP/opened")"
   [ -e "$CLAUDE_WT_BASE/alpha/fresh/.git" ]
+}
+
+@test "hooks: a lane's own fields never shadow holt's own environment" {
+  # Every HOLT_* a hook is given leaks into the pane that hook spawns, and into
+  # every window opened from it. So no field may be spelled as a variable holt
+  # itself reads: HOLT_STATE is the state DIRECTORY and HOLT_AGENT is the
+  # one-invocation client override, which is why the lane's are HOLT_LANE_STATE
+  # and HOLT_LANE_AGENT. When HOLT_STATE carried the lane's state, `holt reap`
+  # in an agent pane wrote the machine's reap ledger to ./live/reaped.log,
+  # inside whatever git checkout the pane was sitting in.
+  local main hook; main="$(mkrepo alpha)"
+  hook="$(mkhook open '
+    printf "state=%s agent=%s\n" "$HOLT_LANE_STATE" "$HOLT_LANE_AGENT" >"'"$TMP"'/lane"
+    printf "state=%s agent=%s\n" "$HOLT_STATE" "$HOLT_AGENT" >"'"$TMP"'/shadow"
+    exit 0')"
+  setcfg "[hooks]
+open = \"$hook\""
+  cd "$main"; wt_run new noshadow --open
+  [ "$status" -eq 0 ]
+
+  run cat "$TMP/lane"
+  [ "$output" = "state=live agent=claude" ] || fail "the lane's own fields are wrong: $output"
+
+  # holt's own two must arrive untouched by the lane — empty here, because the
+  # suite sets neither. A lane value in either is the bug.
+  run cat "$TMP/shadow"
+  [ "$output" = "state= agent=" ] || fail "a lane field shadowed holt's own environment: $output"
 }
 
 @test "hooks: agent — the default client can be a program, not just a constant" {

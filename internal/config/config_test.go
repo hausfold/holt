@@ -162,6 +162,7 @@ func TestAskIgnoresNonJSONStdout(t *testing.T) {
 func TestHookEnvRenamesStateAwayFromHoltsOwnStateDir(t *testing.T) {
 	env := hookEnv("open", map[string]string{
 		"state": "live",
+		"agent": "claude",
 		"base":  "main",
 		"path":  "/tmp/lane",
 	})
@@ -175,6 +176,12 @@ func TestHookEnvRenamesStateAwayFromHoltsOwnStateDir(t *testing.T) {
 	}
 	if got["HOLT_LANE_STATE"] != "live" {
 		t.Errorf("HOLT_LANE_STATE = %q, want %q", got["HOLT_LANE_STATE"], "live")
+	}
+	if _, ok := got["HOLT_AGENT"]; ok {
+		t.Errorf("HOLT_AGENT is holt's one-invocation client override — a hook must not set it; got %q", got["HOLT_AGENT"])
+	}
+	if got["HOLT_LANE_AGENT"] != "claude" {
+		t.Errorf("HOLT_LANE_AGENT = %q, want %q", got["HOLT_LANE_AGENT"], "claude")
 	}
 	if got["HOLT_BASE_BRANCH"] != "main" {
 		t.Errorf("HOLT_BASE_BRANCH = %q, want %q", got["HOLT_BASE_BRANCH"], "main")

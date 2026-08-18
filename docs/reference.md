@@ -9,6 +9,27 @@ agent = "codex"
 
 `HOLT_AGENT` overrides it for one invocation.
 
+## Environment
+
+| | |
+|---|---|
+| `HOLT_AGENT` | the default client, for one invocation |
+| `HOLT_BASE` | where checkouts live (default `~/.cache/claude-worktrees`) |
+| `HOLT_STATE` | where machine state lives — the occupancy leases and the reap ledger (default `$XDG_STATE_HOME/holt`, else `~/.local/state/holt`) |
+| `HOLT_OCCUPANCY` | `lease` declares that every session here is one holt spawned, so a lane nobody leased is a lane nobody is in |
+
+`HOLT_STATE` **must be absolute**. A relative value is refused with a warning
+and the default is used: this state is machine-global, so resolving it against
+the current directory would scatter the lease and the ledger into whatever
+directory holt was run from — routinely a git checkout, where they show up as
+an untracked dir and can be swept into a `wip:` commit by `holt park`.
+
+A hook is handed the lane as `HOLT_*` too, and none of the above is among them:
+the lane's own fields are `HOLT_LANE_AGENT`, `HOLT_LANE_STATE` and
+`HOLT_BASE_BRANCH`, spelled apart precisely so a hook's environment — which it
+leaks into any pane it spawns — can never feed holt back its own input. See
+[lifecycle.md](./lifecycle.md).
+
 ## Exit codes
 
 | | |

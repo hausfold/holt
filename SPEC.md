@@ -671,11 +671,14 @@ three lines of shell without either having to become the other:
   may be interactive.)
 - **environment** — `HOLT_HOOK`, plus `HOLT_<FIELD>` for every §5.2 variable:
   `HOLT_PATH`, `HOLT_MAIN`, `HOLT_REPO`, `HOLT_NAME`, `HOLT_BRANCH`,
-  `HOLT_AGENT`, `HOLT_PARENT`, `HOLT_CWD`. Two collisions to know about, both
-  because holt's own environment got there first: `HOLT_BASE` is already the
-  lane base *directory*, so the repo's default branch is
-  **`HOLT_BASE_BRANCH`**; and `HOLT_STATE` is already the state *directory*
-  (§9.1), so the lane's lifecycle state is **`HOLT_LANE_STATE`**.
+  `HOLT_PARENT`, `HOLT_CWD`. Three collisions to know about, all the same
+  shape — holt's own environment got to the name first, and a hook leaks its
+  environment into every pane it spawns, so a field spelled as one of these
+  hands holt back its own input: `HOLT_BASE` is the lane base *directory*, so
+  the repo's default branch is **`HOLT_BASE_BRANCH`**; `HOLT_STATE` is the
+  state *directory* (§9.1) and `HOLT_AGENT` is the one-invocation client
+  override (§5.3), so the lane's are **`HOLT_LANE_STATE`** and
+  **`HOLT_LANE_AGENT`**.
 
 The two action seams that open a session — `resume` and `open` — carry three
 more, because a hook that spawns a pane has to reproduce a decision holt already

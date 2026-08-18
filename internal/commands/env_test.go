@@ -112,6 +112,31 @@ func TestStateDirRefusesRelativeOverride(t *testing.T) {
 	}
 }
 
+// The guard has to hold where it is actually consumed, not only in the helper:
+// LeaseDir and the ledger are the two things a relative override scattered.
+func TestNewEnvKeepsStateOutOfTheCwdAndSaysSo(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("CLAUDE_WT_BASE", t.TempDir())
+	t.Setenv("HOLT_STATE", "live")
+
+	e, err := NewEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(state, "holt")
+	if got := e.LeaseDir; got != filepath.Join(want, "live") {
+		t.Errorf("LeaseDir = %q, want %q", got, filepath.Join(want, "live"))
+	}
+	if got := e.ledgerFile(); got != filepath.Join(want, "reaped.log") {
+		t.Errorf("ledger = %q, want %q", got, filepath.Join(want, "reaped.log"))
+	}
+	if len(e.Warnings) != 1 {
+		t.Errorf("warnings = %v, want exactly one — a silently ignored override is the worse failure", e.Warnings)
+	}
+}
+
 func TestStateDirHonoursAbsoluteOverride(t *testing.T) {
 	abs := t.TempDir()
 	t.Setenv("HOLT_STATE", abs)

@@ -234,14 +234,22 @@ func decode(s string) map[string]any {
 // lines of shell instead of a program with a JSON parser. Same data as stdin,
 // same names as the adapter template variables (SPEC.md §5.2).
 //
-// Two collisions to know about, both because holt's own environment got there
-// first. HOLT_BASE is already the lane base DIRECTORY, so the repo's default
-// branch is HOLT_BASE_BRANCH. HOLT_STATE is already the state DIRECTORY
-// (env.go), so the lane's lifecycle state is HOLT_LANE_STATE — before the
-// rename, an `open` hook exported HOLT_STATE=live, every pane it spawned
-// inherited it, and holt run in that pane resolved its machine-global state to
-// the relative path "live" under the cwd. Renaming either would break
-// something that already exists.
+// Three collisions to know about, all the same shape: holt's own environment
+// got to the name first, so a field named after it would hand holt back its own
+// input. HOLT_BASE is the lane base DIRECTORY, so the repo's default branch is
+// HOLT_BASE_BRANCH. HOLT_STATE is the state DIRECTORY and HOLT_AGENT is the
+// one-invocation default-client override (both env.go), so the lane's fields
+// are HOLT_LANE_STATE and HOLT_LANE_AGENT.
+//
+// This is not hypothetical tidiness. A hook that spawns a pane leaks this whole
+// environment into the shell it starts, and into every window opened from it —
+// so before the rename, `holt` run in an agent pane resolved its
+// machine-global state to the relative path "live" under the cwd (a git
+// checkout, routinely), and read the lane's own client as an override sitting
+// ABOVE the operator's config key. A hook that wants the client holt was about
+// to run has HOLT_COMMAND, which is the resolved invocation rather than an id.
+//
+// Renaming any of the three would break something that already exists.
 func hookEnv(hook string, payload map[string]string) []string {
 	env := []string{"HOLT_HOOK=" + hook}
 	for k, v := range payload {
@@ -251,6 +259,8 @@ func hookEnv(hook string, payload map[string]string) []string {
 			key = "HOLT_BASE_BRANCH"
 		case "state":
 			key = "HOLT_LANE_STATE"
+		case "agent":
+			key = "HOLT_LANE_AGENT"
 		}
 		env = append(env, key+"="+v)
 	}
