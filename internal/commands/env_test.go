@@ -93,3 +93,34 @@ func writeHook(t *testing.T, name, body string) string {
 	}
 	return path
 }
+
+// A relative HOLT_STATE is refused, not honoured: this state is machine-global,
+// so resolving it against the cwd scatters leases and the reap ledger into
+// whatever directory holt was run from — which is how `holt reap` in an agent
+// pane created an untracked `live/` inside a git checkout.
+func TestStateDirRefusesRelativeOverride(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", home)
+	t.Setenv("HOLT_STATE", "live")
+
+	dir, warning := resolveStateDir()
+	if want := filepath.Join(home, "holt"); dir != want {
+		t.Errorf("state dir = %q, want the default %q", dir, want)
+	}
+	if warning == "" {
+		t.Error("a silently ignored HOLT_STATE is worse than an honoured one — want a warning")
+	}
+}
+
+func TestStateDirHonoursAbsoluteOverride(t *testing.T) {
+	abs := t.TempDir()
+	t.Setenv("HOLT_STATE", abs)
+
+	dir, warning := resolveStateDir()
+	if dir != abs {
+		t.Errorf("state dir = %q, want %q", dir, abs)
+	}
+	if warning != "" {
+		t.Errorf("unexpected warning for an absolute override: %q", warning)
+	}
+}

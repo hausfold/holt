@@ -234,15 +234,23 @@ func decode(s string) map[string]any {
 // lines of shell instead of a program with a JSON parser. Same data as stdin,
 // same names as the adapter template variables (SPEC.md §5.2).
 //
-// One collision to know about: HOLT_BASE is already the lane base
-// DIRECTORY, so the repo's default branch is HOLT_BASE_BRANCH. Renaming either
-// would break something that already exists.
+// Two collisions to know about, both because holt's own environment got there
+// first. HOLT_BASE is already the lane base DIRECTORY, so the repo's default
+// branch is HOLT_BASE_BRANCH. HOLT_STATE is already the state DIRECTORY
+// (env.go), so the lane's lifecycle state is HOLT_LANE_STATE — before the
+// rename, an `open` hook exported HOLT_STATE=live, every pane it spawned
+// inherited it, and holt run in that pane resolved its machine-global state to
+// the relative path "live" under the cwd. Renaming either would break
+// something that already exists.
 func hookEnv(hook string, payload map[string]string) []string {
 	env := []string{"HOLT_HOOK=" + hook}
 	for k, v := range payload {
 		key := "HOLT_" + strings.ToUpper(k)
-		if k == "base" {
+		switch k {
+		case "base":
 			key = "HOLT_BASE_BRANCH"
+		case "state":
+			key = "HOLT_LANE_STATE"
 		}
 		env = append(env, key+"="+v)
 	}
