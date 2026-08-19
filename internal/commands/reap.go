@@ -27,6 +27,9 @@ func (e *Env) Reap() error {
 	for _, name := range res.SkippedLive {
 		ui.Say("kept %s — a pane is open in it", name)
 	}
+	for _, note := range res.Dirty {
+		ui.Say("kept %s", note)
+	}
 	for _, note := range res.Relanded {
 		ui.Say("kept %s", note)
 	}
@@ -40,7 +43,14 @@ func (e *Env) Reap() error {
 		ui.Say("dangling checkout — git lost the link; `holt <name>` moves it aside and rebuilds: %s", s)
 	}
 	if len(res.Reaped) == 0 {
-		ui.Say("nothing to reap — every lane is either unmerged, dirty, or in use.")
+		// Only when nothing above spoke. The old unconditional line listed the
+		// three reasons in the abstract right after naming the concrete one,
+		// which read as a second, contradictory verdict.
+		if len(res.SkippedLive)+len(res.Dirty)+len(res.Relanded)+len(res.Diverged)+len(res.DeadEnds) == 0 {
+			ui.Say("nothing to reap — every lane is either unmerged, dirty, or in use.")
+		} else {
+			ui.Say("nothing reaped — see above for what held each lane back.")
+		}
 	}
 	return nil
 }

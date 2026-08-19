@@ -553,6 +553,33 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
   git -C "$main" show-ref -q --verify refs/heads/worktree-messy
 }
 
+@test "reap: a dirty lane NAMES what is in the way instead of going quiet" {
+  # The lane that prompted this was landed, unoccupied, and held back by a
+  # single untracked directory a tool had dropped in it. Reap said nothing
+  # about it at all and closed with the generic three-reason line, so the
+  # lane read as one holt had simply forgotten about.
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" fossil)"
+  git -C "$main" merge -q --no-edit worktree-fossil
+  mkdir -p "$dir/live"; echo junk >"$dir/live/reaped.log"
+  cd "$TMP"; wt_run reap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"kept fossil (alpha)"* ]] || fail "the dirty lane went unnamed: $output"
+  [[ "$output" == *"live/"* ]] || fail "the note didn't name the path in the way: $output"
+  [[ "$output" == *"$dir"* ]] || fail "the note didn't say where to go look: $output"
+  # And the generic line must NOT also fire — it reads as a second verdict.
+  [[ "$output" != *"nothing to reap"* ]] || fail "the abstract line contradicted the concrete one: $output"
+  [ -e "$dir/.git" ]
+}
+
+@test "reap: a dirty lane's note caps the paths it lists" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" littered)"
+  git -C "$main" merge -q --no-edit worktree-littered
+  local i; for i in 1 2 3 4 5; do echo x >"$dir/stray$i.txt"; done
+  cd "$TMP"; wt_run reap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"+2 more"* ]] || fail "an uncapped note would be a screenful: $output"
+}
+
 @test "reap: keeps an unmerged checkout" {
   local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" unmerged)"
   cd "$TMP"; wt_run reap
