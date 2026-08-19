@@ -40,10 +40,30 @@ type jsonLane struct {
 	Agent          string        `json:"agent"`
 	State          string        `json:"state"`
 	Occupied       *bool         `json:"occupied"`
+	OccupiedBy     []jsonHolder  `json:"occupied_by,omitempty"`
 	Dirty          *bool         `json:"dirty"`
 	Landed         jsonLanded    `json:"landed"`
 	PostMergeAhead jsonPostMerge `json:"post_merge_ahead"`
 	Last           string        `json:"last_commit"`
+}
+
+// jsonHolder is the evidence behind `occupied: true` — an ADDITION to the
+// frozen envelope, and omitted entirely when nothing is standing there, so a
+// consumer that never learns the key sees byte-identical output to before.
+//
+// It exists because `occupied` alone cannot be checked. A statusline showing a
+// lane as busy for five days is either a long-running agent or a stray daemon
+// nobody can see, and the two want opposite responses. `pid` is the whole
+// point; `command` and `path` are what make it recognisable without a ps.
+//
+// `via` names the provider that saw it (`lsof` | `leases`), because an
+// embedder's lease and a machine-wide cwd scan are different kinds of evidence
+// and a consumer weighing them should not have to guess which it got.
+type jsonHolder struct {
+	PID     int    `json:"pid"`
+	Command string `json:"command,omitempty"`
+	Path    string `json:"path"`
+	Via     string `json:"via"`
 }
 
 type jsonLanded struct {
@@ -109,13 +129,18 @@ func (e *Env) toJSONLane(r listRow, occ occupancy.Report) jsonLane {
 	// A lease asserts presence even when nothing on this machine can vouch
 	// for absence, so "held" outranks "unknowable" — but the reverse never
 	// happens, and an unvouched miss stays null rather than becoming false.
-	switch {
-	case occ.Occupied(entry.Path):
-		held := true
-		w.Occupied = &held
+	switch holders := occ.Holders(entry.Path); {
+	case len(holders) > 0:
+		yes := true
+		w.Occupied = &yes
+		for _, h := range holders {
+			w.OccupiedBy = append(w.OccupiedBy, jsonHolder{
+				PID: h.PID, Command: h.Cmd, Path: h.Path, Via: h.Via,
+			})
+		}
 	case occ.Known():
-		held := false
-		w.Occupied = &held
+		no := false
+		w.Occupied = &no
 	}
 	if entry.State == Live {
 		dirty := gitx.Dirty(entry.Path)

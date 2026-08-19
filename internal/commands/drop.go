@@ -7,6 +7,7 @@ import (
 
 	"github.com/hausfold/holt/internal/exitcode"
 	"github.com/hausfold/holt/internal/gitx"
+	"github.com/hausfold/holt/internal/occupancy"
 	"github.com/hausfold/holt/internal/ui"
 )
 
@@ -73,8 +74,13 @@ func (e *Env) Drop(want string) error {
 		if entry.Path == selfTop {
 			return exitcode.Refusedf("that is the checkout you are standing in — drop %s from another pane", label)
 		}
-		if e.Occupancy().Occupied(entry.Path) {
-			return exitcode.Refusedf("a pane is open in %s — close it first", label)
+		// Named, not merely asserted. A drop is a refusal a human has to
+		// clear before they can proceed, so "close it first" is useless advice
+		// when the thing standing there is a dev server they forgot about
+		// rather than a window they can close. Same evidence the reap prints.
+		if held := e.Occupancy().Holders(entry.Path); len(held) > 0 {
+			return exitcode.Refusedf("something is standing in %s: %s — close the pane, or end that process, first",
+				label, occupancy.Describe(entry.Path, held))
 		}
 		if gitx.Dirty(entry.Path) {
 			return exitcode.Refusedf("%s has uncommitted changes and no PR to fall back on — `holt park` them first, or commit", label)

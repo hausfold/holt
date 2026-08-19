@@ -24,8 +24,8 @@ func (e *Env) Reap() error {
 	for _, name := range res.Reaped {
 		ui.Say("reaped %s", name)
 	}
-	for _, name := range res.SkippedLive {
-		ui.Say("kept %s — a pane is open in it", name)
+	for _, note := range res.SkippedLive {
+		ui.Say("kept %s", note)
 	}
 	for _, note := range res.Dirty {
 		ui.Say("kept %s", note)

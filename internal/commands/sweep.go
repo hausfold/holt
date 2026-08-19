@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/hausfold/holt/internal/gitx"
+	"github.com/hausfold/holt/internal/occupancy"
 	"github.com/hausfold/holt/internal/registry"
 )
 
@@ -24,7 +25,7 @@ const (
 type SweepResult struct {
 	Reaped      []string
 	Strays      []string
-	SkippedLive []string
+	SkippedLive []string // reapable but for a live process standing in the checkout
 	Dirty       []string // reapable but for uncommitted work in the checkout
 	Relanded    []string // landed PR, but the branch committed past it
 	Diverged    []string // landed PR, but the tip isn't built on what merged
@@ -76,13 +77,12 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 			if entry.Path == selfTop {
 				continue // never the checkout we are being run from
 			}
-			if occ.Occupied(entry.Path) {
-				// Landed or not, a pane is standing in it. Removing the checkout
-				// yanks the cwd out from under a running client: the shell and
-				// the agent keep running in a deleted directory and every
+			if held := occ.Holders(entry.Path); len(held) > 0 {
+				// Landed or not, something live is standing in it. Removing the
+				// checkout yanks the cwd out from under it: the shell and the
+				// agent keep running in a deleted directory and every
 				// subsequent tool call fails.
-				res.SkippedLive = append(res.SkippedLive,
-					entry.Name()+" ("+filepath.Base(entry.Main)+")")
+				res.SkippedLive = append(res.SkippedLive, occupiedNote(entry, held))
 				continue
 			}
 			dirt, err := gitx.Status(entry.Path)
@@ -122,6 +122,26 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 	}
 	e.pruneRegistry()
 	return res
+}
+
+// occupiedNote names WHO is standing there, because "a pane is open in it" is a
+// claim holt cannot actually make and the user cannot check.
+//
+// lsof observes a cwd, not a pane. The two coincide for a terminal and diverge
+// for everything else a checkout accumulates — a dev server, a language server,
+// a watcher, a telemetry daemon reparented to pid 1 days ago. Told "a pane is
+// open", a user goes looking for a window, finds none, and reasonably concludes
+// the tool is wrong; told "pid 46864 node", they see a stray and kill it. The
+// verdict is unchanged either way (invariant 2: occupied ⇒ keep) — what changes
+// is that the evidence outlives the sweep that found it.
+//
+// Deliberately NOT a suggestion to kill anything. holt does not know whose
+// process that is, and the whole point of naming it is that the human can tell.
+func occupiedNote(entry Entry, held []occupancy.Holder) string {
+	return entry.Name() + " (" + filepath.Base(entry.Main) + ")" +
+		" — something is standing in the checkout: " + occupancy.Describe(entry.Path, held) +
+		". Nothing is reaped out from under a live process; close the pane, or if" +
+		" that is a stray, end it — then reap again: " + entry.Path
 }
 
 // dirtyNote names what is actually in the way, because "dirty" alone sends you

@@ -84,8 +84,13 @@ means something narrower and the overload was the bug:
 | **agent** | the **client**: `claude`, `codex`, `opencode`, `jcode`. Registry field 6, `--json` `agent`, `--agent`, `HOLT_AGENT`. Frozen (§2.1) — a lane *runs* an agent, it is not one. |
 | **session** | somebody else's: zellij's session, and each client's own transcript/resume session. holt never names its own unit this. |
 
-`pane` stays available for the terminal pane a lane is (or isn't) occupied by —
-that is exactly what `occupied` reports.
+`pane` stays available for the terminal pane a lane is (or isn't) occupied by.
+It is what `occupied` is *for*, but not what `occupied` **observes**: the built-in
+provider sees a process with its cwd in the checkout, and a dev server, a
+watcher or a daemon orphaned to pid 1 is not a pane. So `occupied` reports
+"something is standing here", and `occupied_by` (§2.2) names it — a refusal
+that says "a pane is open" about a stray daemon sends a user looking for a
+window that does not exist.
 
 ---
 
@@ -174,6 +179,9 @@ the implied verb. One envelope, so they can version-check without sniffing:
       "agent": "claude",
       "state": "live",
       "occupied": true,
+      "occupied_by": [
+        { "pid": 46864, "command": "node", "path": "/Users/j/.cache/holt/hausfold-haus/sparkle", "via": "lsof" }
+      ],
       "dirty": true,
       "ahead": 3,
       "behind": 12,
@@ -200,6 +208,14 @@ Contract points that matter:
   (no `lsof`, no forge, cache miss), which is categorically different from
   `false`. Every consumer bug in the bash version's statusline came from
   conflating those two.
+- `occupied_by[]` is the EVIDENCE behind `occupied: true` — `{pid, command,
+  path, via}`, with `via` ∈ `lsof | leases`. Omitted entirely when nothing is
+  standing there, so a consumer that never learns the key sees the same bytes it
+  always did. It exists because `occupied` alone cannot be checked: a lane that
+  reads busy for five days is either a long-running agent or a stray daemon
+  nobody can see, and the two want opposite responses. `command` is best-effort
+  (a lease knows the pid, never the name) and nothing in the safety model reads
+  any of it — occupancy still resolves to *keep* regardless.
 - `warnings[]` is where degraded-mode explanations go. Never silently degrade.
 - Field additions are non-breaking; consumers must ignore unknown keys.
 - `post_merge_ahead.diverged` disambiguates a case `commits` alone cannot: the

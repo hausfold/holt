@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -12,13 +13,29 @@ import (
 // machine attached.
 type fake struct {
 	name    string
-	held    []string
+	held    []Holder
 	vouches bool
 }
 
-func (f fake) Name() string                           { return f.name }
-func (f fake) Scan() ([]string, bool)                 { return f.held, f.vouches }
-func provider(n string, v bool, h ...string) Provider { return fake{name: n, held: h, vouches: v} }
+func (f fake) Name() string           { return f.name }
+func (f fake) Scan() ([]Holder, bool) { return f.held, f.vouches }
+
+func provider(n string, v bool, paths ...string) Provider {
+	held := make([]Holder, 0, len(paths))
+	for i, p := range paths {
+		held = append(held, Holder{Path: p, PID: 100 + i, Cmd: "zsh"})
+	}
+	return fake{name: n, held: held, vouches: v}
+}
+
+// paths flattens a Scan for the assertions that only care about where.
+func paths(held []Holder) []string {
+	out := make([]string, 0, len(held))
+	for _, h := range held {
+		out = append(out, h.Path)
+	}
+	return out
+}
 
 // The fold's whole safety model in one table: presence unions, absence needs a
 // witness. A provider that cannot enumerate every occupant must never be able
@@ -108,14 +125,14 @@ func TestLeaseRoundTrip(t *testing.T) {
 	if err := Acquire(dir, "/w/held", os.Getpid()); err != nil {
 		t.Fatal(err)
 	}
-	if held, _ := Leases(dir, false).Scan(); len(held) != 1 || held[0] != "/w/held" {
-		t.Fatalf("Scan() = %v, want [/w/held]", held)
+	if held, _ := Leases(dir, false).Scan(); len(held) != 1 || held[0].Path != "/w/held" {
+		t.Fatalf("Scan() = %v, want [/w/held]", paths(held))
 	}
 	if err := Release(dir, "/w/held"); err != nil {
 		t.Fatal(err)
 	}
 	if held, _ := Leases(dir, false).Scan(); len(held) != 0 {
-		t.Fatalf("after Release, Scan() = %v, want empty", held)
+		t.Fatalf("after Release, Scan() = %v, want empty", paths(held))
 	}
 	// Releasing twice is a cleanup path running after itself, not an error.
 	if err := Release(dir, "/w/held"); err != nil {
@@ -143,7 +160,7 @@ func TestMissingLeaseDirIsSilentNotEmpty(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "never-created")
 	held, vouches := Leases(missing, true).Scan()
 	if len(held) != 0 {
-		t.Errorf("held = %v, want none", held)
+		t.Errorf("held = %v, want none", paths(held))
 	}
 	if vouches {
 		t.Error("a lease dir that does not exist must not vouch for anything")
@@ -165,7 +182,7 @@ func TestLeaseDiesWithItsProcess(t *testing.T) {
 	}
 	held, _ := Leases(dir, false).Scan()
 	if len(held) != 0 {
-		t.Fatalf("held = %v, want none — the holder is gone", held)
+		t.Fatalf("held = %v, want none — the holder is gone", paths(held))
 	}
 	if _, err := os.Stat(LeaseFile(dir, "/w/ghost")); !os.IsNotExist(err) {
 		t.Error("a dead lease must be reclaimed, not left to be re-read")
@@ -184,7 +201,7 @@ func TestLiveHolderOutlivesTheTTL(t *testing.T) {
 		t.Fatal(err)
 	}
 	if held, _ := Leases(dir, false).Scan(); len(held) != 1 {
-		t.Fatalf("held = %v, want the lease kept — its holder is alive", held)
+		t.Fatalf("held = %v, want the lease kept — its holder is alive", paths(held))
 	}
 }
 
@@ -196,14 +213,14 @@ func TestPidlessLeaseExpiresOnTTL(t *testing.T) {
 		t.Fatal(err)
 	}
 	if held, _ := Leases(dir, false).Scan(); len(held) != 1 {
-		t.Fatalf("a fresh pid-less lease must hold, got %v", held)
+		t.Fatalf("a fresh pid-less lease must hold, got %v", paths(held))
 	}
 	stale := time.Now().Add(-2 * TTL)
 	if err := os.Chtimes(LeaseFile(dir, "/w/remote"), stale, stale); err != nil {
 		t.Fatal(err)
 	}
 	if held, _ := Leases(dir, false).Scan(); len(held) != 0 {
-		t.Fatalf("a stale pid-less lease must expire, got %v", held)
+		t.Fatalf("a stale pid-less lease must expire, got %v", paths(held))
 	}
 }
 
@@ -236,7 +253,91 @@ func TestGarbageLeaseIsSkipped(t *testing.T) {
 		t.Fatal(err)
 	}
 	held, _ := Leases(dir, false).Scan()
-	if len(held) != 1 || held[0] != "/w/good" {
-		t.Fatalf("held = %v, want just the parseable lease", held)
+	if len(held) != 1 || held[0].Path != "/w/good" {
+		t.Fatalf("held = %v, want just the parseable lease", paths(held))
+	}
+}
+
+// The lsof parse is a STREAM, not a line map: `p` opens a process, `c` names
+// it, and every `n` after belongs to whichever process was opened last. Getting
+// that wrong is worse than having no pid at all — it would attribute a cwd to
+// the wrong process, and the whole point of carrying the pid is that a human
+// can go and look at it.
+func TestLSOFParsesFieldSets(t *testing.T) {
+	dir := t.TempDir()
+	// printf, not cat: PATH is replaced wholesale below so the fake lsof is the
+	// only thing findable, and a builtin is the only command still guaranteed.
+	script := "#!/bin/sh\nprintf '%s\\n' " +
+		"p1 cinit fcwd n/ " + // the machine's own noise: a non-empty dump
+		"p4242 cnode fcwd n/w/api/node_modules/next " +
+		"p77 fcwd n/w/api\n"
+	if err := os.WriteFile(filepath.Join(dir, "lsof"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	r := Collect(LSOF())
+	if !r.Known() {
+		t.Fatal("a non-empty dump must vouch for absence")
+	}
+	held := r.Holders("/w/api")
+	if len(held) != 2 {
+		t.Fatalf("Holders = %v, want the two processes standing in /w/api", held)
+	}
+	if held[0].PID != 4242 || held[0].Cmd != "node" {
+		t.Errorf("holder[0] = %+v, want pid 4242 node", held[0])
+	}
+	// The third set names no command. Carrying "node" forward would invent a
+	// process that does not exist.
+	if held[1].PID != 77 || held[1].Cmd != "" {
+		t.Errorf("holder[1] = %+v, want pid 77 with no command", held[1])
+	}
+	if r.Occupied("/w/other") {
+		t.Error("a path nothing stands in must stay free")
+	}
+}
+
+// A dump lsof could not produce is still "no answer", not "nobody is anywhere" —
+// the same rule as before pids were carried, restated because the emptiness
+// check now looks at holders rather than raw paths.
+func TestLSOFEmptyDumpVouchesForNothing(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "lsof"), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	if r := Collect(LSOF()); r.Known() {
+		t.Error("a broken lsof must not vouch for absence")
+	}
+}
+
+// Describe is the whole user-visible payoff: a pid to look up, a command to
+// recognise, and — when the cwd is deeper than the checkout — the subdirectory,
+// which is usually the diagnosis on its own.
+func TestDescribeNamesEvidence(t *testing.T) {
+	root := "/w/api"
+	got := Describe(root, []Holder{
+		{Path: root, PID: 12, Cmd: "zsh", Via: "lsof"},
+		{Path: root + "/node_modules/next", PID: 34, Cmd: "node", Via: "lsof"},
+	})
+	want := "pid 12 zsh, pid 34 node in node_modules/next"
+	if got != want {
+		t.Errorf("Describe = %q, want %q", got, want)
+	}
+
+	// A lease knows the pid but never the command, so the provider stands in
+	// for it rather than the line reading like a nameless process.
+	if got := Describe(root, []Holder{{Path: root, PID: 9, Via: "leases"}}); got != "pid 9 (leases)" {
+		t.Errorf("Describe(lease) = %q", got)
+	}
+
+	// Capped, like the dirty listing — a checkout with a build running in it
+	// reports a line, not a screenful.
+	var many []Holder
+	for i := 0; i < HoldersShown+2; i++ {
+		many = append(many, Holder{Path: root, PID: i + 1, Cmd: "node", Via: "lsof"})
+	}
+	if got := Describe(root, many); !strings.HasSuffix(got, ", +2 more") {
+		t.Errorf("Describe(many) = %q, want a +2 more tail", got)
 	}
 }
