@@ -26,6 +26,18 @@
 // Hence Report.Known reports true only when SOME provider vouched for absence,
 // and unknown still resolves to keep, exactly as it did when lsof was the only
 // answer.
+//
+// # Why a Holder and not a path
+//
+// Presence is kept WITH ITS WITNESS, and that is the difference between a
+// refusal a human can act on and one they can only believe. lsof does not
+// observe "a pane"; it observes "pid 46864, node, cwd here", and those are not
+// the same claim — a Next.js telemetry daemon orphaned to pid 1 five days ago
+// pins a lane exactly as hard as a live agent, and reads identically once the
+// pid is thrown away. A user told "a pane is open in it" goes looking for a
+// window that does not exist, finds nothing, and concludes holt is lying;
+// told "pid 46864 node", they kill it in one line. Same verdict, same
+// invariant — the only thing that changed is that the evidence survives.
 package occupancy
 
 import (
@@ -45,22 +57,46 @@ import (
 // no refresh at all. See leaseLive.
 const TTL = 90 * time.Second
 
+// Holder is one observed occupant: what is standing there, and where.
+//
+// Every field but Path is best-effort — a provider that can only name a path
+// says so by leaving PID zero, and the fold is identical either way. Nothing in
+// the safety model reads these; they exist to be PRINTED.
+type Holder struct {
+	Path string // the cwd (or leased path) actually observed
+	PID  int    // 0 when the provider cannot name a process
+	Cmd  string // the process's short name, "" when unknown
+	Via  string // the provider that saw it — filled in by Collect
+}
+
+// String renders one holder as the shortest thing a human can act on.
+func (h Holder) String() string {
+	switch {
+	case h.PID > 0 && h.Cmd != "":
+		return "pid " + strconv.Itoa(h.PID) + " " + h.Cmd
+	case h.PID > 0:
+		return "pid " + strconv.Itoa(h.PID) + " (" + h.Via + ")"
+	default:
+		return h.Via
+	}
+}
+
 // Provider is one way of answering "who is standing in a checkout?".
 type Provider interface {
 	// Name identifies the provider in degraded-mode messages.
 	Name() string
 
-	// Scan reports every path this provider observes as held, and whether a
-	// path's ABSENCE from that list is evidence of an empty checkout or merely
-	// an absence of evidence. See the package comment — this second return is
-	// the whole safety model.
-	Scan() (held []string, vouchesForAbsence bool)
+	// Scan reports every occupant this provider observes, and whether a path's
+	// ABSENCE from that list is evidence of an empty checkout or merely an
+	// absence of evidence. See the package comment — this second return is the
+	// whole safety model.
+	Scan() (held []Holder, vouchesForAbsence bool)
 }
 
 // Report is the folded answer for one sweep. Providers are scanned once per
 // sweep, never once per lane: the lsof dump alone is ~0.2s.
 type Report struct {
-	held    []string
+	held    []Holder
 	vouched []string
 }
 
@@ -71,13 +107,19 @@ func (r Report) Known() bool { return len(r.vouched) > 0 }
 // Occupied reports whether path — or anything beneath it — is held. The prefix
 // match is the point: a pane's cwd is usually a subdirectory of the checkout,
 // not the checkout root.
-func (r Report) Occupied(path string) bool {
+func (r Report) Occupied(path string) bool { return len(r.Holders(path)) > 0 }
+
+// Holders names every occupant of path, for the refusal that has to explain
+// itself. Same match as Occupied, which is not a coincidence: the two must
+// never be able to disagree, so Occupied is defined in terms of this.
+func (r Report) Holders(path string) []Holder {
+	var out []Holder
 	for _, h := range r.held {
-		if h == path || strings.HasPrefix(h, path+"/") {
-			return true
+		if h.Path == path || strings.HasPrefix(h.Path, path+"/") {
+			out = append(out, h)
 		}
 	}
-	return false
+	return out
 }
 
 // Vouching names the providers that answered for absence, for diagnostics.
@@ -88,12 +130,51 @@ func Collect(providers ...Provider) Report {
 	var r Report
 	for _, p := range providers {
 		held, vouches := p.Scan()
-		r.held = append(r.held, held...)
+		for _, h := range held {
+			h.Via = p.Name()
+			r.held = append(r.held, h)
+		}
 		if vouches {
 			r.vouched = append(r.vouched, p.Name())
 		}
 	}
 	return r
+}
+
+// Describe renders holders as one clause of evidence, relative to the checkout
+// they are holding — a cwd DEEPER than the root is worth saying out loud,
+// because "in node_modules/next" is usually the whole diagnosis.
+//
+// Capped like the dirty listing, and for the same reason: a checkout with a
+// build tree running in it should report a line, not a screenful.
+func Describe(root string, holders []Holder) string {
+	shown := holders
+	if len(shown) > HoldersShown {
+		shown = shown[:HoldersShown]
+	}
+	parts := make([]string, 0, len(shown))
+	for _, h := range shown {
+		s := h.String()
+		if rel := relBelow(root, h.Path); rel != "" {
+			s += " in " + rel
+		}
+		parts = append(parts, s)
+	}
+	out := strings.Join(parts, ", ")
+	if n := len(holders) - len(shown); n > 0 {
+		out += ", +" + strconv.Itoa(n) + " more"
+	}
+	return out
+}
+
+// HoldersShown caps the named occupants in a single refusal.
+const HoldersShown = 3
+
+func relBelow(root, path string) string {
+	if root == "" || path == root || !strings.HasPrefix(path, root+"/") {
+		return ""
+	}
+	return path[len(root)+1:]
 }
 
 // ── lsof ─────────────────────────────────────────────────────────────────────
@@ -107,27 +188,50 @@ func LSOF() Provider { return lsofProvider{} }
 
 func (lsofProvider) Name() string { return "lsof" }
 
-func (lsofProvider) Scan() ([]string, bool) {
+func (lsofProvider) Scan() ([]Holder, bool) {
 	if _, err := exec.LookPath("lsof"); err != nil {
 		return nil, false
 	}
-	out, err := exec.Command("lsof", "-w", "-d", "cwd", "-F", "n").Output()
+	// -F pcn, not -F n: the pid and command name cost nothing to ask for and
+	// are the entire difference between a refusal that can be checked and one
+	// that can only be taken on faith. Field sets arrive as a stream — `p`
+	// opens a process, `c` names it, and every `n` after that belongs to the
+	// process last opened — so the parse is a running pair, not a per-line one.
+	out, err := exec.Command("lsof", "-w", "-d", "cwd", "-F", "pcn").Output()
 	if err != nil && len(out) == 0 {
 		return nil, false
 	}
-	var cwds []string
+	var held []Holder
+	pid, cmd := 0, ""
 	for _, line := range strings.Split(string(out), "\n") {
-		if strings.HasPrefix(line, "n") {
-			cwds = append(cwds, strings.TrimSpace(line[1:]))
+		if line == "" {
+			continue
+		}
+		switch line[0] {
+		case 'p':
+			// A new process set. The command name belongs to the process that
+			// opened it, so it is cleared here rather than carried over — an
+			// lsof that omits `c` for one process must not label it with the
+			// previous one's name.
+			pid, _ = strconv.Atoi(strings.TrimSpace(line[1:]))
+			cmd = ""
+		case 'c':
+			cmd = strings.TrimSpace(line[1:])
+		case 'n':
+			held = append(held, Holder{
+				Path: strings.TrimSpace(line[1:]),
+				PID:  pid,
+				Cmd:  cmd,
+			})
 		}
 	}
 	// An empty dump is a broken lsof, not an empty machine — there is always at
 	// least one process with a cwd. Reading it as "nobody, anywhere" would reap
 	// every landed checkout on the machine in one run.
-	if len(cwds) == 0 {
+	if len(held) == 0 {
 		return nil, false
 	}
-	return cwds, true
+	return held, true
 }
 
 // ── leases ───────────────────────────────────────────────────────────────────
@@ -150,14 +254,14 @@ func Leases(dir string, sole bool) Provider { return leaseProvider{dir: dir, sol
 
 func (l leaseProvider) Name() string { return "leases" }
 
-func (l leaseProvider) Scan() ([]string, bool) {
+func (l leaseProvider) Scan() ([]Holder, bool) {
 	entries, err := os.ReadDir(l.dir)
 	if err != nil {
 		// No directory yet is not the same as an empty one: nothing has ever
 		// leased here, so this provider has nothing to say in either direction.
 		return nil, false
 	}
-	var held []string
+	var held []Holder
 	for _, e := range entries {
 		if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
 			continue
@@ -174,7 +278,7 @@ func (l leaseProvider) Scan() ([]string, bool) {
 			_ = os.Remove(file)
 			continue
 		}
-		held = append(held, path)
+		held = append(held, Holder{Path: path, PID: pid})
 	}
 	return held, l.sole
 }

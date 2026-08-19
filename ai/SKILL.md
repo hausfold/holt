@@ -43,7 +43,7 @@ system, the package manager or which agent is running.
 
 `holt --json` returns `{holt, schema, warnings, lanes:[…]}`. Each lane carries
 `name`, `repo`, `main`, `branch`, `path`, `parent`, `agent`, `state`,
-`occupied`, `dirty`, `landed:{verdict,via,confidence}`,
+`occupied`, `occupied_by`, `dirty`, `landed:{verdict,via,confidence}`,
 `post_merge_ahead:{commits,pr,diverged}` and `last_commit`.
 
 Three things about that payload an agent gets wrong:
@@ -54,6 +54,10 @@ Three things about that payload an agent gets wrong:
   false.** Reading `null` as falsy is how you tell a user a lane is clean when
   holt could not tell. Every consumer bug in the predecessor's status bar came
   from exactly this.
+- **`occupied` says a process is standing there, not that a *pane* is.** A dev
+  server or an orphaned daemon holds a lane exactly as hard as a live agent.
+  `occupied_by[]` names it (`{pid, command, path, via}`, absent when free) — use
+  it before telling a user to go and close a window that may not exist.
 - **`warnings` is the only place a degraded run explains itself.** Under
   `--json` the human-readable notes are suppressed, so if you ignore
   `warnings` you will silently report a partial sweep as a complete one.

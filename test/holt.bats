@@ -101,11 +101,20 @@ EOF
   # this worktree?". Always emit at least "/" so the dump is non-empty — an
   # EMPTY dump is wt's "lsof told me nothing, degrade to parked-only" signal,
   # which FAKE_LSOF_BROKEN=1 exercises deliberately.
+  #
+  # Real `-F pcn` FIELD SETS, not bare `n` lines: holt now carries the pid and
+  # command name into every refusal it prints, so a shim that emitted only
+  # paths would let the parse regress without a single test noticing. Pids
+  # start at 4001 and count up per cwd; FAKE_LSOF_CMD names them all.
   cat >"$BIN/lsof" <<'EOF'
 #!/usr/bin/env bash
 [ "${FAKE_LSOF_BROKEN:-0}" = 1 ] && exit 1
-printf 'n/\n'
-for c in ${FAKE_LSOF_CWDS:-}; do printf 'n%s\n' "$c"; done
+printf 'p1\ncinit\nfcwd\nn/\n'
+pid=4000
+for c in ${FAKE_LSOF_CWDS:-}; do
+  pid=$((pid + 1))
+  printf 'p%s\nc%s\nfcwd\nn%s\n' "$pid" "${FAKE_LSOF_CMD:-zsh}" "$c"
+done
 EOF
 
   chmod +x "$BIN/gh" "$BIN/lsof"
@@ -540,8 +549,49 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
   export FAKE_LSOF_CWDS="$dir"
   cd "$TMP"; wt_run reap
   [ "$status" -eq 0 ]
-  [[ "$output" == *"kept busy (alpha) — a pane is open in it"* ]]
+  [[ "$output" == *"kept busy (alpha) — something is standing in the checkout"* ]]
   [ -e "$dir/.git" ]
+}
+
+@test "reap: an occupied lane NAMES the process, because lsof sees a cwd not a pane" {
+  # The bug this exists for: a lane was kept with "a pane is open in it" and
+  # there was no window anywhere on the machine. lsof does not observe panes,
+  # it observes cwds — a dev server, a watcher, a telemetry daemon orphaned to
+  # pid 1 days ago all pin a lane exactly as hard as a live agent, and read
+  # identically once the pid is discarded. The verdict is unchanged (occupied
+  # ⇒ keep); what has to change is that the evidence survives the sweep.
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" haunted)"
+  git -C "$main" merge -q --no-edit worktree-haunted
+  export FAKE_LSOF_CWDS="$dir/node_modules/next" FAKE_LSOF_CMD=node
+  cd "$TMP"; wt_run reap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"pid 4001 node"* ]] || fail "the refusal named no process: $output"
+  # A cwd DEEPER than the checkout says which subdirectory, which is usually
+  # the whole diagnosis.
+  [[ "$output" == *"in node_modules/next"* ]] || fail "$output"
+  [[ "$output" == *"$dir"* ]] || fail "the refusal named no checkout to go and look at: $output"
+  [ -e "$dir/.git" ]
+}
+
+@test "reap: an occupied lane exposes its holders in --json" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" watched)"
+  export FAKE_LSOF_CWDS="$dir" FAKE_LSOF_CMD=node
+  cd "$TMP"; wt_run list --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"occupied": true'* ]] || fail "$output"
+  [[ "$output" == *'"pid": 4001'* ]] || fail "$output"
+  [[ "$output" == *'"command": "node"'* ]] || fail "$output"
+  [[ "$output" == *'"via": "lsof"'* ]] || fail "$output"
+}
+
+@test "reap: an unoccupied lane carries no occupied_by key at all" {
+  # occupied_by is an ADDITION to a frozen envelope. Omitted when empty, so a
+  # consumer that never learns the key sees exactly what it saw before.
+  local main; main="$(mkrepo alpha)"; mkwt "$main" quiet >/dev/null
+  cd "$TMP"; wt_run list --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"occupied": false'* ]] || fail "$output"
+  [[ "$output" != *"occupied_by"* ]] || fail "an empty holder list must not appear: $output"
 }
 
 @test "reap: keeps a landed checkout with uncommitted changes" {
@@ -810,11 +860,14 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
   [ -f "$dir/uncommitted.txt" ] || fail "a refused drop still ate the working tree"
 }
 
-@test "drop: refuses a lane a pane is standing in" {
+@test "drop: refuses a lane a pane is standing in, and names what is standing there" {
   local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" busy)"
-  export FAKE_LSOF_CWDS="$dir"
+  export FAKE_LSOF_CWDS="$dir" FAKE_LSOF_CMD=node
   cd "$TMP"; wt_run drop busy
   [ "$status" -eq 2 ] || fail "expected a refusal (exit 2), got $status: $output"
+  # "close it first" is useless advice when the occupant is a dev server rather
+  # than a window. A drop is a refusal a human must clear, so it has to say what.
+  [[ "$output" == *"pid 4001 node"* ]] || fail "the refusal named no process: $output"
   git -C "$main" show-ref -q --verify refs/heads/worktree-busy || fail "drop yanked an occupied lane"
 }
 
@@ -1420,7 +1473,9 @@ EOF
   [ "$status" -eq 0 ]
   cd "$TMP"; wt_run reap
   [ "$status" -eq 0 ]
-  [[ "$output" == *"kept leased (alpha) — a pane is open in it"* ]]
+  [[ "$output" == *"kept leased (alpha) — something is standing in the checkout"* ]]
+  # A lease knows the pid but never the command, so the provider stands in.
+  [[ "$output" == *"pid $$ (leases)"* ]] || fail "$output"
   [ -e "$dir/.git" ]
 }
 
@@ -1493,7 +1548,7 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" != *"no lsof"* ]] || fail "leases should have answered: $output"
   [[ "$output" == *"reaped free (beta)"* ]]
-  [[ "$output" == *"kept held (alpha) — a pane is open in it"* ]]
+  [[ "$output" == *"kept held (alpha) — something is standing in the checkout"* ]]
   [ -e "$held/.git" ]
 }
 
