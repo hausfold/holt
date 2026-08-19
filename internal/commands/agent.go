@@ -93,27 +93,6 @@ func specFor(id string) (agentSpec, bool) {
 			resume: []string{"opencode", "--continue"},
 			last:   []string{"opencode", "--continue"},
 		}, true
-	case "jcode":
-		return agentSpec{
-			id: "jcode",
-			// The one client with NO way to be handed a first message: no
-			// positional prompt, no --prompt, and it does not read stdin
-			// (checked against v0.76.0 — `jcode run "<msg>"` is the
-			// non-interactive path and exits, which is not a pane). So the
-			// prompt is dropped HERE, deliberately, and the caller is the one
-			// that has to say so: haus's Spawn Agent copies it to the clipboard
-			// and tells you. A lane is still worth spawning without it — the
-			// worktree, the branch named after the task and the pane are all
-			// still right.
-			start: func(_, _ string) []string { return []string{"jcode"} },
-			open:  []string{"jcode"},
-			// `--resume` with no id opens jcode's session picker. There is no
-			// continue-the-newest flag, so both rungs are the same command, as
-			// with opencode — the picker in a lane's own checkout lists that
-			// lane's conversations and little else.
-			resume: []string{"jcode", "--resume"},
-			last:   []string{"jcode", "--resume"},
-		}, true
 	}
 	return agentSpec{}, false
 }
@@ -135,7 +114,7 @@ func resumeArgv(spec agentSpec, own, pick bool) []string {
 func resolveAgent(id string) (agentSpec, error) {
 	spec, ok := specFor(id)
 	if !ok {
-		return spec, exitcode.Usagef("unknown agent %q (expected claude, codex, opencode, or jcode)", id)
+		return spec, exitcode.Usagef("unknown agent %q (expected claude, codex, or opencode)", id)
 	}
 	if _, err := exec.LookPath(id); err != nil {
 		return spec, exitcode.Usagef("%s is unavailable — install it, then try again", id)
