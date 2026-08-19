@@ -31,7 +31,7 @@ go install github.com/hausfold/holt/cmd/holt@latest     # or, with Go 1.23+
 Needs `git`. `gh` and `lsof` are optional and make it sharper — `gh` proves a
 branch landed, `lsof` proves nobody's standing in a checkout; without them holt
 degrades toward *keep*, never toward *delete*. On
-[haus](https://github.com/hausfold/haus) it's already on `PATH`, wired to ⌘A.
+[haus](https://github.com/hausfold/haus) it's already on `PATH`, wired to ⌘↵.
 
 ## a lane
 

@@ -209,11 +209,14 @@ Standing rules for any agent working here:
 ## Where holt sits in the family
 
 The layer ([hausfold/haus](https://github.com/hausfold/haus)) takes holt
-as a flake input and ships it on `PATH`. `⌘A` runs `holt new` for codex,
-opencode and jcode; on a Claude machine it runs `claude --worktree`, whose
-`WorktreeCreate`/`WorktreeRemove` hooks call `holt hook create` / `holt hook
-remove` — so either way this repo is the plumbing. Its bash predecessor `wt.sh`
-is retired; there is no fallback.
+as a flake input and ships it on `PATH`. Its **⌘↵** lane chord runs `holt new`
+for every client — claude, codex, opencode and jcode alike (haus#388; it used to
+spell Claude's spawn `claude --worktree`, which runs the client in the pane it
+was launched from and never asks `[hooks] open`, the seam a lane's own window
+arrives through). The `WorktreeCreate`/`WorktreeRemove` hooks still call `holt
+hook create` / `holt hook remove`, so a hand-run `--worktree` lands in the
+registry too — it just isn't the path the chord takes. Either way this repo is
+the plumbing. Its bash predecessor `wt.sh` is retired; there is no fallback.
 
 holt IS a family repo for *shipping* purposes — it's in the workshop's `FAMILY`,
 so a merged commit here is invisible to the rice until `bench ship` bumps that
