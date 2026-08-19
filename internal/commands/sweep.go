@@ -2,6 +2,8 @@ package commands
 
 import (
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/hausfold/holt/internal/gitx"
 	"github.com/hausfold/holt/internal/registry"
@@ -23,6 +25,7 @@ type SweepResult struct {
 	Reaped      []string
 	Strays      []string
 	SkippedLive []string
+	Dirty       []string // reapable but for uncommitted work in the checkout
 	Relanded    []string // landed PR, but the branch committed past it
 	Diverged    []string // landed PR, but the tip isn't built on what merged
 	DeadEnds    []string // nothing will ever land this: PR closed, or repo archived
@@ -82,7 +85,23 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 					entry.Name()+" ("+filepath.Base(entry.Main)+")")
 				continue
 			}
-			if gitx.Dirty(entry.Path) {
+			dirt, err := gitx.Status(entry.Path)
+			if err != nil {
+				// git could not answer, so we do not know the tree is clean —
+				// and this is the branch that DELETES. Uncertainty resolves to
+				// keep, out loud.
+				res.Dirty = append(res.Dirty, entry.Name()+" ("+filepath.Base(entry.Main)+")"+
+					" — git could not read the checkout, so holt cannot tell whether"+
+					" there is unsaved work in it; nothing is reaped on a guess: "+entry.Path)
+				continue
+			}
+			if dirt != "" {
+				// Say so. Every other refusal in this loop leaves a note, and
+				// this one used to `continue` in silence — so a landed,
+				// unoccupied lane held back by one stray untracked file read as
+				// a lane holt had simply forgotten, with the summary line's
+				// "unmerged, dirty, or in use" left to guess between.
+				res.Dirty = append(res.Dirty, dirtyNote(entry, dirt))
 				continue // uncommitted work — leave it for a human
 			}
 			if !e.Landed(entry.Main, entry.Branch).Landed {
@@ -104,6 +123,48 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 	e.pruneRegistry()
 	return res
 }
+
+// dirtyNote names what is actually in the way, because "dirty" alone sends you
+// to `git status` in a checkout you have to find first — and the paths are
+// usually the whole answer (the case that prompted this was one untracked
+// directory a tool had dropped there, obvious junk the moment it was named).
+//
+// Deliberately NOT "holt park it": park commits the tree as a `wip:` commit,
+// which makes the branch unlanded and moves the lane from this refusal to the
+// next one. The two real ways out are commit it or clean it.
+func dirtyNote(entry Entry, porcelain string) string {
+	lines := strings.Split(strings.TrimRight(porcelain, "\n"), "\n")
+	shown := lines
+	if len(shown) > dirtyPathsShown {
+		shown = shown[:dirtyPathsShown]
+	}
+	paths := make([]string, 0, len(shown))
+	for _, l := range shown {
+		// Porcelain v1 is "XY path"; the status letters are always 2 columns
+		// plus a space, and a rename's " -> " tail is worth keeping as written.
+		if len(l) > 3 {
+			l = l[3:]
+		}
+		// Porcelain C-quotes any path with non-ASCII or special characters
+		// (`?? "caf\303\251.txt"`). Trimming the quotes alone leaves the
+		// escapes in, which is not a path anyone can paste back.
+		if unq, err := strconv.Unquote(l); err == nil {
+			l = unq
+		}
+		paths = append(paths, l)
+	}
+	more := ""
+	if len(lines) > len(shown) {
+		more = ", +" + itoa(len(lines)-len(shown)) + " more"
+	}
+	return entry.Name() + " (" + filepath.Base(entry.Main) + ")" +
+		" — uncommitted work in the checkout: " + strings.Join(paths, ", ") + more +
+		". Nothing is reaped over that; commit it or clean it, then reap again: " + entry.Path
+}
+
+// dirtyPathsShown caps the named paths, so a checkout with a build tree in it
+// reports a line rather than a screenful.
+const dirtyPathsShown = 3
 
 // noteRelanded records why a lane declined to be reaped, so it says something
 // instead of silently persisting — and points at the right fix. Three shapes,

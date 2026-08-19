@@ -151,9 +151,19 @@ func ShortRev(dir, rev string) string {
 	return oid
 }
 
+// Status is `git status --porcelain` with the failure KEPT, for the callers
+// whose "" must not be allowed to mean "clean".
+//
+// Porcelain's "" is doing double duty: a clean tree and a checkout git could
+// not read at all (a corrupt index, a permission wall, an interrupted rebase)
+// look identical to it. That is fine where the answer only decides whether to
+// park, and wrong where it decides whether to DELETE — the sweep must resolve
+// an unknown to "keep", which it cannot do without seeing the error.
+func Status(dir string) (string, error) { return Run(dir, "status", "--porcelain") }
+
 // Porcelain returns `git status --porcelain` output; "" means a clean tree.
 func Porcelain(dir string) string {
-	s, err := Run(dir, "status", "--porcelain")
+	s, err := Status(dir)
 	if err != nil {
 		return ""
 	}
