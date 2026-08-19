@@ -123,7 +123,10 @@ name    main-checkout    branch    checkout-path    parent    agent
 
 Field 4 (checkout path) is the primary key. Field 6 is the client id
 (`claude|codex|opencode`); **a row with fewer than 6 fields means `claude`** —
-that's the already-shipped v0 migration case and it must survive.
+that's the already-shipped v0 migration case and it must survive. So does a
+field 6 naming a client holt no longer knows (`jcode`, accepted through
+0.2.x): it reads as `claude`, and the next write persists that. Narrowing this
+set is allowed; stranding a lane over it is not.
 
 **Rule for 0.1: read the existing file unchanged.** No format migration on
 cutover day. Julien's machine had live rows written by the bash predecessor;

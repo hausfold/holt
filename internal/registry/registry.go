@@ -106,6 +106,12 @@ func parse(s string) []Row {
 		}
 		// The v0 case: a row written before the client column existed is a
 		// Claude worktree, and must not reopen in whatever the default is now.
+		//
+		// It catches a second case as well, and deliberately: a row naming a
+		// client holt USED to know (jcode, accepted through 0.2.x) reads as
+		// claude rather than as an error, and the next write persists that.
+		// Retiring a client must not strand a lane whose checkout and branch
+		// are still perfectly good.
 		if !KnownAgent(row.Agent) {
 			row.Agent = "claude"
 		}

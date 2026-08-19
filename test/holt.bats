@@ -1109,6 +1109,16 @@ mkremote() { # mkremote <main> — give a repo a bare origin it can actually pus
   [[ "$output" == *"claude --continue"* ]]
 }
 
+@test "resume: a row naming a retired client reopens in Claude" {
+  local main dir; main="$(mkrepo alpha)"; dir="$CLAUDE_WT_BASE/alpha/retired"
+  git -C "$main" branch worktree-retired
+  mkdir -p "$(dirname "$REG")"
+  printf 'retired\t%s\tworktree-retired\t%s\t%s\tjcode\n' "$main" "$dir" "$main" >"$REG"
+  HAUS_AGENT_DEFAULT=codex run "$WT" resume retired
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"claude --continue"* ]]
+}
+
 @test "agent start: Codex receives a captured screenshot as an initial image" {
   cat >"$BIN/codex" <<'EOF'
 #!/usr/bin/env bash
