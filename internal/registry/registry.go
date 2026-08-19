@@ -7,7 +7,7 @@
 //
 // A LANE is holt's unit: one agent's branch, checkout and pane, across the whole
 // create → live → parked → landed → reaped life. Note the word is NOT "agent" —
-// that is the CLIENT (field 6, claude | codex | opencode | jcode) — and NOT "session",
+// that is the CLIENT (field 6, claude | codex | opencode) — and NOT "session",
 // which belongs to zellij and to the clients' own transcript stores.
 //
 // # Format
@@ -37,7 +37,7 @@ type Row struct {
 	Branch string // full branch name
 	Path   string // checkout path — the primary key
 	Parent string // cwd of the pane that spawned it, or "" — see cmd child
-	Agent  string // client id: claude | codex | opencode | jcode
+	Agent  string // client id: claude | codex | opencode
 }
 
 // Registry is a handle on one registry file.
@@ -55,7 +55,7 @@ var DefaultAgent = "claude"
 // growing a dependency on it.
 var KnownAgent = func(id string) bool {
 	switch id {
-	case "claude", "codex", "opencode", "jcode":
+	case "claude", "codex", "opencode":
 		return true
 	}
 	return false
@@ -106,6 +106,12 @@ func parse(s string) []Row {
 		}
 		// The v0 case: a row written before the client column existed is a
 		// Claude worktree, and must not reopen in whatever the default is now.
+		//
+		// It catches a second case as well, and deliberately: a row naming a
+		// client holt USED to know (jcode, accepted through 0.2.x) reads as
+		// claude rather than as an error, and the next write persists that.
+		// Retiring a client must not strand a lane whose checkout and branch
+		// are still perfectly good.
 		if !KnownAgent(row.Agent) {
 			row.Agent = "claude"
 		}

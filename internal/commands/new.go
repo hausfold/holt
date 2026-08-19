@@ -65,7 +65,7 @@ func (e *Env) NewCmd(args []string) error {
 			}
 		case "--agent":
 			if i+1 >= len(args) {
-				return exitcode.Usagef("--agent needs a client id (claude, codex, opencode, jcode)")
+				return exitcode.Usagef("--agent needs a client id (claude, codex, opencode)")
 			}
 			i++
 			opts.Agent, opts.Open = args[i], true
@@ -107,7 +107,7 @@ func (e *Env) NewCmd(args []string) error {
 func (e *Env) New(want string, opts NewOpts) error {
 	agentID := orDefault(opts.Agent, e.Agent)
 	if _, ok := specFor(agentID); !ok {
-		return exitcode.Usagef("unknown agent %q (expected claude, codex, opencode, or jcode)", agentID)
+		return exitcode.Usagef("unknown agent %q (expected claude, codex, or opencode)", agentID)
 	}
 	main, err := e.mainCheckoutOf(e.Cwd, true)
 	if err != nil {
@@ -229,7 +229,7 @@ func (e *Env) Spawn(target, want, agentID string) error {
 	}
 	agentID = orDefault(agentID, e.Agent)
 	if _, ok := specFor(agentID); !ok {
-		return exitcode.Usagef("unknown agent %q (expected claude, codex, opencode, or jcode)", agentID)
+		return exitcode.Usagef("unknown agent %q (expected claude, codex, or opencode)", agentID)
 	}
 	if fi, err := os.Stat(target); err != nil || !fi.IsDir() {
 		return exitcode.Usagef("no such directory: %s", target)

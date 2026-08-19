@@ -9,7 +9,7 @@ create ──▶ live ──▶ parked ──▶ live ──▶ landed ──▶
 A **lane** is one agent's branch, checkout, and pane, moving through that
 life. Not a "worktree" — a parked lane has no checkout on disk; the branch
 is what survives. Not an "agent" — that word means the *client* a lane runs
-(`claude`, `codex`, `opencode`, `jcode`). Not a "session" — that's your multiplexer's.
+(`claude`, `codex`, `opencode`). Not a "session" — that's your multiplexer's.
 
 ## Invariants
 
