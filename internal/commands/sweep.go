@@ -2,6 +2,7 @@ package commands
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/hausfold/holt/internal/gitx"
@@ -84,7 +85,17 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 					entry.Name()+" ("+filepath.Base(entry.Main)+")")
 				continue
 			}
-			if dirt := gitx.Porcelain(entry.Path); dirt != "" {
+			dirt, err := gitx.Status(entry.Path)
+			if err != nil {
+				// git could not answer, so we do not know the tree is clean —
+				// and this is the branch that DELETES. Uncertainty resolves to
+				// keep, out loud.
+				res.Dirty = append(res.Dirty, entry.Name()+" ("+filepath.Base(entry.Main)+")"+
+					" — git could not read the checkout, so holt cannot tell whether"+
+					" there is unsaved work in it; nothing is reaped on a guess: "+entry.Path)
+				continue
+			}
+			if dirt != "" {
 				// Say so. Every other refusal in this loop leaves a note, and
 				// this one used to `continue` in silence — so a landed,
 				// unoccupied lane held back by one stray untracked file read as
@@ -134,7 +145,13 @@ func dirtyNote(entry Entry, porcelain string) string {
 		if len(l) > 3 {
 			l = l[3:]
 		}
-		paths = append(paths, strings.Trim(l, `"`))
+		// Porcelain C-quotes any path with non-ASCII or special characters
+		// (`?? "caf\303\251.txt"`). Trimming the quotes alone leaves the
+		// escapes in, which is not a path anyone can paste back.
+		if unq, err := strconv.Unquote(l); err == nil {
+			l = unq
+		}
+		paths = append(paths, l)
 	}
 	more := ""
 	if len(lines) > len(shown) {

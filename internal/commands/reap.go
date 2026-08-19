@@ -46,7 +46,9 @@ func (e *Env) Reap() error {
 		// Only when nothing above spoke. The old unconditional line listed the
 		// three reasons in the abstract right after naming the concrete one,
 		// which read as a second, contradictory verdict.
-		if len(res.SkippedLive)+len(res.Dirty)+len(res.Relanded)+len(res.Diverged)+len(res.DeadEnds) == 0 {
+		spoke := len(res.SkippedLive) + len(res.Dirty) + len(res.Relanded) +
+			len(res.Diverged) + len(res.DeadEnds) + len(res.Strays)
+		if spoke == 0 {
 			ui.Say("nothing to reap — every lane is either unmerged, dirty, or in use.")
 		} else {
 			ui.Say("nothing reaped — see above for what held each lane back.")
