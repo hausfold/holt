@@ -103,10 +103,11 @@ point of holt existing:
   safety" as an error and reaches for `git worktree remove` has defeated
   invariant 2 from the outside. The skill says so twice.
 
-It also spends space on the `--json` payload's three traps — `state`'s closed
-set, `occupied`/`dirty` being nullable with `null` meaning *undetermined*, and
-`warnings` being the only channel a degraded run has under `--json`. Those are
-SPEC 2.2's own warnings, aimed at the newest consumer.
+It also spends space on the `--json` payload's traps — `state`'s closed set,
+`landed.verdict`'s `fresh` not meaning `yes`, `occupied`/`dirty` being nullable
+with `null` meaning *undetermined*, and `warnings` being the only channel a
+degraded run has under `--json`. Those are SPEC 2.2's own warnings, aimed at the
+newest consumer.
 
 `nix/skill.nix` ships it as `pkgs.holt-skill` (`$out/holt/SKILL.md`) — its own
 derivation so a consumer can install the skill with no Go toolchain and no

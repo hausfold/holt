@@ -46,10 +46,15 @@ system, the package manager or which agent is running.
 `occupied`, `occupied_by`, `dirty`, `landed:{verdict,via,confidence}`,
 `post_merge_ahead:{commits,pr,diverged}` and `last_commit`.
 
-Three things about that payload an agent gets wrong:
+What an agent gets wrong about that payload:
 
 - **`state` is a closed set: `live`, `parked`, `stray`.** A `stray` is a husk
   with no usable checkout — `holt <name>` moves it aside and rebuilds.
+- **`landed.verdict` is `yes`, `no`, `fresh` or `contained` — and `fresh` is not
+  `yes`.** A lane cut from the default branch that has never committed carries
+  nothing of its own, so ancestry alone finds it already contained there.
+  `fresh` is that case given its own word: report it as *nothing yet*, never as
+  *merged*. A verdict or `via` you don't recognise resolves to not-landed.
 - **`occupied` and `dirty` are nullable, and `null` means *not determined*, not
   false.** Reading `null` as falsy is how you tell a user a lane is clean when
   holt could not tell. Every consumer bug in the predecessor's status bar came
