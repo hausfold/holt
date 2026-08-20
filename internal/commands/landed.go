@@ -19,6 +19,7 @@ import (
 //
 // The full merge-strategy matrix is SPEC.md §3. In short:
 //
+//	nothing ever committed on the branch                   → never-diverged, offline
 //	fast-forward / merge commit / rebase-that-kept-commits → ancestry, offline
 //	forge rebase / squash                                  → the merged PR's headRefOid
 //	cherry-pick / rebase done elsewhere                    → patch-equivalence
@@ -30,7 +31,7 @@ import (
 // Verdict is how confident holt is that a branch has landed.
 type Verdict struct {
 	Landed     bool
-	Via        string // ancestry | pr-head-oid | patch-equivalence | merge-tree-empty
+	Via        string // never-diverged | ancestry | pr-head-oid | patch-equivalence | merge-tree-empty
 	Confidence string // certain | heuristic
 	PR         int
 }
@@ -89,6 +90,18 @@ func (e *Env) builtinLanded(main, branch string) Verdict {
 
 	// 1. Ancestry — offline, exact, always safe.
 	if gitx.IsAncestor(main, branch, base) {
+		// …but ancestry alone cannot tell WORK THAT LANDED from work that never
+		// existed. A lane cut from main seconds ago is trivially an ancestor of
+		// it, so the freshest possible branch got the same "landed, certain"
+		// verdict as one whose PR merged an hour ago — and every consumer that
+		// renders a verdict rendered a brand-new lane as `merged`.
+		//
+		// The two are still both REAPABLE (there is nothing on either to lose),
+		// so Landed stays true and the sweep is untouched; what separates them
+		// is only what a reader should be told. See neverDiverged.
+		if neverDiverged(main, base, branch) {
+			return Verdict{Landed: true, Via: "never-diverged", Confidence: "certain"}
+		}
 		return Verdict{Landed: true, Via: "ancestry", Confidence: "certain"}
 	}
 
@@ -119,6 +132,50 @@ func (e *Env) builtinLanded(main, branch string) Verdict {
 	}
 
 	return Verdict{Landed: false}
+}
+
+// neverDiverged reports whether a branch has never carried a commit of its own —
+// the "nothing has happened here yet" state, as distinct from "it happened and
+// it landed". Both are ancestors of the default branch, which is why ancestry
+// cannot answer this and something else has to.
+//
+// Two facts, both offline:
+//
+//  1. no commits unique to the branch (so there is nothing here NOW), and
+//  2. no reflog entry that recorded a commit (so there never was).
+//
+// (2) is the one that does the work. A lane that committed and then merged by
+// fast-forward looks, by commit count alone, exactly like a lane that has done
+// nothing — but its reflog kept the `commit:` entry, and a fresh branch's holds
+// only `branch: Created from …`.
+//
+// Uncertainty resolves to false — "not fresh", i.e. the old `ancestry` answer.
+// A repo with reflogs disabled (`core.logAllRefUpdates=false`) or entries aged
+// out by gc prints nothing here, and an empty reflog proves nothing; the cost of
+// guessing wrong is a display that says `merged` where it could have said
+// `fresh`, which is exactly where this ladder was before.
+func neverDiverged(main, base, branch string) bool {
+	if out, err := gitx.Run(main, "rev-list", "--count", base+".."+branch); err != nil || out != "0" {
+		return false
+	}
+	out, err := gitx.Run(main, "reflog", "show", "--format=%gs", branch)
+	if err != nil {
+		return false
+	}
+	lines := gitx.Lines(out)
+	if len(lines) == 0 {
+		return false // no reflog at all — can't prove anything
+	}
+	for _, l := range lines {
+		// "commit:", "commit (amend):", "commit (initial):" — every way git
+		// spells "this branch recorded a commit". A `merge`/`pull` entry is not
+		// in the list on purpose: whatever it brought is, by (1), already in the
+		// default branch, so it is not this lane's work either.
+		if strings.HasPrefix(l, "commit") {
+			return false
+		}
+	}
+	return true
 }
 
 // patchEquivalent reports whether every commit on branch has a patch-id

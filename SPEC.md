@@ -204,9 +204,11 @@ Contract points that matter:
   disk, so `worktrees` was never true of the whole set. `agent` inside each lane
   keeps its own meaning: the client, never the lane.
 - `state` ∈ `live | parked | stray`. Closed set; additions are minor, removals major.
-- `landed.verdict` ∈ `yes | no | contained` and `landed.via` ∈
-  `ancestry | pr-head-oid | patch-equivalence | merge-tree-empty | null` — see §3.
-  Consumers must treat an unknown `via` as `no`.
+- `landed.verdict` ∈ `yes | no | fresh | contained` and `landed.via` ∈
+  `never-diverged | ancestry | pr-head-oid | patch-equivalence | merge-tree-empty | null`
+  — see §3. Consumers must treat an unknown `via` as `no`. `fresh` (§3.5) is an
+  ADDITION, and a minor one by the same rule `state` follows: a consumer that
+  doesn't know it falls back to "not landed", which is the safe direction.
 - `occupied`, `dirty`, `pr` are **nullable**: `null` means *not determined*
   (no `lsof`, no forge, cache miss), which is categorically different from
   `false`. Every consumer bug in the bash version's statusline came from
@@ -345,6 +347,33 @@ and a visible marker in the listing — not quietly report every branch as unlan
 Silent degradation is how a user learns to distrust the tool.
 
 ---
+
+### 3.5 Never-diverged (`landed: fresh`)
+
+Ancestry (§3, rung 1) answers "is the tip already in the default branch?", and a
+lane cut from main five seconds ago answers **yes** — trivially, because it *is*
+main. So the freshest possible branch carried the same `verdict: yes, via:
+ancestry, confidence: certain` as one whose PR merged an hour ago, and every
+consumer that renders a verdict rendered a brand-new lane as **merged**. The
+rice's paw pill and its statusline ⏏ are the two that were seen doing it.
+
+`fresh` is that state given its own word. Two offline facts, both required:
+
+```
+git rev-list --count <default>..<branch>  == 0   # nothing here now
+git reflog show --format=%gs <branch>     has no `commit…` entry   # nothing ever
+```
+
+The reflog is the half that does the work: a branch that committed and then
+merged by fast-forward has no commits of its own left to count either, and only
+its reflog remembers that it ever did anything. Uncertainty resolves to the old
+answer — a repo with `core.logAllRefUpdates=false`, or entries aged out by gc,
+prints nothing and stays `via: ancestry`.
+
+**It is a LABEL, not a gate.** `Landed` stays true, so `reap`, the parked sweep
+and the remove hook behave exactly as they did: a never-committed branch has
+nothing to lose, and this spec is about what a reader is told, not what the state
+machine does.
 
 ## 4. Repo identity: the remote slug, not the directory basename
 

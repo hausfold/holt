@@ -41,12 +41,14 @@ pub mod lane_state {
 pub mod landed_verdict {
     pub const YES: &str = "yes";
     pub const NO: &str = "no";
+    pub const FRESH: &str = "fresh";
     pub const CONTAINED: &str = "contained";
 }
 
 /// Known values of [`Landed::via`] (when it's `Some`). Same open-set
 /// discipline as [`lane_state`].
 pub mod landed_via {
+    pub const NEVER_DIVERGED: &str = "never-diverged";
     pub const ANCESTRY: &str = "ancestry";
     pub const PR_HEAD_OID: &str = "pr-head-oid";
     pub const PATCH_EQUIVALENCE: &str = "patch-equivalence";

@@ -34,10 +34,16 @@ class HoltExitCode(IntEnum):
 # unknown value as opaque, not an error.
 LaneState = Literal["live", "parked", "stray"]
 
-LandedVerdict = Literal["yes", "no", "contained"]
+LandedVerdict = Literal["yes", "no", "fresh", "contained"]
 
 LandedVia = Optional[
-    Literal["ancestry", "pr-head-oid", "patch-equivalence", "merge-tree-empty"]
+    Literal[
+        "never-diverged",
+        "ancestry",
+        "pr-head-oid",
+        "patch-equivalence",
+        "merge-tree-empty",
+    ]
 ]
 
 

@@ -594,6 +594,41 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
   [[ "$output" != *"occupied_by"* ]] || fail "an empty holder list must not appear: $output"
 }
 
+@test "list --json: a lane that never committed reads as fresh, not merged" {
+  # The bug: a lane cut from main seconds ago is trivially an ancestor of main,
+  # so the ancestry rung called it landed and every consumer that renders a
+  # verdict — the rice's paw pill among them — labelled a brand-new lane
+  # `merged`. "Nothing has happened here yet" is its own state.
+  local main; main="$(mkrepo alpha)"; hook_create "$main" brandnew >/dev/null
+  cd "$TMP"; wt_run list --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"verdict": "fresh"'* ]] || fail "$output"
+  [[ "$output" == *'"via": "never-diverged"'* ]] || fail "$output"
+}
+
+@test "list --json: a branch whose commits really landed still reads as yes" {
+  # The other half of the same rule: `fresh` must never swallow a real landing.
+  # This one merged by fast-forward, so it has no commits of its own left to
+  # count either — only its reflog remembers that it ever did anything.
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" done)"
+  git -C "$main" merge -q --ff-only worktree-done
+  cd "$TMP"; wt_run list --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"verdict": "yes"'* ]] || fail "$output"
+  [[ "$output" == *'"via": "ancestry"'* ]] || fail "$output"
+}
+
+@test "reap: a fresh lane is still reapable — the new verdict is a label only" {
+  # `fresh` splits what a reader is TOLD, never what the sweep does: there is
+  # nothing on a never-committed branch to lose, exactly as before.
+  local main dir; main="$(mkrepo alpha)"; dir="$(hook_create "$main" nothing)"
+  cd "$TMP"; wt_run reap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"reaped nothing (alpha)"* ]] || fail "$output"
+  [ ! -e "$dir" ]
+  [ "$(reg_rows)" -eq 0 ]
+}
+
 @test "reap: keeps a landed checkout with uncommitted changes" {
   local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" messy)"
   git -C "$main" merge -q --no-edit worktree-messy
