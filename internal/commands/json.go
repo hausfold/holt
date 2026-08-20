@@ -149,11 +149,15 @@ func (e *Env) toJSONLane(r listRow, occ occupancy.Report) jsonLane {
 	v := e.Landed(entry.Main, entry.Branch)
 	w.Landed = jsonLanded{Verdict: "no", Via: v.Via, Confidence: v.Confidence}
 	switch {
-	case v.Via == "never-diverged":
+	case v.Landed && v.Via == "never-diverged":
 		// Reapable like any other ancestor of the default branch — but nothing
 		// landed, because nothing ever happened here. Its own word, so a
 		// consumer can render a fresh lane as fresh instead of as `merged`,
 		// which is what every one of them did while this shared "yes".
+		//
+		// Gated on Landed as well as on the via, because a `landed` HOOK names
+		// its own via (hookVerdict) — a hook answering NO under this name must
+		// not paint `fresh` on a lane that will never be reaped.
 		w.Landed.Verdict = "fresh"
 	case v.Landed:
 		w.Landed.Verdict = "yes"
