@@ -618,6 +618,24 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
   [[ "$output" == *'"via": "ancestry"'* ]] || fail "$output"
 }
 
+@test "list --json: work that arrived by cherry-pick is not 'fresh' either" {
+  # The trap this test exists for: `commit:` is NOT every way git spells "this
+  # branch did something". cherry-pick, revert, rebase and reset each write
+  # their own reflog subject, so a rule that hunts for `commit…` calls all of
+  # them fresh — this bug pointing the other way, a landed lane losing its
+  # verdict. The rule is inverted instead: nothing but `branch: Created from`.
+  local main dir; main="$(mkrepo alpha)"
+  git -C "$main" checkout -q -b source
+  commit_in "$main" side.txt "a commit made somewhere else"
+  git -C "$main" checkout -q main
+  dir="$(hook_create "$main" picked)"
+  git -C "$dir" -c commit.gpgsign=false cherry-pick "$(git -C "$main" rev-parse source)" >/dev/null
+  git -C "$main" merge -q --ff-only worktree-picked   # …and that is how it landed
+  cd "$TMP"; wt_run list --json
+  [ "$status" -eq 0 ]
+  [[ "$output" != *'"verdict": "fresh"'* ]] || fail "a cherry-picked lane read as fresh: $output"
+}
+
 @test "reap: a fresh lane is still reapable — the new verdict is a label only" {
   # `fresh` splits what a reader is TOLD, never what the sweep does: there is
   # nothing on a never-committed branch to lose, exactly as before.

@@ -279,6 +279,7 @@ existing signal and close the remaining holes explicitly.
 
 | How the work got to the default branch | Tip is ancestor of default? | Forge record | Detected by |
 |---|---|---|---|
+| Nothing — the branch never committed at all | ✅ (trivially: it *is* the default branch) | none | **not a landing → never-diverged (§3.5)**, reported as `verdict: fresh` |
 | Fast-forward | ✅ | any | `merge-base --is-ancestor` |
 | Merge commit | ✅ | MERGED | ancestry |
 | Rebase-and-merge (forge button) | ❌ (new SHAs) | MERGED, `headRefOid` = pre-rebase tip = local tip | `headRefOid == local tip` |
@@ -369,6 +370,14 @@ merged by fast-forward has no commits of its own left to count either, and only
 its reflog remembers that it ever did anything. Uncertainty resolves to the old
 answer — a repo with `core.logAllRefUpdates=false`, or entries aged out by gc,
 prints nothing and stays `via: ancestry`.
+
+The test is **inverted on purpose**: it requires that *nothing but creation* ever
+happened, rather than enumerating what "something happened" looks like. That
+enumeration is a trap — `commit:` covers `git commit` and `--amend`, and nothing
+else: cherry-pick writes `cherry-pick:`, revert `revert:`, rebase
+`rebase (finish):`, `reset --hard` `reset: moving to`, `branch -f`
+`branch: Reset to`. A prefix list calls every one of those fresh, which is this
+same bug pointing the other way.
 
 **It is a LABEL, not a gate.** `Landed` stays true, so `reap`, the parked sweep
 and the remove hook behave exactly as they did: a never-committed branch has

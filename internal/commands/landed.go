@@ -142,12 +142,20 @@ func (e *Env) builtinLanded(main, branch string) Verdict {
 // Two facts, both offline:
 //
 //  1. no commits unique to the branch (so there is nothing here NOW), and
-//  2. no reflog entry that recorded a commit (so there never was).
+//  2. a reflog holding NOTHING but the branch's own creation (so there never was).
 //
 // (2) is the one that does the work. A lane that committed and then merged by
 // fast-forward looks, by commit count alone, exactly like a lane that has done
-// nothing — but its reflog kept the `commit:` entry, and a fresh branch's holds
-// only `branch: Created from …`.
+// nothing — but its reflog kept the entry, and a fresh branch's holds only
+// `branch: Created from …`.
+//
+// The test is deliberately inverted: it requires that nothing but creation ever
+// happened, rather than enumerating what "something happened" looks like. That
+// enumeration is a trap — `git commit` writes `commit:`, but cherry-pick writes
+// `cherry-pick:`, revert `revert:`, rebase `rebase (finish):`, `reset --hard`
+// `reset: moving to`, and `branch -f` `branch: Reset to`. A list of prefixes
+// silently calls every one of those "fresh", which is this bug pointing the
+// other way — a lane whose work really did land losing its landed verdict.
 //
 // Uncertainty resolves to false — "not fresh", i.e. the old `ancestry` answer.
 // A repo with reflogs disabled (`core.logAllRefUpdates=false`) or entries aged
@@ -167,11 +175,10 @@ func neverDiverged(main, base, branch string) bool {
 		return false // no reflog at all — can't prove anything
 	}
 	for _, l := range lines {
-		// "commit:", "commit (amend):", "commit (initial):" — every way git
-		// spells "this branch recorded a commit". A `merge`/`pull` entry is not
-		// in the list on purpose: whatever it brought is, by (1), already in the
-		// default branch, so it is not this lane's work either.
-		if strings.HasPrefix(l, "commit") {
+		// The ONE subject a branch that has only ever been created can carry.
+		// Note the trailing space: it excludes `branch: Reset to …`, which is a
+		// hand-moved tip and very much something happening.
+		if !strings.HasPrefix(l, "branch: Created from ") {
 			return false
 		}
 	}
