@@ -3,10 +3,9 @@
 **holt** — the worktree-lifecycle substrate for parallel coding agents. A single
 Go binary plus five SDKs, published from this one repo under one version number.
 
-**This file is the one set of instructions, for every agent.** Claude Code,
-Codex, OpenCode, Cursor, Copilot — TUI or GUI — all read *this*, directly or
-through a one-line pointer (`CLAUDE.md` is nothing but an `@AGENTS.md` import).
-Nothing harness-specific belongs here; the wiring map is
+**This file is the one set of instructions, for every agent** — Claude Code,
+Codex, OpenCode, Cursor, Copilot alike, directly or through a one-line pointer.
+Per-client wiring lives in that client's own file; the wiring map is
 [`.agents/README.md`](./.agents/README.md).
 
 Deep detail lives in the docs, not here — [`SPEC.md`](./SPEC.md) is the design
@@ -38,16 +37,16 @@ agent you run. "Substrate, not orchestrator" is the whole thesis — the actions
 each transition belong to the user.
 
 **holt is repo-agnostic and client-agnostic.** No repo-local adapters, no
-`bench`, no rice paths, no *new* code that assumes the consumer is the family.
+`bench`, no haus paths, no *new* code that assumes the consumer is the family.
 Adapters are template-driven (`SPEC.md` §5); if a need can only be met by
 hardcoding one caller, it belongs in that caller.
 
-The rule binds new behavior, not history. Two grandfathered exceptions exist on
-purpose — don't "enforce" them away: `HAUS_AGENT_DEFAULT` is still read as a
-fallback rung in `defaultAgent` (`internal/commands/env.go`), because pre-config
-rice builds set it and deleting it breaks their default agent; and `SPEC.md` §10
-is the cutover story for that one consumer, which is history rather than a
-dependency. Adding a *third* is the thing to argue hard against.
+The rule binds new behavior, not history. **Two grandfathered exceptions exist
+on purpose — don't "enforce" them away**: `HAUS_AGENT_DEFAULT` is still read as
+a fallback rung in `defaultAgent` (`internal/commands/env.go`), because older
+haus builds set it and deleting it breaks their default agent; and `SPEC.md` §10
+is that one consumer's cutover story. Adding a *third* is the thing to argue
+hard against.
 
 ## Vocabulary (the overload was the bug)
 
@@ -66,7 +65,7 @@ A **lane** is the unit — one agent's branch, checkout and pane, `create` →
 
 `SPEC.md` §2 is versioned and breaking-change-gated: the **registry schema**,
 `--json` **output**, the **hook protocol**, and **exit codes**. Downstreams pin
-them — the rice's statusline, the workshop's `bench status`, pounce's Spawn
+them — haus's statusline, the workshop's `bench status`, pounce's Spawn
 Agent, and every SDK. Changing one is a semver **major** conversation, not a
 refactor. The same goes for user-facing command names and flags.
 
@@ -142,12 +141,12 @@ job exists to protect, so a change to one SDK's surface is a change to all five.
   bare form (no `--tag`) mirrors `main` only, and exists for one case: getting
   an unreleased change in front of a consumer pinning a branch.
 - **The Go module path is `github.com/hausfold/holt`**, in `go.mod`,
-  `sdk/go/go.mod` and the `Makefile`'s `LDFLAGS`. ⚠️ It moved there on
-  2026-08-16, and Go's proxy is immutable: `sdk/go` up to `v0.2.8` is published
-  under the previous owner and stays resolvable there forever, while nothing
-  released after is. An importer edits its import line or pins v0.2.8. Keep the
-  three spellings in step — a mismatch between `go.mod` and `LDFLAGS` builds
-  fine and reports the wrong version.
+  `sdk/go/go.mod` and the `Makefile`'s `LDFLAGS`. Keep the three spellings in
+  step — a mismatch between `go.mod` and `LDFLAGS` builds fine and reports the
+  wrong version. ⚠️ Go's proxy is immutable, and the path moved here after
+  `v0.2.8`: everything up to that tag stays resolvable under the previous owner
+  forever, and nothing released after it is. An importer on an old path either
+  edits its import line or pins v0.2.8.
 
 ## Verify by running it
 
@@ -208,19 +207,18 @@ Standing rules for any agent working here:
 
 ## Where holt sits in the family
 
-The layer ([hausfold/haus](https://github.com/hausfold/haus)) takes holt
-as a flake input and ships it on `PATH`. Its **⌘↵** lane chord runs `holt new`
-for every client — claude, codex and opencode alike (haus#388; it used to
-spell Claude's spawn `claude --worktree`, which runs the client in the pane it
+The layer ([hausfold/haus](https://github.com/hausfold/haus)) takes holt as a
+flake input and ships it on `PATH`. Its **⌘↵** lane chord runs `holt new` for
+every client — claude, codex and opencode alike; `claude --worktree` is
+deliberately not the path it takes, because that runs the client in the pane it
 was launched from and never asks `[hooks] open`, the seam a lane's own window
-arrives through). The `WorktreeCreate`/`WorktreeRemove` hooks still call `holt
+arrives through. The `WorktreeCreate`/`WorktreeRemove` hooks still call `holt
 hook create` / `holt hook remove`, so a hand-run `--worktree` lands in the
-registry too — it just isn't the path the chord takes. Either way this repo is
-the plumbing. Its bash predecessor `wt.sh` is retired; there is no fallback.
+registry too. Either way this repo is the plumbing.
 
 holt IS a family repo for *shipping* purposes — it's in the workshop's `FAMILY`,
-so a merged commit here is invisible to the rice until `bench ship` bumps that
-lock. But the dependency runs **one way only**: the rice consumes holt, and new
-code here doesn't get to know the rice exists (the two grandfathered exceptions
-are named above). The day holt needs a *third* hausfold-shaped special case is
-the day the abstraction was wrong.
+so a merged commit here is invisible to haus until `bench ship` bumps that lock.
+But the dependency runs **one way only**: haus consumes holt, and new code here
+doesn't get to know haus exists (the two grandfathered exceptions are named
+above). The day holt needs a *third* hausfold-shaped special case is the day the
+abstraction was wrong.
