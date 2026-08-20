@@ -62,7 +62,7 @@ Each lane:
 | `state` | `live` \| `parked` \| `stray` — a closed set |
 | `occupied` / `dirty` | nullable; **`null` means undetermined, not false** |
 | `occupied_by` | the evidence behind `occupied: true` — `[{pid, command, path, via}]`, `via` ∈ `lsof \| leases`. Absent when nothing holds the lane |
-| `landed` | `{verdict: yes\|no\|contained, via, confidence}` |
+| `landed` | `{verdict: yes\|no\|fresh\|contained, via, confidence}` |
 | `post_merge_ahead` | `{commits, pr, diverged}` — work done after the PR merged |
 | `last_commit` | most recent commit |
 

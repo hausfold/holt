@@ -45,6 +45,7 @@ type LandedVerdict string
 const (
 	LandedYes       LandedVerdict = "yes"
 	LandedNo        LandedVerdict = "no"
+	LandedFresh     LandedVerdict = "fresh"
 	LandedContained LandedVerdict = "contained"
 )
 

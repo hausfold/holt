@@ -71,6 +71,7 @@ public typealias LandedVerdict = HoltOpenEnum<LandedVerdictTag>
 extension LandedVerdict {
     public static let yes = LandedVerdict(rawValue: "yes")
     public static let no = LandedVerdict(rawValue: "no")
+    public static let fresh = LandedVerdict(rawValue: "fresh")
     public static let contained = LandedVerdict(rawValue: "contained")
 }
 
@@ -80,6 +81,7 @@ public enum LandedViaTag {}
 /// which still round-trips as an opaque `LandedVia`.
 public typealias LandedVia = HoltOpenEnum<LandedViaTag>
 extension LandedVia {
+    public static let neverDiverged = LandedVia(rawValue: "never-diverged")
     public static let ancestry = LandedVia(rawValue: "ancestry")
     public static let prHeadOID = LandedVia(rawValue: "pr-head-oid")
     public static let patchEquivalence = LandedVia(rawValue: "patch-equivalence")

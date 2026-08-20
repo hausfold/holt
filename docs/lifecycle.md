@@ -31,8 +31,14 @@ is what survives. Not an "agent" — that word means the *client* a lane runs
 
 Whether a branch's work reached the default branch, across every merge
 shape: fast-forward, merge commit, forge rebase, squash, cherry-pick, and
-merged-then-kept-committing. Verdict is `yes` \| `no` \| `contained`, each
-with a `via` and a `confidence`.
+merged-then-kept-committing. Verdict is `yes` \| `no` \| `fresh` \|
+`contained`, each with a `via` and a `confidence`.
+
+`fresh` is the one that is not about merging at all: the branch has never
+carried a commit of its own, so there is nothing here to have landed. It is
+still reapable — a never-committed branch has nothing to lose — but a
+consumer that renders the verdict should say so as *nothing yet*, never as
+*merged*.
 
 ## Occupancy — heartbeats and leases
 

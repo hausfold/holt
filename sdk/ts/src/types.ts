@@ -26,9 +26,10 @@ export enum HoltExitCode {
  * minor, removals major." Treat an unknown value as opaque, not an error. */
 export type LaneState = "live" | "parked" | "stray";
 
-export type LandedVerdict = "yes" | "no" | "contained";
+export type LandedVerdict = "yes" | "no" | "fresh" | "contained";
 
 export type LandedVia =
+  | "never-diverged"
   | "ancestry"
   | "pr-head-oid"
   | "patch-equivalence"
