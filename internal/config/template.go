@@ -10,7 +10,7 @@ import (
 // adapter kind and every command template a lane's argv is built from.
 type TemplateVars struct {
 	Path, Main, Repo, Name, Branch, Base, Parent, Agent, Prompt, Image, Port string
-	Env                                                                     map[string]string
+	Env                                                                      map[string]string
 }
 
 // RenderArgv runs text/template over each argv element independently.
