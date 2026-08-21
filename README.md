@@ -90,6 +90,7 @@ failing. Don't reach for `git worktree remove`; ask it why.
 | `holt reship [name]` | push a branch that outran its merged PR, open the follow-up |
 | `holt heartbeat [path]` | hold the occupancy lease, so `reap` spares this lane |
 | `holt watch --json` | lifecycle events on stdout, one NDJSON object per line |
+| `holt runtime up\|enter\|down <name>` | hand a lane to an isolation backend, and take it back · `--backend <id>` every time, no default |
 | `holt hook create` / `remove` | client-hook entry points (this is what `claude --worktree` calls) |
 
 `holt --help` is exhaustive. Config, exit codes, and the `--json` lane payload
