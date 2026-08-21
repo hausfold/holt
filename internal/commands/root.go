@@ -33,6 +33,12 @@ A LANE is one agent's branch, checkout and pane, from create to reaped.
                           --pid N (0 = TTL-only) · --release to drop it
   holt watch --json       lifecycle events on stdout, one NDJSON object per line
   holt reship [name]      push a branch that outran its merged PR, open the follow-up
+  holt runtime up <name>  stand up a lane's runtime-isolation backend
+                          --backend <id> (required — no default backend)
+  holt runtime enter <name> --backend <id>
+                          drop into it interactively
+  holt runtime down <name> --backend <id>
+                          tear it down
   holt hook create        [hook] open a lane — JSON on stdin, path on stdout
   holt hook remove        [hook] retire one without losing work — JSON on stdin
 
@@ -115,6 +121,9 @@ func Run(args []string) error {
 
 	case "reship":
 		return env.Reship(argAt(args, 1))
+
+	case "runtime":
+		return env.RuntimeCmd(args[1:])
 
 	// `holt hook create` is the documented spelling. The bare `create` /
 	// `remove` verbs are kept because that is what the shipped Claude Code hook
