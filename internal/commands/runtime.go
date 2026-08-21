@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 
@@ -66,9 +67,7 @@ func (e *Env) RuntimeCmd(args []string) error {
 //
 // stdout/stderr are inherited rather than captured, so a `tart clone`/`tart
 // run` (or any other backend) prints its progress live, the same visibility
-// Reship gives `gh pr create`. A failing setup command degrades rather than
-// dying outright — see RuntimeDown for why "never fatal" is the rule for
-// every verb here, not just teardown.
+// Reship gives `gh pr create`.
 func (e *Env) RuntimeUp(name, backend string) error {
 	entry, vars, adapter, err := e.resolveRuntime(name, backend)
 	if err != nil {
@@ -83,7 +82,7 @@ func (e *Env) RuntimeUp(name, backend string) error {
 	}
 	ui.Say("standing up %s for %s …", backend, entry.Name())
 	if err := runInherited(argv); err != nil {
-		return exitcode.Degradedf("%s's setup failed for %s: %v", backend, entry.Name(), err)
+		return runtimeCommandError(backend, "setup", entry.Name(), argv[0], err)
 	}
 	return nil
 }
@@ -112,11 +111,6 @@ func (e *Env) RuntimeEnter(name, backend string) error {
 }
 
 // RuntimeDown tears a lane's runtime backend down.
-//
-// Never fatal: a stuck VM is a nuisance, not a reason for holt to exit
-// non-zero and leave the caller unsure whether anything happened. It
-// degrades and says so, the way HookRemove treats a stray checkout as
-// "named, not fatal" rather than aborting the whole removal.
 func (e *Env) RuntimeDown(name, backend string) error {
 	entry, vars, adapter, err := e.resolveRuntime(name, backend)
 	if err != nil {
@@ -131,7 +125,7 @@ func (e *Env) RuntimeDown(name, backend string) error {
 	}
 	ui.Say("tearing down %s's %s …", entry.Name(), backend)
 	if err := runInherited(argv); err != nil {
-		return exitcode.Degradedf("%s's teardown failed for %s: %v", backend, entry.Name(), err)
+		return runtimeCommandError(backend, "teardown", entry.Name(), argv[0], err)
 	}
 	return nil
 }
@@ -183,4 +177,23 @@ func runInherited(argv []string) error {
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return cmd.Run()
+}
+
+// runtimeCommandError turns a failed setup/teardown command into holt's exit
+// code, and the two failure shapes mean different things.
+//
+// A binary that isn't on PATH at all is the same "a signal was unavailable"
+// shape as Reship's "gh is unavailable" case — SPEC.md §2.4's own words for
+// exit 3 — so it degrades: install the backend's CLI and the same command
+// works. A binary that WAS found and ran and still exited non-zero actually
+// attempted the operation and failed at it (a VM that already exists, a full
+// disk, a bad image) — that is not "completed, but a signal was unavailable",
+// so it lands in Usage instead, the bucket every other "fix this, then
+// retry" failure lands in.
+func runtimeCommandError(backend, step, lane, bin string, err error) error {
+	var notFound *exec.Error
+	if errors.As(err, &notFound) {
+		return exitcode.Degradedf("%s's %s command (%s) is unavailable — install it, then try again", backend, step, bin)
+	}
+	return exitcode.Usagef("%s's %s failed for %s: %v", backend, step, lane, err)
 }

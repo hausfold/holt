@@ -38,6 +38,7 @@ system, the package manager or which agent is running.
 | what got reaped, and the SHA to undo it | `holt reaped` |
 | retire a lane that will never land | `holt drop <name>` |
 | push commits that outran a merged PR | `holt reship [name]` |
+| stand up/enter/tear down a lane's VM or container | `holt runtime up\|enter\|down <name> --backend <id>` |
 | watch lifecycle events | `holt watch --json` (NDJSON, one object per line) |
 | everything, exhaustively | `holt --help` (prints to **stderr**) |
 
