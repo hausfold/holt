@@ -1952,6 +1952,95 @@ open = \"$hook\""
   [ "$status" -eq 1 ]
 }
 
+@test "prompt: spawn WITHOUT a prompt never fires the open hook" {
+  # The pairing that makes the test above mean something. `holt spawn` on its
+  # own is still "make me a lane and print its path" — a caller doing its own
+  # opening must not get a second window from holt.
+  local b hook; b="$(mkrepo beta)"
+  hook="$(mkhook open 'echo fired >"'"$TMP"'/fired"; exit 0')"
+  setcfg "[hooks]
+open = \"$hook\""
+  run bash -c "'$WT' spawn '$b' quiet 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [ ! -e "$TMP/fired" ] || fail "spawn opened a window nobody asked for"
+}
+
+@test "prompt: an open hook that FAILS is degraded too, not a usage error" {
+  # These used to be two answers to one situation: no hook exited 3 with a
+  # recovery line, a hook that broke exited 1 with none. A palette command whose
+  # window manager was down read 1 as "you asked wrong", retried, and made a
+  # SECOND lane while the first sat on disk.
+  local b hook; b="$(mkrepo beta)"
+  hook="$(mkhook open 'exit 7')"      # 7 means nothing to holt — a broken hook
+  setcfg "[hooks]
+open = \"$hook\""
+  run bash -c "'$WT' spawn '$b' broken --prompt 'do the thing'"
+  [ "$status" -eq 3 ] || fail "a broken opener must not read as a bad invocation: $status"
+  [ -e "$CLAUDE_WT_BASE/beta/broken/.git" ]
+  [[ "$output" == *"claude -- 'do the thing'"* ]] || fail "no recovery command: $output"
+}
+
+@test "prompt: an open hook that REFUSES still exits 2" {
+  # A decision, not a breakage — and a caller has to tell them apart.
+  local b hook; b="$(mkrepo beta)"
+  hook="$(mkhook open 'exit 2')"
+  setcfg "[hooks]
+open = \"$hook\""
+  run bash -c "'$WT' spawn '$b' declined --prompt 'do the thing'"
+  [ "$status" -eq 2 ]
+}
+
+@test "prompt: an empty positional is refused instead of shifting the next one along" {
+  # `holt spawn "$repo" "" claude` used to fall through the name slot and name
+  # the lane "claude". Every SDK passes the name positionally, so an unset
+  # variable in a caller silently produced a misnamed lane.
+  local b; b="$(mkrepo beta)"
+  run "$WT" spawn "$b" "" claude
+  [ "$status" -eq 1 ]
+  [ ! -e "$CLAUDE_WT_BASE/beta/claude" ] || fail "the agent id became the lane name"
+}
+
+@test "prompt: an empty --prompt is refused, like an empty --prompt-file" {
+  local b main; b="$(mkrepo beta)"; main="$(mkrepo alpha)"
+  run "$WT" spawn "$b" blank --prompt ""
+  [ "$status" -eq 1 ]
+  [ ! -e "$CLAUDE_WT_BASE/beta/blank" ]
+  cd "$main"; wt_run new blank --prompt "   "
+  [ "$status" -eq 1 ]
+  [ ! -e "$CLAUDE_WT_BASE/alpha/blank" ]
+}
+
+@test "prompt: --image with no first turn to look at it is refused" {
+  # Silently dropping it opens a pane whose agent was never given the screenshot
+  # the user pointed at.
+  local main b; main="$(mkrepo alpha)"; b="$(mkrepo beta)"
+  : >"$TMP/shot.png"
+  cd "$main"; wt_run new shotless --open --image "$TMP/shot.png"
+  [ "$status" -eq 1 ]
+  [ ! -e "$CLAUDE_WT_BASE/alpha/shotless" ]
+  run "$WT" spawn "$b" shotless --image "$TMP/shot.png"
+  [ "$status" -eq 1 ]
+}
+
+@test "prompt: --image reaches a client that can attach it, and is described to one that can't" {
+  local b hook; b="$(mkrepo beta)"
+  : >"$TMP/shot.png"
+  hook="$(mkhook open 'printf "%s\n" "$HOLT_COMMAND" >"'"$TMP"'/cmd"; exit 0')"
+  setcfg "[hooks]
+open = \"$hook\""
+  run bash -c "'$WT' spawn '$b' shot --agent codex --prompt 'look' --image '$TMP/shot.png' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TMP/cmd")" = "codex -i $TMP/shot.png -- look" ] || fail "codex: $(cat "$TMP/cmd")"
+
+  # claude has no image flag, so the path is named in the prompt instead of
+  # being dropped — an agent reasoning about a screenshot it was never given is
+  # worse than one told where to find it.
+  run bash -c "'$WT' spawn '$b' shot-claude --prompt 'look' --image '$TMP/shot.png' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$(cat "$TMP/cmd")" == *"A screenshot for this task is at $TMP/shot.png"* ]] \
+    || fail "claude: $(cat "$TMP/cmd")"
+}
+
 @test "prompt: new --prompt implies --open, and keeps the lane's own client" {
   local main hook; main="$(mkrepo alpha)"
   hook="$(mkhook open 'printf "%s|%s\n" "$HOLT_LANE_AGENT" "$HOLT_COMMAND" >"'"$TMP"'/cmd"; exit 0')"

@@ -81,8 +81,9 @@ failing. Don't reach for `git worktree remove`; ask it why.
 | `holt` | list every live/parked lane, across all repos · `--json` for machines |
 | `holt <name>` | resume one — rebuild its checkout, reopen its agent |
 | `holt new [name]` | a lane on **this** repo — prints its path · `--open [agent]` / `--cmd '…'` to run something in it |
+| `… --prompt '<task>'` | open it on a first turn instead of a blank pane · `--prompt-file <file\|->` for a brief · `--image <file>` |
 | `holt child <repo>` | a lane on **another** repo, as a child of this pane |
-| `holt spawn <repo> <name>` | a named lane, for a spawner with no pane of its own |
+| `holt spawn <repo> <name>` | a named lane, for a spawner with no pane of its own — `--prompt`/`--prompt-file` opens it through `[hooks] open` |
 | `holt park [label]` / `unpark` | set the tree aside as a `wip:` commit, and put it back |
 | `holt reap` | sweep every landed, unoccupied lane |
 | `holt reaped` | what went, why, and the SHA to get it back |

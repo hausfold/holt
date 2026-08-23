@@ -38,7 +38,7 @@ jobs:
       # that derivation would never fire here.
       - name: agent skills
         run: |
-          script/check-skills.sh holt ai/SKILL.md handoff ai/handoff/SKILL.md
+          script/check-skills.sh ai holt
 
       - name: gofmt
         run: test -z "$(gofmt -l ./cmd ./internal)" || { gofmt -l ./cmd ./internal; exit 1; }

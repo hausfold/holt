@@ -1,12 +1,14 @@
 package commands
 
 import (
+	"fmt"
 	"io"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/hausfold/holt/internal/config"
 	"github.com/hausfold/holt/internal/exitcode"
@@ -52,6 +54,9 @@ type NewOpts struct {
 	// agent's business, not holt's.
 	Prompt string
 	Image  string // a local file the first turn should look at
+	// Stdin records that Prompt was drained from fd 0, so the exec path can
+	// give the client a terminal back. See restoreStdin.
+	Stdin bool
 }
 
 // NewCmd parses `holt new [name] [agent] [--open [agent]] [--agent id] [--cmd …]`.
@@ -89,6 +94,9 @@ func (e *Env) NewCmd(args []string) error {
 				return exitcode.Usagef("--prompt needs the task text (or use --prompt-file)")
 			}
 			i++
+			if strings.TrimSpace(args[i]) == "" {
+				return exitcode.Usagef("--prompt is empty — there is no task to open the lane on")
+			}
 			opts.Prompt, opts.Open = args[i], true
 		case "--prompt-file":
 			if i+1 >= len(args) {
@@ -99,7 +107,7 @@ func (e *Env) NewCmd(args []string) error {
 			if err != nil {
 				return err
 			}
-			opts.Prompt, opts.Open = text, true
+			opts.Prompt, opts.Open, opts.Stdin = text, true, args[i] == "-"
 		case "--image":
 			if i+1 >= len(args) {
 				return exitcode.Usagef("--image needs a file path")
@@ -113,13 +121,17 @@ func (e *Env) NewCmd(args []string) error {
 			case strings.HasPrefix(a, "--cmd="):
 				opts.Cmd = a[len("--cmd="):]
 			case strings.HasPrefix(a, "--prompt="):
+				if strings.TrimSpace(a[len("--prompt="):]) == "" {
+					return exitcode.Usagef("--prompt is empty — there is no task to open the lane on")
+				}
 				opts.Prompt, opts.Open = a[len("--prompt="):], true
 			case strings.HasPrefix(a, "--prompt-file="):
-				text, err := readPrompt(a[len("--prompt-file="):])
+				path := a[len("--prompt-file="):]
+				text, err := readPrompt(path)
 				if err != nil {
 					return err
 				}
-				opts.Prompt, opts.Open = text, true
+				opts.Prompt, opts.Open, opts.Stdin = text, true, path == "-"
 			case strings.HasPrefix(a, "--image="):
 				opts.Image = a[len("--image="):]
 			case strings.HasPrefix(a, "-"):
@@ -135,6 +147,12 @@ func (e *Env) NewCmd(args []string) error {
 	}
 	if opts.Cmd != "" && opts.Open {
 		return exitcode.Usagef("--cmd and --open/--agent/--prompt do different things with the same pane — pick one")
+	}
+	// An image is something the FIRST TURN looks at, so with no first turn
+	// there is nowhere to put it. Dropping it silently would open a pane whose
+	// agent was never given the screenshot the user pointed at.
+	if opts.Image != "" && opts.Prompt == "" {
+		return exitcode.Usagef("--image needs a --prompt/--prompt-file — it is what the first turn is told to look at")
 	}
 	return e.New(name, opts)
 }
@@ -209,6 +227,9 @@ func (e *Env) New(want string, opts NewOpts) error {
 	}
 	if err := os.Chdir(dir); err != nil {
 		return exitcode.Usagef("could not enter %s", dir)
+	}
+	if opts.Stdin {
+		restoreStdin()
 	}
 	return execClient(argv)
 }
@@ -296,6 +317,9 @@ func (e *Env) SpawnCmd(args []string) error {
 				return exitcode.Usagef("--prompt needs the task text (or use --prompt-file)")
 			}
 			i++
+			if strings.TrimSpace(args[i]) == "" {
+				return exitcode.Usagef("--prompt is empty — there is no task to open the lane on")
+			}
 			opts.Prompt = args[i]
 		case "--prompt-file":
 			if i+1 >= len(args) {
@@ -318,6 +342,9 @@ func (e *Env) SpawnCmd(args []string) error {
 			case strings.HasPrefix(a, "--agent="):
 				opts.Agent = a[len("--agent="):]
 			case strings.HasPrefix(a, "--prompt="):
+				if strings.TrimSpace(a[len("--prompt="):]) == "" {
+					return exitcode.Usagef("--prompt is empty — there is no task to open the lane on")
+				}
 				opts.Prompt = a[len("--prompt="):]
 			case strings.HasPrefix(a, "--prompt-file="):
 				text, err := readPrompt(a[len("--prompt-file="):])
@@ -329,6 +356,12 @@ func (e *Env) SpawnCmd(args []string) error {
 				opts.Image = a[len("--image="):]
 			case strings.HasPrefix(a, "-"):
 				return exitcode.Usagef("unknown flag %q — try `holt --help`", a)
+			case a == "":
+				// An empty positional is an unset variable in the caller, never
+				// an intention. Falling through would hand this slot to the NEXT
+				// argument: `holt spawn "$repo" "" claude` named the lane
+				// "claude". Every SDK passes the name positionally.
+				return exitcode.Usagef("usage: holt spawn <repo> <name> — an argument is empty")
 			case target == "":
 				target = a
 			case want == "":
@@ -339,6 +372,11 @@ func (e *Env) SpawnCmd(args []string) error {
 				return exitcode.Usagef("usage: holt spawn <repo> <name> [--prompt '<task>' | --prompt-file <file>]")
 			}
 		}
+	}
+	// Same rule as `new`: an image is what the first turn is told to look at,
+	// so with no first turn there is nowhere to put it.
+	if opts.Image != "" && opts.Prompt == "" {
+		return exitcode.Usagef("--image needs a --prompt/--prompt-file — it is what the first turn is told to look at")
 	}
 	return e.Spawn(target, want, opts)
 }
@@ -395,21 +433,59 @@ func (e *Env) Spawn(target, want string, opts SpawnOpts) error {
 	// HOLT_CHAT is the lane's own checkout: a spawn continues nothing, so there
 	// is no parent pane whose transcript this belongs to.
 	argv := startArgv(spec, opts.Image, opts.Prompt)
-	if res := e.openSession(config.HookOpen, entry, agentID, dir, argv); res.Answer != config.Defer {
-		return hookOutcome(config.HookOpen, res)
+	res := e.openSession(config.HookOpen, entry, agentID, dir, argv)
+	switch {
+	case res.Answer == config.Yes:
+		return nil
+	case res.Refused:
+		// A seam that DECLINED made a decision, and a caller has to be able to
+		// tell that from a seam that broke. Exit 2 keeps its meaning.
+		return exitcode.Refusedf("the open hook declined")
 	}
-	// No seam. Deliberately NOT holt's `new` fallback of exec'ing the client:
-	// `spawn` is the "nobody's pane" verb, so the process holt would replace
-	// belongs to a script, a palette command or another agent's tool call — all
-	// of which would hang on a client waiting for a terminal that isn't there.
-	// Invariant 1 still holds: the lane exists and the branch is on disk. What
-	// is unavailable is a place to open it, which is exactly exit 3.
-	ui.Warn("no [hooks] open configured — the lane is ready, but nothing opened it")
+
+	// Everything else is "the lane exists and nothing opened it", and it is one
+	// answer, not two. It used to be two: no seam configured exited 3 with a
+	// recovery line, while a seam that FAILED exited 1 with none — so a caller
+	// whose window manager was down read "you asked wrong", retried, and got a
+	// second lane while the first sat on disk with its path already on stdout.
+	//
+	// Deliberately NOT holt's `new` fallback of exec'ing the client: `spawn` is
+	// the "nobody's pane" verb, so the process holt would replace belongs to a
+	// script, a palette command or another agent's tool call — all of which
+	// would hang on a client waiting for a terminal that isn't there.
+	//
+	// Invariant 1 holds either way: the checkout, the branch and the registry
+	// row are all on disk before the seam is asked anything. What is
+	// unavailable is a place to open it, which is exactly what exit 3 is for.
+	why := "no [hooks] open configured"
+	if res.Answer != config.Defer {
+		why = "the open hook failed"
+	}
+	e.Warn(fmt.Sprintf("%s — lane '%s' is ready, but nothing opened it", why, name))
 	return exitcode.Degradedf("lane '%s' created at %s; run this inside it: %s",
 		name, dir, shellCommand(argv))
 }
 
 // ── shared plumbing ──────────────────────────────────────────────────────────
+
+// restoreStdin puts a terminal back on fd 0 before holt execs a client.
+//
+// `--prompt-file -` drains stdin, which leaves fd 0 at EOF — and an
+// interactive client handed an exhausted, non-tty stdin does not draw a UI, it
+// reads nothing and leaves. So the one path that both consumes stdin AND execs
+// (`holt new --prompt-file -`) reopens the controlling terminal first.
+//
+// Best-effort by design: with no controlling terminal there was nothing to
+// restore, and refusing the lane over it would be worse than the client
+// deciding for itself what to do with a closed stdin.
+func restoreStdin() {
+	tty, err := os.OpenFile("/dev/tty", os.O_RDONLY, 0)
+	if err != nil {
+		return
+	}
+	defer tty.Close()
+	_ = syscall.Dup2(int(tty.Fd()), int(os.Stdin.Fd()))
+}
 
 // readPrompt loads a first-turn task from a file, or from stdin for "-".
 //

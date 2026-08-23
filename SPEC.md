@@ -746,6 +746,12 @@ invocation holt was about to exec, already resolved to continue-the-newest or
 open-the-picker per §5.3. A hook that re-derives it instead lands its new pane
 on the picker holt just spared the user.
 
+`HOLT_COMMAND` is a command STRING, **shell-quoted per argument**, and a hook
+runs it through a shell rather than word-splitting it. That was invisible while
+every invocation was one or two bare words; `new`/`spawn --prompt` put a whole
+task in there ({{.Prompt}}, §5.2), and a brief spans lines and holds quotes and
+`$`.
+
 A predicate may print a JSON object on stdout to enrich its yes/no — a `landed`
 hook naming its own rule, so a reap stays attributable in `--json` (`via:
 "release-train"` beats `via: "hook"` when you are working out why a branch went

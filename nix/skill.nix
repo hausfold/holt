@@ -42,15 +42,26 @@ runCommand "holt-skill"
     };
   }
   ''
-    mkdir -p "$out/holt" "$out/handoff"
-    cp ${../ai/SKILL.md} "$out/holt/SKILL.md"
-    cp ${../ai/handoff/SKILL.md} "$out/handoff/SKILL.md"
+    # The whole ai/ tree, not two named files: the layout below is DERIVED from
+    # it, so a third skill needs no edit here, in check.yml, or in the guard
+    # script. Three hardcoded lists is three places to forget one — and
+    # forgetting it in the CI copy reinstates the exact gap the guards exist to
+    # close, since a skill that is never checked is one that installs, lists and
+    # is never loaded.
+    ai=${../ai}
+
+    mkdir -p "$out/holt"
+    cp "$ai/SKILL.md" "$out/holt/SKILL.md"
+    for dir in "$ai"/*/; do
+      [ -f "$dir/SKILL.md" ] || continue
+      name="$(basename "$dir")"
+      mkdir -p "$out/$name"
+      cp "$dir/SKILL.md" "$out/$name/SKILL.md"
+    done
 
     # The guards live in script/check-skills.sh, not here, and that is the whole
     # point: holt's CI installs Go and bats and no Nix, so a guard written into
     # this derivation would run on a developer's machine and nowhere else. Both
-    # callers run the same copy.
-    bash ${../script/check-skills.sh} \
-      holt "$out/holt/SKILL.md" \
-      handoff "$out/handoff/SKILL.md"
+    # callers run the same copy, over the same discovered set.
+    bash ${../script/check-skills.sh} "$ai" holt
   ''

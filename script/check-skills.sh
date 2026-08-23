@@ -12,19 +12,40 @@
 # run on a developer's machine and nowhere else. nix/skill.nix calls this, and
 # `check.yml` calls it directly.
 #
-# Usage: script/check-skills.sh <name> <path> [<name> <path> …]
+# It DISCOVERS the skills rather than being handed a list, and that is the point:
+# a hardcoded list here plus a hardcoded list in nix/skill.nix plus a third in
+# check.yml is three places to forget a new skill, and forgetting it in the CI
+# copy reinstates exactly the gap this script was extracted to close.
+#
+# Usage: script/check-skills.sh <ai-dir> <tool-name>
+#
+#   <ai-dir>/SKILL.md        → checked as <tool-name>   (the tool's own skill)
+#   <ai-dir>/*/SKILL.md      → checked as its directory name
 set -euo pipefail
 
 status=0
 bad() { printf '%s\n' "$*" >&2; status=1; }
 
-[ "$#" -ge 2 ] && [ $(( $# % 2 )) -eq 0 ] || {
-  printf 'usage: check-skills.sh <name> <path> [<name> <path> ...]\n' >&2
+[ "$#" -eq 2 ] || {
+  printf 'usage: check-skills.sh <ai-dir> <tool-name>\n' >&2
   exit 2
 }
+root="$1" tool="$2"
+[ -d "$root" ] || { printf 'check-skills.sh: no such directory: %s\n' "$root" >&2; exit 2; }
 
-while [ "$#" -ge 2 ]; do
-  name="$1" skill="$2"; shift 2
+# name<TAB>path, the tool's own first.
+skills="$(printf '%s\t%s\n' "$tool" "$root/SKILL.md")"
+for dir in "$root"/*/; do
+  [ -f "$dir/SKILL.md" ] || continue
+  skills="$skills
+$(printf '%s\t%s' "$(basename "$dir")" "$dir/SKILL.md")"
+done
+
+# At least the tool's own has to be there — an empty run must not pass.
+[ -f "$root/SKILL.md" ] || { printf 'check-skills.sh: no %s/SKILL.md\n' "$root" >&2; exit 2; }
+
+while IFS="$(printf '\t')" read -r name skill; do
+  [ -n "$name" ] || continue
 
   [ -f "$skill" ] || { bad "$name: no SKILL.md at $skill"; continue; }
 
@@ -54,6 +75,10 @@ while [ "$#" -ge 2 ]; do
   lines=$(wc -l < "$skill")
   [ "$lines" -le 150 ] \
     || bad "$name: SKILL.md is $lines lines; the standard caps a skill at 150"
-done
+# A pipe would put this loop in a subshell and throw `status` away with it, so
+# every failure would print and the script would still exit 0.
+done <<EOF
+$skills
+EOF
 
 exit "$status"
