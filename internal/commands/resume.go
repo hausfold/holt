@@ -108,7 +108,7 @@ func (e *Env) Resume(want string, pick bool) error {
 	// No tty (piped, or driven by a script) or no client installed: print the
 	// command rather than exec into something nobody can see.
 	ui.Say("checkout ready. Reopen the %s chat with:", agent)
-	ui.Out("    cd %s && %s\n", shellQuote(chat), strings.Join(argv, " "))
+	ui.Out("    cd %s && %s\n", shellQuote(chat), shellCommand(argv))
 	return nil
 }
 
@@ -150,7 +150,7 @@ func (e *Env) openSession(hook string, entry Entry, agent, chat string, argv []s
 	payload := e.hookPayload(entry.Main, entry.Branch, entry.Path, agent)
 	payload["chat"] = chat
 	payload["state"] = string(entry.State)
-	payload["command"] = strings.Join(argv, " ")
+	payload["command"] = shellCommand(argv)
 	res := e.Cfg.Do(hook, payload)
 	e.noteHook(res)
 	return res
@@ -173,6 +173,25 @@ func hookOutcome(hook string, res config.Result) error {
 func clientInstalled(id string) bool {
 	_, err := exec.LookPath(id)
 	return err == nil
+}
+
+// shellCommand renders an argv as a command STRING a hook can run through a
+// shell — which is what the `command` field and `HOLT_COMMAND` have always been
+// (lifecycle.md: "run it; don't rebuild it"), and what every opener does with it.
+//
+// Each element is quoted independently. Until `--prompt`, every argv holt handed
+// a hook was one or two bare words (`claude`, `codex resume --last`) where a
+// space-join and a quoted join are byte-identical — so this changes nothing that
+// already exists, and stops the one thing that would otherwise break the moment
+// a prompt is in there. A brief is multi-line and routinely holds quotes and
+// `$`; joined bare it shatters into words at best, and unbalances the opener's
+// `bash -lc` at worst.
+func shellCommand(argv []string) string {
+	quoted := make([]string, len(argv))
+	for i, a := range argv {
+		quoted[i] = shellQuote(a)
+	}
+	return strings.Join(quoted, " ")
 }
 
 func shellQuote(s string) string {

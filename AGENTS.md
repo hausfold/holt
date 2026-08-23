@@ -69,18 +69,38 @@ them — haus's statusline, the workshop's `bench status`, pounce's Spawn
 Agent, and every SDK. Changing one is a semver **major** conversation, not a
 refactor. The same goes for user-facing command names and flags.
 
-**`ai/SKILL.md` quotes two of those four** — `--json` output and exit codes —
-plus the frozen command names, so it is now downstream of the same freeze. See
-below.
+**The `ai/` skills quote two of those four** — `--json` output and exit codes —
+plus the frozen command names and flags, so they are now downstream of the same
+freeze. See below.
 
-## The agent surface (`ai/SKILL.md`)
+## The agent surface (`ai/`) — two skills
 
 **Don't confuse it with this file.** `AGENTS.md` is for an agent working **on**
-holt, from a checkout. [`ai/SKILL.md`](./ai/SKILL.md) is for an agent **using**
-it — on a stranger's machine, with no checkout, when their human says *"what
-worktrees do I have open?"* or *"park this"*. It is the routing document that
-makes those work first try: the verbs, the six exit codes, the `--json` fields,
-and when the answer is to do nothing.
+holt, from a checkout. `ai/` is for an agent **using** it — on a stranger's
+machine, with no checkout, when their human says *"what worktrees do I have
+open?"* or *"park this"*.
+
+| file | skill | teaches |
+|---|---|---|
+| [`ai/SKILL.md`](./ai/SKILL.md) | `holt` | the lifecycle: verbs, the six exit codes, the `--json` fields, and when the answer is to do nothing |
+| [`ai/handoff/SKILL.md`](./ai/handoff/SKILL.md) | `handoff` | the one thing with no verb — how to write the brief a cold session can act on, ending on the clipboard or in `holt spawn --prompt-file` |
+
+**Why `handoff` is holt's and not a consumer's.** The lane it opens is holt's
+unit, and `--prompt` is holt's flag; the brief is that flag's argument, and an
+argument nobody knows how to write is a flag nobody uses well. It stays inside
+the non-goals: it describes handing work **over** and stops there — no
+scheduling, no supervision, no opinion about what the receiving agent then does.
+The day it starts telling that agent how to do the work, it has become an
+orchestrator and belongs somewhere else.
+
+`handoff` is also the one skill here that a user invokes by name (`/handoff`),
+so its `description` carries both phrase families — *"make me a handoff"* and
+*"spawn an agent for this"* — and its default ending is the harmless one.
+Spawning costs a branch, a window and another agent's context, so it takes an
+explicit word; a skill that spawned on an ambiguous ask would be the wrong kind
+of surprise.
+
+The rest of this section is about both files.
 
 It is bound by the family standard, [the workshop's
 `notes/agent-surface.md`](https://github.com/hausfold/workshop/blob/main/notes/agent-surface.md) —
@@ -109,13 +129,14 @@ with `null` meaning *undetermined*, and `warnings` being the only channel a
 degraded run has under `--json`. Those are SPEC 2.2's own warnings, aimed at the
 newest consumer.
 
-`nix/skill.nix` ships it as `pkgs.holt-skill` (`$out/holt/SKILL.md`) — its own
-derivation so a consumer can install the skill with no Go toolchain and no
-binary. It does **not** isolate the Go build's hash: `src = ./.` is unfiltered,
+`nix/skill.nix` ships both as `pkgs.holt-skill` (`$out/holt/SKILL.md` and
+`$out/handoff/SKILL.md`, one directory per skill) — its own derivation so a
+consumer can install them with no Go toolchain and no binary. It does **not** isolate the Go build's hash: `src = ./.` is unfiltered,
 so `ai/` is inside that closure and a prose edit moves holt's drvPath either way
-(measured, not assumed). The build fails if the frontmatter is missing or
-unterminated, or if the file passes 150 lines — each of those produces a skill
-that installs, lists, and is never loaded.
+(measured, not assumed). The build runs the same guards over each: it fails if the
+frontmatter is missing or unterminated, if `name:` disagrees with the directory,
+or if the file passes 150 lines — each of those produces a skill that installs,
+lists, and is never loaded.
 
 ⚠️ **The verb's name is not settled.** This file and the family standard say
 `holt skill`; `SPEC.md` §14.5 already reserves the same capability as `holt docs
@@ -123,10 +144,12 @@ agent [--format=md|json]`, with a `{version, body}` envelope. Different verb,
 different output shape, same job — resolve it before either is implemented,
 not by whichever lands first.
 
-**Every claim in it must be runnable.** A verb, flag, exit code or `--json` key
-that changes changes `ai/SKILL.md` in the same PR. That file quotes the frozen
-contracts above, so it is not merely documentation that drifted — it is a
-downstream consumer of them.
+**Every claim in them must be runnable.** A verb, flag, exit code or `--json` key
+that changes changes `ai/SKILL.md` in the same PR — and `ai/handoff/SKILL.md`
+too when it is one of the flags that file spells out (`--prompt`,
+`--prompt-file`, `--agent`, `--image`, and spawn's exit 3). Those files quote the
+frozen contracts above, so they are not merely documentation that drifted — they
+are downstream consumers of them.
 
 ## The five SDKs are one product
 

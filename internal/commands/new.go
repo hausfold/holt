@@ -1,11 +1,14 @@
 package commands
 
 import (
+	"fmt"
+	"io"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/hausfold/holt/internal/config"
 	"github.com/hausfold/holt/internal/exitcode"
@@ -43,6 +46,17 @@ type NewOpts struct {
 	Agent string // client id; implies Open when set explicitly
 	Open  bool   // exec a session in the lane instead of printing its path
 	Cmd   string // command to exec in the lane instead of a client
+	// Prompt is the lane's FIRST TURN, and it implies Open: a task with no
+	// session to hand it to is a task nobody reads. It changes which client
+	// invocation gets run — `spec.start`, not `spec.open` — and nothing else
+	// about the lane. holt neither stores it nor reads it; it is one argv
+	// element passed through, and what the agent then does with it is the
+	// agent's business, not holt's.
+	Prompt string
+	Image  string // a local file the first turn should look at
+	// Stdin records that Prompt was drained from fd 0, so the exec path can
+	// give the client a terminal back. See restoreStdin.
+	Stdin bool
 }
 
 // NewCmd parses `holt new [name] [agent] [--open [agent]] [--agent id] [--cmd …]`.
@@ -75,12 +89,51 @@ func (e *Env) NewCmd(args []string) error {
 			}
 			i++
 			opts.Cmd = args[i]
+		case "--prompt":
+			if i+1 >= len(args) {
+				return exitcode.Usagef("--prompt needs the task text (or use --prompt-file)")
+			}
+			i++
+			if strings.TrimSpace(args[i]) == "" {
+				return exitcode.Usagef("--prompt is empty — there is no task to open the lane on")
+			}
+			opts.Prompt, opts.Open = args[i], true
+		case "--prompt-file":
+			if i+1 >= len(args) {
+				return exitcode.Usagef("--prompt-file needs a path, or - for stdin")
+			}
+			i++
+			text, err := readPrompt(args[i])
+			if err != nil {
+				return err
+			}
+			opts.Prompt, opts.Open, opts.Stdin = text, true, args[i] == "-"
+		case "--image":
+			if i+1 >= len(args) {
+				return exitcode.Usagef("--image needs a file path")
+			}
+			i++
+			opts.Image = args[i]
 		default:
 			switch {
 			case strings.HasPrefix(a, "--agent="):
 				opts.Agent, opts.Open = a[len("--agent="):], true
 			case strings.HasPrefix(a, "--cmd="):
 				opts.Cmd = a[len("--cmd="):]
+			case strings.HasPrefix(a, "--prompt="):
+				if strings.TrimSpace(a[len("--prompt="):]) == "" {
+					return exitcode.Usagef("--prompt is empty — there is no task to open the lane on")
+				}
+				opts.Prompt, opts.Open = a[len("--prompt="):], true
+			case strings.HasPrefix(a, "--prompt-file="):
+				path := a[len("--prompt-file="):]
+				text, err := readPrompt(path)
+				if err != nil {
+					return err
+				}
+				opts.Prompt, opts.Open, opts.Stdin = text, true, path == "-"
+			case strings.HasPrefix(a, "--image="):
+				opts.Image = a[len("--image="):]
 			case strings.HasPrefix(a, "-"):
 				return exitcode.Usagef("unknown flag %q — try `holt --help`", a)
 			case name == "":
@@ -93,7 +146,13 @@ func (e *Env) NewCmd(args []string) error {
 		}
 	}
 	if opts.Cmd != "" && opts.Open {
-		return exitcode.Usagef("--cmd and --open/--agent do different things with the same pane — pick one")
+		return exitcode.Usagef("--cmd and --open/--agent/--prompt do different things with the same pane — pick one")
+	}
+	// An image is something the FIRST TURN looks at, so with no first turn
+	// there is nowhere to put it. Dropping it silently would open a pane whose
+	// agent was never given the screenshot the user pointed at.
+	if opts.Image != "" && opts.Prompt == "" {
+		return exitcode.Usagef("--image needs a --prompt/--prompt-file — it is what the first turn is told to look at")
 	}
 	return e.New(name, opts)
 }
@@ -152,21 +211,27 @@ func (e *Env) New(want string, opts NewOpts) error {
 	// is told what holt WOULD run, and an uninstalled client is that hook's
 	// problem to report, not a reason to withhold the command.
 	openSpec, _ := specFor(agentID)
-	if res := e.openSession(config.HookOpen, entry, agentID, dir, openSpec.open); res.Answer != config.Defer {
+	argv := openSpec.open
+	if opts.Prompt != "" {
+		argv = startArgv(openSpec, opts.Image, opts.Prompt)
+	}
+	if res := e.openSession(config.HookOpen, entry, agentID, dir, argv); res.Answer != config.Defer {
 		return hookOutcome(config.HookOpen, res)
 	}
 
 	// The client is resolved LAST, and its absence is not fatal to the lane:
 	// the checkout and the registry row are already on disk, so an uninstalled
 	// client costs you this launch, not the branch. `holt <name>` picks it up.
-	spec, err := resolveAgent(agentID)
-	if err != nil {
+	if _, err := resolveAgent(agentID); err != nil {
 		return err
 	}
 	if err := os.Chdir(dir); err != nil {
 		return exitcode.Usagef("could not enter %s", dir)
 	}
-	return execClient(spec.open)
+	if opts.Stdin {
+		restoreStdin()
+	}
+	return execClient(argv)
 }
 
 // Child opens a lane on ANOTHER repo, as a child of this pane.
@@ -222,13 +287,116 @@ func (e *Env) Child(target, want string) error {
 	return nil
 }
 
+// SpawnOpts is how `holt spawn` was asked to finish. Same two fields as
+// NewOpts' prompt half, and they mean the same thing — see there.
+type SpawnOpts struct {
+	Agent  string
+	Prompt string
+	Image  string
+}
+
+// SpawnCmd parses `holt spawn <repo> <name> [agent] [--agent id]
+// [--prompt TEXT | --prompt-file FILE] [--image FILE]`.
+//
+// The third POSITIONAL is still an agent id: that is the spelling every shipped
+// palette command uses (`holt spawn "$repo" "$slug" "$agent"`), and it predates
+// the flags.
+func (e *Env) SpawnCmd(args []string) error {
+	var target, want string
+	var opts SpawnOpts
+	for i := 0; i < len(args); i++ {
+		switch a := args[i]; a {
+		case "--agent":
+			if i+1 >= len(args) {
+				return exitcode.Usagef("--agent needs a client id (claude, codex, opencode)")
+			}
+			i++
+			opts.Agent = args[i]
+		case "--prompt":
+			if i+1 >= len(args) {
+				return exitcode.Usagef("--prompt needs the task text (or use --prompt-file)")
+			}
+			i++
+			if strings.TrimSpace(args[i]) == "" {
+				return exitcode.Usagef("--prompt is empty — there is no task to open the lane on")
+			}
+			opts.Prompt = args[i]
+		case "--prompt-file":
+			if i+1 >= len(args) {
+				return exitcode.Usagef("--prompt-file needs a path, or - for stdin")
+			}
+			i++
+			text, err := readPrompt(args[i])
+			if err != nil {
+				return err
+			}
+			opts.Prompt = text
+		case "--image":
+			if i+1 >= len(args) {
+				return exitcode.Usagef("--image needs a file path")
+			}
+			i++
+			opts.Image = args[i]
+		default:
+			switch {
+			case strings.HasPrefix(a, "--agent="):
+				opts.Agent = a[len("--agent="):]
+			case strings.HasPrefix(a, "--prompt="):
+				if strings.TrimSpace(a[len("--prompt="):]) == "" {
+					return exitcode.Usagef("--prompt is empty — there is no task to open the lane on")
+				}
+				opts.Prompt = a[len("--prompt="):]
+			case strings.HasPrefix(a, "--prompt-file="):
+				text, err := readPrompt(a[len("--prompt-file="):])
+				if err != nil {
+					return err
+				}
+				opts.Prompt = text
+			case strings.HasPrefix(a, "--image="):
+				opts.Image = a[len("--image="):]
+			case strings.HasPrefix(a, "-"):
+				return exitcode.Usagef("unknown flag %q — try `holt --help`", a)
+			case a == "":
+				// An empty positional is an unset variable in the caller, never
+				// an intention. Falling through would hand this slot to the NEXT
+				// argument: `holt spawn "$repo" "" claude` named the lane
+				// "claude". Every SDK passes the name positionally.
+				return exitcode.Usagef("usage: holt spawn <repo> <name> — an argument is empty")
+			case target == "":
+				target = a
+			case want == "":
+				want = a
+			case opts.Agent == "":
+				opts.Agent = a
+			default:
+				return exitcode.Usagef("usage: holt spawn <repo> <name> [--prompt '<task>' | --prompt-file <file>]")
+			}
+		}
+	}
+	// Same rule as `new`: an image is what the first turn is told to look at,
+	// so with no first turn there is nowhere to put it.
+	if opts.Image != "" && opts.Prompt == "" {
+		return exitcode.Usagef("--image needs a --prompt/--prompt-file — it is what the first turn is told to look at")
+	}
+	return e.Spawn(target, want, opts)
+}
+
 // Spawn opens a NAMED lane for a spawner that has no pane of its own.
-func (e *Env) Spawn(target, want, agentID string) error {
+//
+// With --prompt it also OPENS that lane, through the same `[hooks] open` seam
+// `new` uses — which is the whole difference between the two endings. A spawner
+// with no pane cannot exec a client (there is no terminal to become), so the
+// seam is not an optimisation here, it is the only way a window happens at all.
+// Without a seam configured, the lane is still created and the invocation is
+// still reported; what is missing is somewhere to run it, and that is a
+// degraded run, not a failure — see below.
+func (e *Env) Spawn(target, want string, opts SpawnOpts) error {
 	if target == "" || want == "" {
 		return exitcode.Usagef("usage: holt spawn <repo-path> <name>")
 	}
-	agentID = orDefault(agentID, e.Agent)
-	if _, ok := specFor(agentID); !ok {
+	agentID := orDefault(opts.Agent, e.Agent)
+	spec, ok := specFor(agentID)
+	if !ok {
 		return exitcode.Usagef("unknown agent %q (expected claude, codex, or opencode)", agentID)
 	}
 	if fi, err := os.Stat(target); err != nil || !fi.IsDir() {
@@ -251,11 +419,108 @@ func (e *Env) Spawn(target, want, agentID string) error {
 	})
 	trustWorktree(agentID, main, dir)
 	ui.Say("created %s lane '%s' → %s", filepath.Base(main), name, dir)
+	// The path goes to stdout BEFORE the seam runs, and unconditionally: a
+	// caller reading `dir="$(holt spawn …)"` still gets one, and a caller that
+	// asked for a window still needs to be told where the lane landed in order
+	// to report it. The seam's own exit status is what says whether the window
+	// happened.
 	ui.Out("%s\n", dir)
-	return nil
+	if opts.Prompt == "" {
+		return nil
+	}
+
+	entry := Entry{Main: main, Branch: "worktree-" + name, Path: dir, State: Live}
+	// HOLT_CHAT is the lane's own checkout: a spawn continues nothing, so there
+	// is no parent pane whose transcript this belongs to.
+	argv := startArgv(spec, opts.Image, opts.Prompt)
+	res := e.openSession(config.HookOpen, entry, agentID, dir, argv)
+	switch {
+	case res.Answer == config.Yes:
+		return nil
+	case res.Refused:
+		// A seam that DECLINED made a decision, and a caller has to be able to
+		// tell that from a seam that broke. Exit 2 keeps its meaning.
+		return exitcode.Refusedf("the open hook declined")
+	}
+
+	// Everything else is "the lane exists and nothing opened it", and it is one
+	// answer, not two. It used to be two: no seam configured exited 3 with a
+	// recovery line, while a seam that FAILED exited 1 with none — so a caller
+	// whose window manager was down read "you asked wrong", retried, and got a
+	// second lane while the first sat on disk with its path already on stdout.
+	//
+	// Deliberately NOT holt's `new` fallback of exec'ing the client: `spawn` is
+	// the "nobody's pane" verb, so the process holt would replace belongs to a
+	// script, a palette command or another agent's tool call — all of which
+	// would hang on a client waiting for a terminal that isn't there.
+	//
+	// Invariant 1 holds either way: the checkout, the branch and the registry
+	// row are all on disk before the seam is asked anything. What is
+	// unavailable is a place to open it, which is exactly what exit 3 is for.
+	why := "no [hooks] open configured"
+	if res.Answer != config.Defer {
+		why = "the open hook failed"
+	}
+	e.Warn(fmt.Sprintf("%s — lane '%s' is ready, but nothing opened it", why, name))
+	return exitcode.Degradedf("lane '%s' created at %s; run this inside it: %s",
+		name, dir, shellCommand(argv))
 }
 
 // ── shared plumbing ──────────────────────────────────────────────────────────
+
+// restoreStdin puts a terminal back on fd 0 before holt execs a client.
+//
+// `--prompt-file -` drains stdin, which leaves fd 0 at EOF — and an
+// interactive client handed an exhausted, non-tty stdin does not draw a UI, it
+// reads nothing and leaves. So the one path that both consumes stdin AND execs
+// (`holt new --prompt-file -`) reopens the controlling terminal first.
+//
+// Best-effort by design: with no controlling terminal there was nothing to
+// restore, and refusing the lane over it would be worse than the client
+// deciding for itself what to do with a closed stdin.
+func restoreStdin() {
+	tty, err := os.OpenFile("/dev/tty", os.O_RDONLY, 0)
+	if err != nil {
+		return
+	}
+	defer tty.Close()
+	_ = syscall.Dup2(int(tty.Fd()), int(os.Stdin.Fd()))
+}
+
+// readPrompt loads a first-turn task from a file, or from stdin for "-".
+//
+// It exists because the interesting prompts are the long ones. A brief written
+// for a cold session is multi-line and routinely contains quotes, backticks and
+// `$` — text that survives a Go argv untouched but has to cross a shell to get
+// there, and `--prompt "$(cat brief.md)"` is where it gets mangled. Handing
+// over a PATH moves the text out of the command line entirely.
+//
+// Surrounding whitespace goes (a file ends with a newline; that newline is not
+// part of the task), and an empty file is a usage error rather than a lane that
+// opens on nothing — a caller whose heredoc silently produced nothing should
+// hear about it here, not by looking at a blank agent pane.
+func readPrompt(path string) (string, error) {
+	if path == "" {
+		return "", exitcode.Usagef("--prompt-file needs a path, or - for stdin")
+	}
+	var (
+		raw []byte
+		err error
+	)
+	if path == "-" {
+		raw, err = io.ReadAll(os.Stdin)
+	} else {
+		raw, err = os.ReadFile(path)
+	}
+	if err != nil {
+		return "", exitcode.Usagef("could not read the prompt from %s: %v", path, err)
+	}
+	text := strings.TrimSpace(string(raw))
+	if text == "" {
+		return "", exitcode.Usagef("%s is empty — there is no task to open the lane on", path)
+	}
+	return text, nil
+}
 
 // mainCheckoutOf resolves a path to the main checkout of its repo, refusing
 // anything that isn't one.

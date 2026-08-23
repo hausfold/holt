@@ -190,8 +190,18 @@ func (e *Env) agentStart(args []string) error {
 	if err != nil {
 		return err
 	}
+	return execClient(startArgv(spec, image, prompt))
+}
+
+// startArgv is the one place a first-turn prompt becomes a client invocation.
+//
+// Shared by `holt agent start` and by the `--prompt` endings of `new` and
+// `spawn`, because all three are the same act — a lane whose session opens
+// already knowing the task — and a second copy of the image rule would be a
+// second copy to get wrong.
+func startArgv(spec agentSpec, image, prompt string) []string {
 	if image != "" {
-		if _, statErr := os.Stat(image); statErr != nil {
+		if _, err := os.Stat(image); err != nil {
 			image = ""
 		}
 	}
@@ -203,7 +213,7 @@ func (e *Env) agentStart(args []string) error {
 			". Inspect it before drawing conclusions."
 		image = ""
 	}
-	return execClient(spec.start(image, prompt))
+	return spec.start(image, prompt)
 }
 
 // ── inheriting the parent repo's workspace trust ─────────────────────────────

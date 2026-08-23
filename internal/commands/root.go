@@ -20,9 +20,13 @@ A LANE is one agent's branch, checkout and pane, from create to reaped.
   holt new [name]         a lane on THIS repo; prints its path: cd "$(holt new)"
                           --open [agent] open a session in it (--agent <id>)
                           --cmd '<command>' run something else in it instead
+                          --prompt '<task>' | --prompt-file <file|-> open it on
+                          a first turn (implies --open) · --image <file>
   holt child <repo>       a lane on ANOTHER repo, as a child of this pane
   holt spawn <repo> <name>
                           a named lane for a spawner with no pane of its own
+                          --prompt/--prompt-file/--image as above, and the lane
+                          is opened through [hooks] open — exit 3 if none
   holt park [label]       set the working tree aside as a wip: commit on this branch
   holt unpark             put the last parked commit's changes back, uncommitted
   holt reap               sweep every LANDED lane that nobody is standing in
@@ -114,7 +118,7 @@ func Run(args []string) error {
 		return env.Child(argAt(args, 1), argAt(args, 2))
 
 	case "spawn":
-		return env.Spawn(argAt(args, 1), argAt(args, 2), argAt(args, 3))
+		return env.SpawnCmd(args[1:])
 
 	case "agent":
 		return env.AgentCmd(args[1:])

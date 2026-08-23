@@ -31,7 +31,9 @@ system, the package manager or which agent is running.
 | resume a parked lane | `holt <name>` (or `holt <repo>/<name>`) |
 | a lane on this repo | `cd "$(holt new [name])"` |
 | …and open an agent in it | `holt new [name] --open [agent]` |
+| …opened on a task, not a blank pane | `--prompt '<task>'`, or `--prompt-file <file>` |
 | a lane on *another* repo | `holt child <repo>` |
+| a lane on any repo, with a task, from a spawner with no pane | `holt spawn <repo> <name> --prompt-file <file>` |
 | set the tree aside | `holt park [label]` |
 | put it back | `holt unpark` |
 | sweep landed lanes | `holt reap` |
@@ -96,6 +98,10 @@ worktree remove`.
 - "clean up the merged ones" → `holt reap`, then `holt reaped` to show what went
 - "I lost a branch" → `holt reaped` has the reason and the SHA to get it back
 - "start an agent on the other repo" → `holt child <repo>` from this pane
+- "spawn an agent to do X" → `holt spawn <repo> <name> --prompt-file <brief>`;
+  the `handoff` skill is how you write the brief. Exit 3 means the lane exists
+  but this machine has no `[hooks] open` to put a window on it — report the
+  command holt printed, don't retry.
 
 ## When NOT to
 
