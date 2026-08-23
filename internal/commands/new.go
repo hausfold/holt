@@ -406,7 +406,7 @@ func (e *Env) Spawn(target, want string, opts SpawnOpts) error {
 	// is unavailable is a place to open it, which is exactly exit 3.
 	ui.Warn("no [hooks] open configured — the lane is ready, but nothing opened it")
 	return exitcode.Degradedf("lane '%s' created at %s; run this inside it: %s",
-		name, dir, strings.Join(argv, " "))
+		name, dir, shellCommand(argv))
 }
 
 // ── shared plumbing ──────────────────────────────────────────────────────────

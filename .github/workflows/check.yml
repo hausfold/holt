@@ -32,6 +32,14 @@ jobs:
           if [ "$RUNNER_OS" = macOS ]; then brew install bats-core
           else sudo apt-get update && sudo apt-get install -y bats; fi
 
+      # Cheap, and it catches a class of failure nothing else can see: a skill
+      # with broken frontmatter installs, lists and is never loaded. Same script
+      # nix/skill.nix runs — holt's CI has no Nix, so guards that lived only in
+      # that derivation would never fire here.
+      - name: agent skills
+        run: |
+          script/check-skills.sh holt ai/SKILL.md handoff ai/handoff/SKILL.md
+
       - name: gofmt
         run: test -z "$(gofmt -l ./cmd ./internal)" || { gofmt -l ./cmd ./internal; exit 1; }
       - name: vet

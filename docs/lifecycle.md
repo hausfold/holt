@@ -85,7 +85,9 @@ The situation arrives as `HOLT_*` in the environment and as JSON on stdin.
 The `resume` and `open` seams also get `HOLT_CHAT` (the cwd the conversation
 lives in — for a lane spawned by `holt child` that is the *parent's* checkout,
 not the lane's), `HOLT_LANE_STATE` (the lane's lifecycle state) and
-`HOLT_COMMAND` (the exact client invocation holt was about to run).
+`HOLT_COMMAND` (the exact client invocation holt was about to run, **shell-quoted
+per argument** — `holt new`/`holt spawn --prompt` put the whole task in there, and
+a brief is multi-line and full of quotes and `$`).
 
 The lane's own fields are spelled `HOLT_LANE_*` where holt already reads the
 plain name for itself — `HOLT_LANE_STATE` beside holt's `HOLT_STATE` (its state

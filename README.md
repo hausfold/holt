@@ -121,6 +121,7 @@ import line. · **Swift** ships from a generated mirror — send changes to
 - [Lifecycle](docs/lifecycle.md) — states, landing rules, occupancy, and how to disagree with holt
 - [Reference](docs/reference.md) — config, exit codes, the `--json` payload, building from source
 - [`ai/SKILL.md`](ai/SKILL.md) — the agent-facing surface: drop it in and your agent drives holt correctly first try
+- [`ai/handoff/SKILL.md`](ai/handoff/SKILL.md) — the companion skill: write a brief a cold session can act on, and `holt spawn --prompt-file` it into its own lane
 - [SPEC.md](SPEC.md) — the design of record, and the contracts that are frozen
 - [Releasing](docs/releasing.md) — how the CLI and all five SDKs are cut from one number
 

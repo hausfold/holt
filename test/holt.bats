@@ -1867,6 +1867,111 @@ open = \"$hook\""
   [ -e "$CLAUDE_WT_BASE/alpha/fresh/.git" ]
 }
 
+# ── --prompt: a lane that opens already knowing the task ─────────────────────
+
+# A client that reports its own argv, one element per line. Deliberately local
+# to these tests rather than a setup() shim: several tests elsewhere assert what
+# happens when NO client is installed, and a global `claude` would quietly make
+# those pass for the wrong reason.
+mkclient() { # mkclient <id> — write a reporting shim into $BIN, echo nothing
+  cat >"$BIN/$1" <<'EOF'
+#!/usr/bin/env bash
+for a in "$@"; do printf '<%s>\n' "$a"; done
+EOF
+  chmod +x "$BIN/$1"
+}
+
+@test "prompt: spawn hands the open hook the client's START invocation, not its bare open" {
+  local b hook; b="$(mkrepo beta)"
+  hook="$(mkhook open 'printf "%s\n" "$HOLT_COMMAND" >"'"$TMP"'/cmd"; exit 0')"
+  setcfg "[hooks]
+open = \"$hook\""
+  run bash -c "'$WT' spawn '$b' notch-flicker --prompt 'fix the notch' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$CLAUDE_WT_BASE/beta/notch-flicker" ]   # the path is still the stdout contract
+  # `--` before the prompt, always: a task beginning with a dash is a FLAG to
+  # commander and clap otherwise, and dies before the pane draws anything.
+  [ "$(cat "$TMP/cmd")" = "claude -- 'fix the notch'" ] || fail "wrong invocation: $(cat "$TMP/cmd")"
+}
+
+@test "prompt: a multi-line prompt with quotes and a leading dash survives HOLT_COMMAND" {
+  # The regression this exists for: `command` used to be a bare space-join of
+  # argv. Every invocation holt had ever handed a hook was one or two bare words
+  # ("claude", "codex resume --last"), so the bug was invisible — and the first
+  # prompt through it would shatter into words, or unbalance the opener's shell.
+  local b hook brief; b="$(mkrepo beta)"
+  mkclient claude
+  brief="- rewrite \"the parser\"
+  Next: run \$HOME/x.sh  # don't expand me"
+  hook="$(mkhook open 'bash -c "$HOLT_COMMAND" >"'"$TMP"'/argv" 2>&1; exit 0')"
+  setcfg "[hooks]
+open = \"$hook\""
+  run bash -c "'$WT' spawn '$b' parser --prompt \"\$1\" 2>/dev/null" _ "$brief"
+  [ "$status" -eq 0 ]
+  # ONE argument after `--`, byte-identical to what went in — newline, quotes,
+  # leading dash and unexpanded `$HOME` alike. (The shim reports `$@`, so the
+  # client's own name is not in there.)
+  [ "$(cat "$TMP/argv")" = "$(printf '<-->\n<%s>' "$brief")" ] \
+    || fail "the prompt did not survive the round trip:
+$(cat "$TMP/argv")"
+}
+
+@test "prompt: spawn with no open hook is degraded, not failed — the lane exists" {
+  local b; b="$(mkrepo beta)"
+  run bash -c "'$WT' spawn '$b' orphan --prompt 'do the thing'"
+  # 3, not 1: holt made the lane it was asked for. What was unavailable is
+  # somewhere to open it, and the caller needs to tell those two apart.
+  [ "$status" -eq 3 ]
+  [ -e "$CLAUDE_WT_BASE/beta/orphan/.git" ]
+  [[ "$output" == *"claude -- 'do the thing'"* ]] || fail "no recovery command: $output"
+}
+
+@test "prompt: --prompt-file reads the brief from a file, and - from stdin" {
+  local b hook; b="$(mkrepo beta)"
+  hook="$(mkhook open 'printf "%s\n" "$HOLT_COMMAND" >"'"$TMP"'/cmd"; exit 0')"
+  setcfg "[hooks]
+open = \"$hook\""
+  printf 'ship the thing\n' >"$TMP/brief.md"        # trailing newline is not the task
+
+  run bash -c "'$WT' spawn '$b' from-file --prompt-file '$TMP/brief.md' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TMP/cmd")" = "claude -- 'ship the thing'" ] || fail "from file: $(cat "$TMP/cmd")"
+
+  run bash -c "'$WT' spawn '$b' from-stdin --prompt-file - <'$TMP/brief.md' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TMP/cmd")" = "claude -- 'ship the thing'" ] || fail "from stdin: $(cat "$TMP/cmd")"
+}
+
+@test "prompt: an empty --prompt-file is a usage error, not a lane opened on nothing" {
+  local b; b="$(mkrepo beta)"
+  : >"$TMP/empty.md"
+  run "$WT" spawn "$b" nothing --prompt-file "$TMP/empty.md"
+  [ "$status" -eq 1 ]
+  [ ! -e "$CLAUDE_WT_BASE/beta/nothing" ] || fail "a lane was created for a prompt that isn't there"
+  run "$WT" spawn "$b" nofile --prompt-file "$TMP/does-not-exist.md"
+  [ "$status" -eq 1 ]
+}
+
+@test "prompt: new --prompt implies --open, and keeps the lane's own client" {
+  local main hook; main="$(mkrepo alpha)"
+  hook="$(mkhook open 'printf "%s|%s\n" "$HOLT_LANE_AGENT" "$HOLT_COMMAND" >"'"$TMP"'/cmd"; exit 0')"
+  setcfg "[hooks]
+open = \"$hook\""
+  # No --open anywhere: a prompt with no session to hand it to is a prompt
+  # nobody reads, so it opens one.
+  cd "$main"; wt_run new tasked --agent codex --prompt "look at the bar"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TMP/cmd")" = "codex|codex -- 'look at the bar'" ] || fail "wrong: $(cat "$TMP/cmd")"
+  [ "$(awk -F'\t' '$1=="tasked"{print $6}' "$REG")" = codex ]
+}
+
+@test "prompt: --cmd and --prompt are refused together, before anything is created" {
+  local main; main="$(mkrepo alpha)"
+  cd "$main"; wt_run new clash --cmd 'echo hi' --prompt 'do it'
+  [ "$status" -eq 1 ]
+  [ ! -e "$CLAUDE_WT_BASE/alpha/clash" ]
+}
+
 @test "hooks: a lane's own fields never shadow holt's own environment" {
   # Every HOLT_* a hook is given leaks into the pane that hook spawns, and into
   # every window opened from it. So no field may be spelled as a variable holt
