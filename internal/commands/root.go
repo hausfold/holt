@@ -38,11 +38,13 @@ A LANE is one agent's branch, checkout and pane, from create to reaped.
   holt watch --json       lifecycle events on stdout, one NDJSON object per line
   holt reship [name]      push a branch that outran its merged PR, open the follow-up
   holt runtime up <name>  stand up a lane's runtime-isolation backend
-                          --backend <id> (required — no default backend)
+                          --backend <id> (required — never automatic)
+                          tart is built in: a headless macOS per lane
   holt runtime enter <name> --backend <id>
                           drop into it interactively
   holt runtime down <name> --backend <id>
                           tear it down
+  holt runtime eject tart print the built-in backend as an adapter file to edit
   holt hook create        [hook] open a lane — JSON on stdin, path on stdout
   holt hook remove        [hook] retire one without losing work — JSON on stdin
 

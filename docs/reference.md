@@ -18,7 +18,36 @@ is no default one, so a lane pays a VM's boot and disk only when someone asks
 for it by name. `enter` replaces holt with the session; the backend keeps
 running until a separate `down`.
 
-Nothing ships built in — a backend is a file you write:
+### `tart` — the one that ships built in
+
+```sh
+export HOLT_TART_BASE=ghcr.io/cirruslabs/macos-tahoe-base:latest   # or your own image
+holt runtime up    my-lane --backend tart    # clone it, boot it headless, wait for an address
+holt runtime enter my-lane --backend tart    # ssh in as $HOLT_TART_USER (default: admin)
+holt runtime down  my-lane --backend tart    # stop and delete the clone
+```
+
+A lane's guest is named `holt-<lane>`, and the lane's worktree is shared into
+it at `/Volumes/My Shared Files/work` — shared, not copied, so there is one
+copy of the work. The guest boots `--no-graphics`: it runs a full WindowServer
+and draws the real UI, it just draws it to nothing, which is the whole point
+for an agent that needs to SEE a change without taking the display its user is
+sitting at. `screencapture -x` over ssh returns real pixels from it.
+
+Two environment variables and no config file: `HOLT_TART_BASE` (required — the
+image to clone, because the images are tens of GB and which one you want is a
+real choice) and `HOLT_TART_USER` (the guest account, `admin` by default, which
+is what every cirruslabs base image ships). Needs `tart` on `PATH`; without it
+the verb degrades with the install command rather than failing.
+
+This is the only built-in, and it is one because it has to be: `setup` is a
+clone, a backgrounded boot and a wait-for-address, which an argv slot cannot
+hold — so leaving it to a file meant everyone writing the same script before
+they could use the verb at all. A `tart.toml` you write still wins over it, and
+`holt runtime eject tart` prints a starting point.
+
+### Every other backend is a file you write
+
 
 ```toml
 # ~/.config/holt/adapters/runtime/apple-container.toml
@@ -39,7 +68,8 @@ Three failures worth telling apart:
 
 | | |
 |---|---|
-| no such adapter file | **2** — refused, naming the path it looked for. There is no built-in to fall back to |
+| no such adapter file | **2** — refused, naming the path it looked for. `tart` is the one id that falls back to a built-in instead |
+| `--backend tart` with no `HOLT_TART_BASE` | **2** — refused, naming the image to pull. holt never pulls tens of GB you didn't ask for |
 | the backend's binary isn't on `PATH` | **3** — degraded. Install it and the same command works |
 | the backend ran and exited non-zero | **1** — it attempted the thing and failed at it (a VM that already exists, a full disk, a bad image) |
 

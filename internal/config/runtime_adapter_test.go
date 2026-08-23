@@ -23,12 +23,45 @@ func writeRuntimeAdapter(t *testing.T, id, body string) {
 
 func TestLoadRuntimeAdapterMissingFileIsAnError(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	_, err := LoadRuntimeAdapter("tart")
+	_, err := LoadRuntimeAdapter("apple-container")
 	if err == nil {
-		t.Fatal("a missing adapter file must be an error, not a silent default — unlike the policy-seam hooks, there is no built-in runtime backend to fall back to")
+		t.Fatal("a missing adapter file must be an error, not a silent default — the policy-seam hooks have a built-in to fall back to, a runtime backend that isn't tart does not")
 	}
-	if !strings.Contains(err.Error(), "tart") || !strings.Contains(err.Error(), "runtime") {
+	if !strings.Contains(err.Error(), "apple-container") || !strings.Contains(err.Error(), "runtime") {
 		t.Fatalf("error should name the adapter id and where it looked, got %q", err.Error())
+	}
+}
+
+// tart is the one id that answers with no file: the setup step is a
+// multi-command dance the argv slots can't hold, so leaving it to a file meant
+// every standalone user writing the same script before the verb worked at all.
+func TestLoadRuntimeAdapterTartIsBuiltIn(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	adapter, err := LoadRuntimeAdapter(BuiltinRuntime)
+	if err != nil {
+		t.Fatalf("tart must resolve with no adapter file: %v", err)
+	}
+	if adapter.Builtin != BuiltinRuntime {
+		t.Errorf("Builtin = %q, want %q", adapter.Builtin, BuiltinRuntime)
+	}
+	if adapter.Setup != nil || adapter.Enter != nil || adapter.Teardown != nil {
+		t.Error("a built-in carries no argv — the commands package dispatches on Builtin instead")
+	}
+}
+
+// ...and a file with that id still wins, which is how haus (and anyone who
+// wants a different image, guest user or share) overrides it.
+func TestLoadRuntimeAdapterFileBeatsBuiltIn(t *testing.T) {
+	writeRuntimeAdapter(t, BuiltinRuntime, "kind = \"runtime\"\nid = \"tart\"\nsetup = [\"mine\", \"setup\"]\n")
+	adapter, err := LoadRuntimeAdapter(BuiltinRuntime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if adapter.Builtin != "" {
+		t.Error("a tart.toml on disk must load as an ordinary file-backed adapter, not the built-in")
+	}
+	if !reflect.DeepEqual(adapter.Setup, []string{"mine", "setup"}) {
+		t.Errorf("Setup = %v, want the file's own argv", adapter.Setup)
 	}
 }
 
