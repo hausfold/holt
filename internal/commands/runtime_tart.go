@@ -8,7 +8,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/hausfold/holt/internal/config"
 	"github.com/hausfold/holt/internal/exitcode"
 	"github.com/hausfold/holt/internal/ui"
 )
@@ -99,8 +98,18 @@ func (e *Env) tartSetup(name, path string) error {
 	if err != nil {
 		return err
 	}
+	// A parked lane matches by name but has no checkout: without this the
+	// clone happens, `--dir` points at nothing, and the caller finds out sixty
+	// seconds later as "never got an address".
+	if path == "" {
+		return exitcode.Usagef("%s has no checkout to share in — `holt %s` to rebuild it first", name, name)
+	}
+	if info, err := os.Stat(path); err != nil || !info.IsDir() {
+		return exitcode.Usagef("%s is parked — its checkout %s isn't there. `holt %s` rebuilds it, then try again", name, path, name)
+	}
+
 	vm := tartVM(name)
-	if tartExists(vm) {
+	if present, _ := tartExists(vm); present {
 		return exitcode.Usagef("tart VM %s already exists — `holt runtime down %s --backend tart` to reset it", vm, name)
 	}
 
@@ -117,7 +126,7 @@ func (e *Env) tartSetup(name, path string) error {
 	// good time.
 	log, err := tartLog(vm)
 	if err != nil {
-		return err
+		return tartOrphan(name, err)
 	}
 	run := exec.Command("tart", "run", vm, "--no-graphics", "--dir=work:"+path)
 	run.Stdout, run.Stderr = log, log
@@ -126,7 +135,7 @@ func (e *Env) tartSetup(name, path string) error {
 	run.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := run.Start(); err != nil {
 		log.Close()
-		return runtimeCommandError("tart", "setup", name, "tart", err)
+		return tartOrphan(name, runtimeCommandError("tart", "setup", name, "tart", err))
 	}
 	_ = run.Process.Release()
 	log.Close()
@@ -134,7 +143,7 @@ func (e *Env) tartSetup(name, path string) error {
 	ui.Say("booting %s, waiting for an address …", vm)
 	ip, err := tartIP(vm, "60")
 	if err != nil {
-		return exitcode.Usagef("%s booted but never got an address — `tart list` and %s say what happened", vm, tartLogPath(vm))
+		return tartOrphan(name, exitcode.Usagef("%s booted but never got an address — %s says what happened", vm, tartLogPath(vm)))
 	}
 	ui.Say("%s is up at %s — the lane is at /Volumes/My Shared Files/work inside it", vm, ip)
 	ui.Out("holt runtime enter %s --backend tart\n", name)
@@ -165,7 +174,10 @@ func (e *Env) tartTeardown(name string) error {
 		return err
 	}
 	vm := tartVM(name)
-	if !tartExists(vm) {
+	// Only "definitely not there" is a no-op. A `tart list` that failed means
+	// holt could not tell, and the honest move is to try the delete and let
+	// tart answer, not to report success over a clone still on disk.
+	if present, known := tartExists(vm); known && !present {
 		ui.Say("no tart VM %s — nothing to tear down", vm)
 		return nil
 	}
@@ -182,17 +194,22 @@ func (e *Env) tartTeardown(name string) error {
 
 // tartExists asks `tart list` rather than parsing `tart get`, and matches the
 // name exactly — a substring match would see `holt-api` in `holt-api-two`.
-func tartExists(vm string) bool {
+//
+// It returns whether it could TELL, separately from the answer, because the
+// two callers want opposite things from a `tart list` that failed. Collapsing
+// them into a bare false is how `down` ends up printing "nothing to tear down"
+// and exiting 0 over a running guest and a tens-of-GB clone.
+func tartExists(vm string) (present, known bool) {
 	out, err := exec.Command("tart", "list", "--quiet").Output()
 	if err != nil {
-		return false
+		return false, false
 	}
 	for _, line := range strings.Split(string(out), "\n") {
 		if strings.TrimSpace(line) == vm {
-			return true
+			return true, true
 		}
 	}
-	return false
+	return false, true
 }
 
 // tartIP blocks until the guest publishes an address or the wait runs out.
@@ -208,14 +225,26 @@ func tartIP(vm, wait string) (string, error) {
 	return ip, nil
 }
 
-// tartLogPath is where a guest's console output lands: beside the config, not
-// in $TMPDIR, because "why did my VM never come up" is asked hours later.
+// tartLogPath is where a guest's console output lands: holt's STATE dir, not
+// $TMPDIR (because "why did my VM never come up" is asked hours later) and not
+// the config dir (because config is a packager's to own — haus ships
+// ~/.config/holt as read-only symlinks into the nix store, and a log that
+// wants to be written there fails, after the clone has already happened).
+// Same resolver as every other piece of machine-global state, so HOLT_STATE
+// moves this with the rest.
 func tartLogPath(vm string) string {
-	dir := config.Dir()
+	dir, _ := resolveStateDir()
 	if dir == "" {
 		return filepath.Join(os.TempDir(), vm+".log")
 	}
 	return filepath.Join(dir, "runtime", vm+".log")
+}
+
+// tartOrphan wraps a failure that happened AFTER the clone exists, so the
+// message names the one command that cleans it up. A tens-of-GB clone nobody
+// mentioned is how a disk fills up quietly.
+func tartOrphan(name string, err error) error {
+	return exitcode.Usagef("%v\nthe clone is still on disk — `holt runtime down %s --backend tart` removes it", err, name)
 }
 
 func tartLog(vm string) (*os.File, error) {

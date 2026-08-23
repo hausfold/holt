@@ -73,6 +73,7 @@ func (e *Env) RuntimeCmd(args []string) error {
 // runtimeEject prints a built-in backend as an editable adapter file.
 func runtimeEject(args []string) error {
 	id := config.BuiltinRuntime
+	named := false
 	for _, a := range args {
 		if a == "" {
 			continue
@@ -80,7 +81,10 @@ func runtimeEject(args []string) error {
 		if a[0] == '-' {
 			return exitcode.Usagef("unknown flag %q — try `holt runtime eject %s`", a, config.BuiltinRuntime)
 		}
-		id = a
+		if named {
+			return exitcode.Usagef("holt runtime eject takes one backend id")
+		}
+		id, named = a, true
 	}
 	if id != config.BuiltinRuntime {
 		return exitcode.Usagef("%q is not a built-in backend — only %q is; every other id is already a file you wrote", id, config.BuiltinRuntime)
@@ -100,7 +104,7 @@ func (e *Env) RuntimeUp(name, backend string) error {
 	if err != nil {
 		return err
 	}
-	if adapter.Builtin != "" {
+	if adapter.Builtin == config.BuiltinRuntime {
 		ui.Say("standing up %s for %s …", backend, entry.Name())
 		return e.tartSetup(vars.Name, vars.Path)
 	}
@@ -130,7 +134,7 @@ func (e *Env) RuntimeEnter(name, backend string) error {
 	if err != nil {
 		return err
 	}
-	if adapter.Builtin != "" {
+	if adapter.Builtin == config.BuiltinRuntime {
 		ui.Say("entering %s's %s …", entry.Name(), backend)
 		return e.tartEnter(vars.Name)
 	}
@@ -151,7 +155,7 @@ func (e *Env) RuntimeDown(name, backend string) error {
 	if err != nil {
 		return err
 	}
-	if adapter.Builtin != "" {
+	if adapter.Builtin == config.BuiltinRuntime {
 		ui.Say("tearing down %s's %s …", entry.Name(), backend)
 		return e.tartTeardown(vars.Name)
 	}
