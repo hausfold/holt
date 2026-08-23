@@ -24,6 +24,14 @@ func (e *Env) RuntimeCmd(args []string) error {
 	}
 	verb, rest := args[0], args[1:]
 
+	// `eject` is the one verb about an adapter rather than a lane: it prints
+	// the built-in backend as the TOML that would replace it, for someone who
+	// wants a different image, guest user or share and would otherwise be
+	// reverse-engineering it from the source.
+	if verb == "eject" {
+		return runtimeEject(rest)
+	}
+
 	var name, backend string
 	for i := 0; i < len(rest); i++ {
 		switch a := rest[i]; a {
@@ -62,6 +70,25 @@ func (e *Env) RuntimeCmd(args []string) error {
 	}
 }
 
+// runtimeEject prints a built-in backend as an editable adapter file.
+func runtimeEject(args []string) error {
+	id := config.BuiltinRuntime
+	for _, a := range args {
+		if a == "" {
+			continue
+		}
+		if a[0] == '-' {
+			return exitcode.Usagef("unknown flag %q — try `holt runtime eject %s`", a, config.BuiltinRuntime)
+		}
+		id = a
+	}
+	if id != config.BuiltinRuntime {
+		return exitcode.Usagef("%q is not a built-in backend — only %q is; every other id is already a file you wrote", id, config.BuiltinRuntime)
+	}
+	ui.Out("%s", tartAdapterTOML())
+	return nil
+}
+
 // RuntimeUp runs a backend's setup command for a lane — cloning/booting a VM,
 // starting a container, whatever the adapter's `setup` argv does.
 //
@@ -72,6 +99,10 @@ func (e *Env) RuntimeUp(name, backend string) error {
 	entry, vars, adapter, err := e.resolveRuntime(name, backend)
 	if err != nil {
 		return err
+	}
+	if adapter.Builtin != "" {
+		ui.Say("standing up %s for %s …", backend, entry.Name())
+		return e.tartSetup(vars.Name, vars.Path)
 	}
 	argv, err := config.RenderArgv(adapter.Setup, vars)
 	if err != nil {
@@ -99,6 +130,10 @@ func (e *Env) RuntimeEnter(name, backend string) error {
 	if err != nil {
 		return err
 	}
+	if adapter.Builtin != "" {
+		ui.Say("entering %s's %s …", entry.Name(), backend)
+		return e.tartEnter(vars.Name)
+	}
 	argv, err := config.RenderArgv(adapter.Enter, vars)
 	if err != nil {
 		return exitcode.Usagef("rendering %s's enter command: %v", backend, err)
@@ -115,6 +150,10 @@ func (e *Env) RuntimeDown(name, backend string) error {
 	entry, vars, adapter, err := e.resolveRuntime(name, backend)
 	if err != nil {
 		return err
+	}
+	if adapter.Builtin != "" {
+		ui.Say("tearing down %s's %s …", entry.Name(), backend)
+		return e.tartTeardown(vars.Name)
 	}
 	argv, err := config.RenderArgv(adapter.Teardown, vars)
 	if err != nil {

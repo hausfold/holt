@@ -41,6 +41,7 @@ system, the package manager or which agent is running.
 | retire a lane that will never land | `holt drop <name>` |
 | push commits that outran a merged PR | `holt reship [name]` |
 | stand up/enter/tear down a lane's VM or container | `holt runtime up\|enter\|down <name> --backend <id>` |
+| **see a desktop change work without touching the user's screen** | `holt runtime up <name> --backend tart` — built in, needs `tart` + `HOLT_TART_BASE`. Boots a headless macOS with the lane shared in, then drive it over `ssh admin@$(tart ip holt-<name>)`: `screencapture -x` there returns real pixels, `osascript` sends the keystrokes. Prefer this over asking to drive the machine you are on |
 | watch lifecycle events | `holt watch --json` (NDJSON, one object per line) |
 | everything, exhaustively | `holt --help` (prints to **stderr**) |
 

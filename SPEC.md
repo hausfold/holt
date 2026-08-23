@@ -535,6 +535,17 @@ must never hang pane teardown.
 Default backend is `none` + deterministic port/env allocation (§6). Containers are
 **at most one optional backend, never the mechanism**.
 
+**One backend ships built in: `tart`.** `--backend tart` with no adapter file
+clones an image, boots the guest headless with the lane shared in, and waits
+for an address — `HOLT_TART_BASE` names the image, `HOLT_TART_USER` the account
+`enter` sshes in as. It is built in because its `setup` is three commands and a
+wait, which one argv slot cannot hold, so the file-only rule made every user
+write the same script before the verb worked at all. It changes nothing about
+the mechanism: a `tart.toml` on disk still wins, nothing is automatic, and
+`holt runtime eject tart` prints the file to start from. It exists because an
+agent lane that has to *see* a desktop change work should take a disposable
+macOS rather than the screen its user is sitting at.
+
 ```toml
 kind  = "runtime"
 id    = "apple-container"
