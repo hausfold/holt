@@ -173,7 +173,14 @@ func (e *Env) New(want string, opts NewOpts) error {
 		return err
 	}
 
-	name, dir, err := e.freeName(main, orDefault(want, randomName()))
+	// A name the caller gave always wins; only an unnamed lane is named from
+	// its task, and only when a namer is configured (see namer.go). Spelled as
+	// a branch rather than orDefault's second argument, because that argument
+	// is evaluated either way — and this one is a process.
+	if want == "" {
+		want = e.laneNameFor(main, opts.Prompt)
+	}
+	name, dir, err := e.freeName(main, want)
 	if err != nil {
 		return err
 	}
@@ -391,7 +398,15 @@ func (e *Env) SpawnCmd(args []string) error {
 // still reported; what is missing is somewhere to run it, and that is a
 // degraded run, not a failure — see below.
 func (e *Env) Spawn(target, want string, opts SpawnOpts) error {
-	if target == "" || want == "" {
+	if target == "" {
+		return exitcode.Usagef("usage: holt spawn <repo-path> <name>")
+	}
+	// The name stays required, with one exception: a spawn that carries a task
+	// has something to be named AFTER, so `holt spawn <repo> --prompt …` may
+	// leave it out and let the namer (or a random pair) fill it in. Without a
+	// task there is nothing to derive from, and a nameless spawn is still the
+	// caller forgetting an argument.
+	if want == "" && opts.Prompt == "" {
 		return exitcode.Usagef("usage: holt spawn <repo-path> <name>")
 	}
 	agentID := orDefault(opts.Agent, e.Agent)
@@ -405,6 +420,9 @@ func (e *Env) Spawn(target, want string, opts SpawnOpts) error {
 	main, err := e.mainCheckoutOf(target, false)
 	if err != nil {
 		return err
+	}
+	if want == "" {
+		want = e.laneNameFor(main, opts.Prompt) // see New: a given name never asks
 	}
 	name, dir, err := e.freeName(main, want)
 	if err != nil {

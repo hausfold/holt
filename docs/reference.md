@@ -9,6 +9,62 @@ agent = "codex"
 
 `HOLT_AGENT` overrides it for one invocation.
 
+## Naming a lane after its task
+
+A lane opened on a first-turn task (`--prompt` / `--prompt-file`) with **no name
+of its own** can take its name from that task instead of from the animal list —
+`hud-draft-color` rather than `cozy-otter`.
+
+```toml
+# ~/.config/holt/config.toml
+namer = "claude"
+```
+
+That is the whole setup, and there is no key by default: without one, an unnamed
+lane still gets its random pair and no extra process runs at all. With one:
+
+```sh
+holt spawn ~/code/bar --prompt-file brief.md    # the name argument becomes optional
+holt new --prompt 'the bar paints draft PRs in the merged green'
+```
+
+`claude` is the one built-in namer, for the same reason `tart` is the one
+built-in runtime: it is the client a machine spawning agents already has. It runs
+the `claude` binary on `PATH` — so the naming call is authenticated the same way
+your agents are, with no API key for holt to hold — on the cheapest model, with
+the machine's MCP servers switched off:
+
+```toml
+kind = "namer"
+id   = "claude"
+name = ["claude", "-p", "--model", "haiku", "--strict-mcp-config", "--", "{{.Prompt}}"]
+```
+
+Every other namer is a file with that shape, and a `claude.toml` of your own
+shadows the built-in wholesale — a different model, a different client, a local
+model, or a script with no model in it at all:
+
+```toml
+# ~/.config/holt/adapters/namer/ollama.toml
+kind = "namer"
+id   = "ollama"
+name = ["ollama", "run", "qwen3:4b", "{{.Prompt}}"]
+```
+
+**holt never talks to a model.** It runs that one argv with the naming request as
+`{{.Prompt}}` — the instruction, the repo, the lane names already taken and the
+task, composed by holt — and reads the answer off stdout. The command is expected
+to print the name and nothing else; its stdin is `/dev/null` and its stderr is
+holt's, captured.
+
+| | |
+|---|---|
+| a name you passed | always wins — the namer is only ever asked for a lane that has none, so `holt new` and the ⌘↵ path never start a process |
+| the shape of a name | one to three lowercase `[a-z0-9-]` words, 24 characters at most, with the repo's own name dropped — a listing already tells you which repo a lane is in |
+| an answer that isn't one | rejected whole, never cleaned up: prose, a flag, a path, a traversal and anything non-ASCII all fall back to the random pair with a warning |
+| anything else going wrong | same fallback — no adapter file, a namer that isn't installed, a run over 30s. **A namer can never cost you a lane**, only its name |
+| what it costs | one model call on the create path. The built-in returns in 8–12s, most of it the client's own start-up |
+
 ## Runtime backends
 
 `holt runtime up|enter|down <name> --backend <id>` hands one lane to an

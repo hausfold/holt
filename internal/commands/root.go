@@ -27,6 +27,8 @@ A LANE is one agent's branch, checkout and pane, from create to reaped.
                           a named lane for a spawner with no pane of its own
                           --prompt/--prompt-file/--image as above, and the lane
                           is opened through [hooks] open — exit 3 if none
+                          <name> is optional with a --prompt: set namer = "<id>"
+                          in the config and the task names the lane
   holt park [label]       set the working tree aside as a wip: commit on this branch
   holt unpark             put the last parked commit's changes back, uncommitted
   holt reap               sweep every LANDED lane that nobody is standing in

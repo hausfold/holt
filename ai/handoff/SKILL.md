@@ -60,7 +60,8 @@ holt spawn "$repo" <name> --prompt-file <that file>
 
 - **`<name>` comes from the objective, not its first words.** Three or four
   identity-carrying words, kebab-case — `bar-pill-flickers`, not
-  `look-into-why-the`. holt takes the next free suffix if it is taken.
+  `look-into-why-the`; holt suffixes it if it is taken. Omit it only where the
+  machine sets `namer` — you wrote the brief, so you are the better namer.
 - **`--prompt-file`, never `--prompt "$(cat …)"`.** A brief is multi-line and
   routinely holds quotes, backticks and `$`; the file form never crosses a
   shell, so none of that can be mangled.

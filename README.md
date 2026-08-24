@@ -84,6 +84,7 @@ failing. Don't reach for `git worktree remove`; ask it why.
 | `… --prompt '<task>'` | open it on a first turn instead of a blank pane · `--prompt-file <file\|->` for a brief · `--image <file>` |
 | `holt child <repo>` | a lane on **another** repo, as a child of this pane |
 | `holt spawn <repo> <name>` | a named lane, for a spawner with no pane of its own — `--prompt`/`--prompt-file` opens it through `[hooks] open` |
+| `namer = "claude"` | opt-in: a lane opened on a task and given no name takes its name FROM that task — `hud-draft-color`, not `cozy-otter`. One config line; holt runs the client already on `PATH`, never a model of its own |
 | `holt park [label]` / `unpark` | set the tree aside as a `wip:` commit, and put it back |
 | `holt reap` | sweep every landed, unoccupied lane |
 | `holt reaped` | what went, why, and the SHA to get it back |
