@@ -134,3 +134,88 @@ func TestTrillBinaryHonorsOverride(t *testing.T) {
 		t.Fatalf("a missing HOLT_TRILL must resolve to nothing, got %q", got)
 	}
 }
+
+// A fin nothing can name again is a fin that stacks: two permission prompts
+// from one lane would hang two, and the ledge holds five.
+func TestTrillSendArgsKeysTheFinByLane(t *testing.T) {
+	e, row := notifyEnv(t)
+	want := "holt/" + filepath.Base(row.Main) + "/" + row.Name
+	for _, event := range []string{"Notification", "Stop"} {
+		args, ok := e.trillSendArgs(map[string]any{
+			"hook_event_name": event, "cwd": row.Path, "session_id": "abc-123",
+		})
+		if !ok {
+			t.Fatalf("%s must produce a send", event)
+		}
+		i := slices.Index(args, "--key")
+		if i < 0 || i+1 >= len(args) || args[i+1] != want {
+			t.Fatalf("%s: want --key %q, got %q", event, want, strings.Join(args, " "))
+		}
+	}
+}
+
+// A pane outside every lane has no lane identity to key by — and its directory
+// is not one either, since a session can cd out of it. The client's session id
+// is the only stable name it has.
+func TestTrillSendArgsKeysANonLanePaneBySession(t *testing.T) {
+	e, _ := notifyEnv(t)
+	args, ok := e.trillSendArgs(map[string]any{
+		"hook_event_name": "Notification", "cwd": "/somewhere/else/mytool",
+		"session_id": "abc-123",
+	})
+	if !ok {
+		t.Fatal("a Notification event must produce a send")
+	}
+	i := slices.Index(args, "--key")
+	if i < 0 || i+1 >= len(args) || args[i+1] != "holt/session/abc-123" {
+		t.Fatalf("want the session key, got %q", strings.Join(args, " "))
+	}
+}
+
+// Nothing to key by at all (an older client, no session id) is not a failure:
+// the banner still goes up, it just can't be resolved later.
+func TestTrillSendArgsOmitsTheKeyWhenThereIsNothingToName(t *testing.T) {
+	e, _ := notifyEnv(t)
+	args, ok := e.trillSendArgs(map[string]any{
+		"hook_event_name": "Stop", "cwd": "/somewhere/else/mytool",
+	})
+	if !ok || slices.Contains(args, "--key") {
+		t.Fatalf("want no --key, got %q", strings.Join(args, " "))
+	}
+}
+
+// The gate the resume events read. Its whole job is to be cheap and honest:
+// nothing outstanding anywhere → no registry read, no trill launch.
+func TestAskMarkersGateTheResolvePath(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("HOLT_STATE", "")
+	if anyAskOutstanding() {
+		t.Fatal("a fresh state dir has no asks outstanding")
+	}
+	markAskOutstanding("holt/alpha/sparkle")
+	if !anyAskOutstanding() {
+		t.Fatal("a marked ask must be outstanding")
+	}
+	if clearAskOutstanding("holt/alpha/other") {
+		t.Fatal("clearing another lane's key must report nothing cleared")
+	}
+	if !clearAskOutstanding("holt/alpha/sparkle") {
+		t.Fatal("clearing the marked key must report it cleared")
+	}
+	// Idempotent: a fin dismissed by hand leaves nothing behind to clear twice.
+	if clearAskOutstanding("holt/alpha/sparkle") || anyAskOutstanding() {
+		t.Fatal("a cleared ask must stay cleared")
+	}
+}
+
+// Keys become one filename each, and a key with a separator in it may not
+// climb out of the state dir.
+func TestAskMarkerStaysInsideTheStateDir(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("HOLT_STATE", "")
+	for _, key := range []string{"holt/alpha/sparkle", "holt/../../etc/passwd"} {
+		if got := filepath.Dir(askMarker(key)); got != asksDir() {
+			t.Fatalf("key %q escaped to %q", key, got)
+		}
+	}
+}
