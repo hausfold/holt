@@ -58,6 +58,7 @@ setup() {
   export XDG_STATE_HOME="$TMP/xdg-state"
   unset HOLT_AGENT HAUS_AGENT_DEFAULT # machine choices must not leak into the fixture
   unset HOLT_STATE HOLT_OCCUPANCY          # ditto — the lease dir and its sole-provider switch
+  unset HOLT_TRILL                         # ditto — the notify tests shim trill on PATH
   export CLAUDE_WT_BASE="$TMP/wtbase"
   REG="$CLAUDE_WT_BASE/registry.tsv"
   mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_STATE_HOME"
@@ -529,6 +530,69 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
   commit_in "$dir" post.txt "work done after the PR merged"   # tip != headRefOid
   hook_remove "$dir"
   git -C "$main" show-ref -q --verify refs/heads/worktree-moved
+}
+
+# ── notify (Notification/Stop hook) ──────────────────────────────────────────
+# The one hook that changes nothing: it forwards "blocked on the user" /
+# "finished the turn" to trill as a banner. Its contract is exit 0 ALWAYS — a
+# hook that can fail is a hook that can break the session it watches.
+
+mktrill() { # a recording trill shim on PATH; FAKE_TRILL_EXIT fakes the daemon
+  cat >"$BIN/trill" <<'EOF'
+#!/usr/bin/env bash
+printf 'trill %s\n' "$*" >>"${FAKE_TRILL_LOG:-/dev/null}"
+exit "${FAKE_TRILL_EXIT:-0}"
+EOF
+  chmod +x "$BIN/trill"
+  export FAKE_TRILL_LOG="$TMP/trill.log"
+}
+
+hook_notify() { # hook_notify <json> — drive the notify hook
+  printf '%s' "$1" | "$WT" hook notify
+}
+
+@test "notify: a Notification becomes an ask banner titled with the lane name" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(hook_create "$main" sparkle)"
+  mktrill
+  run hook_notify "{\"hook_event_name\":\"Notification\",\"cwd\":\"$dir\",\"message\":\"needs permission to use Bash\"}"
+  [ "$status" -eq 0 ]
+  grep -q -- '--kind ask' "$FAKE_TRILL_LOG"
+  grep -q -- '--title sparkle' "$FAKE_TRILL_LOG"
+  # The payload message is conversation content — it must never reach trill.
+  ! grep -q 'permission' "$FAKE_TRILL_LOG"
+}
+
+@test "notify: a Stop becomes a done banner" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(hook_create "$main" sparkle)"
+  mktrill
+  run hook_notify "{\"hook_event_name\":\"Stop\",\"cwd\":\"$dir\"}"
+  [ "$status" -eq 0 ]
+  grep -q -- '--kind done' "$FAKE_TRILL_LOG"
+  grep -q -- '--title sparkle' "$FAKE_TRILL_LOG"
+}
+
+@test "notify: trill exit 2 (daemon down) is swallowed — the hook still exits 0" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(hook_create "$main" sparkle)"
+  mktrill; export FAKE_TRILL_EXIT=2
+  run hook_notify "{\"hook_event_name\":\"Stop\",\"cwd\":\"$dir\"}"
+  [ "$status" -eq 0 ]
+}
+
+@test "notify: no trill binary anywhere is a silent no-op, exit 0" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(hook_create "$main" sparkle)"
+  export HOLT_TRILL="$TMP/no-such-binary"   # authoritative when set: no fall-through
+  run hook_notify "{\"hook_event_name\":\"Stop\",\"cwd\":\"$dir\"}"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "notify: a garbage payload exits 0 — this hook must never break a session" {
+  mktrill
+  run hook_notify 'not json at all'
+  [ "$status" -eq 0 ]
+  run hook_notify '{"hook_event_name":"SomethingNew","cwd":"/x"}'
+  [ "$status" -eq 0 ]
+  ! grep -q 'trill' "$FAKE_TRILL_LOG"
 }
 
 # ── reap ─────────────────────────────────────────────────────────────────────

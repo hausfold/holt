@@ -47,6 +47,9 @@ A LANE is one agent's branch, checkout and pane, from create to reaped.
   holt runtime eject tart print the built-in backend as an adapter file to edit
   holt hook create        [hook] open a lane — JSON on stdin, path on stdout
   holt hook remove        [hook] retire one without losing work — JSON on stdin
+  holt hook notify        [hook] Notification/Stop → a trill banner for the lane
+                          (ask when blocked on the user, done when finished) —
+                          JSON on stdin, exit 0 always, no-op without trill
 
   --json                  machine-readable listing: holt --json, holt list --json
   --version               print the version
@@ -141,8 +144,10 @@ func Run(args []string) error {
 			return env.HookCreate(os.Stdin)
 		case "remove":
 			return env.HookRemove(os.Stdin)
+		case "notify":
+			return env.HookNotify(os.Stdin)
 		default:
-			return exitcode.Usagef("usage: holt hook <create|remove>  (JSON on stdin)")
+			return exitcode.Usagef("usage: holt hook <create|remove|notify>  (JSON on stdin)")
 		}
 	case "create":
 		return env.HookCreate(os.Stdin)
