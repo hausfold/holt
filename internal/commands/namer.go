@@ -57,9 +57,13 @@ const (
 	namerMaxLen   = 24
 )
 
-// laneNameFor is the name an unnamed lane takes: the namer's answer when there
-// is a namer and a task to read, and the throwaway word pair otherwise.
-func (e *Env) laneNameFor(main, prompt string) string {
+// nameForNewLane is the name an unnamed lane takes: the namer's answer when
+// there is a namer and a task to read, and the throwaway word pair otherwise.
+//
+// Deliberately not `laneNameFor` — that one (notify.go) answers the opposite
+// question, "which existing lane is this cwd in?". One is a lookup, this is a
+// choice, and they are one letter apart in the wrong direction.
+func (e *Env) nameForNewLane(main, prompt string) string {
 	if name := e.nameFromPrompt(main, prompt); name != "" {
 		return name
 	}

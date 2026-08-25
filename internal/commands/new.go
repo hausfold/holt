@@ -178,7 +178,7 @@ func (e *Env) New(want string, opts NewOpts) error {
 	// a branch rather than orDefault's second argument, because that argument
 	// is evaluated either way — and this one is a process.
 	if want == "" {
-		want = e.laneNameFor(main, opts.Prompt)
+		want = e.nameForNewLane(main, opts.Prompt)
 	}
 	name, dir, err := e.freeName(main, want)
 	if err != nil {
@@ -422,7 +422,7 @@ func (e *Env) Spawn(target, want string, opts SpawnOpts) error {
 		return err
 	}
 	if want == "" {
-		want = e.laneNameFor(main, opts.Prompt) // see New: a given name never asks
+		want = e.nameForNewLane(main, opts.Prompt) // see New: a given name never asks
 	}
 	name, dir, err := e.freeName(main, want)
 	if err != nil {
