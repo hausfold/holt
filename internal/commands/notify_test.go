@@ -91,7 +91,8 @@ func TestTrillSendArgsDeclinesUnknownEvents(t *testing.T) {
 	}
 }
 
-// A pane outside any lane still banners, named after its directory.
+// A pane outside any lane still banners, named after its directory — and
+// carries no click, because there is no lane for `holt focus` to go to.
 func TestTrillSendArgsFallsBackToDirectoryName(t *testing.T) {
 	e, _ := notifyEnv(t)
 	args, ok := e.trillSendArgs(map[string]any{
@@ -100,6 +101,28 @@ func TestTrillSendArgsFallsBackToDirectoryName(t *testing.T) {
 	})
 	if !ok || !slices.Contains(args, "mytool") {
 		t.Fatalf("want the cwd basename as the title, got %q", strings.Join(args, " "))
+	}
+	if slices.Contains(args, "--action") {
+		t.Fatalf("a pane that is not a lane must offer no lane action, got %q", strings.Join(args, " "))
+	}
+}
+
+// The banner is clickable, and the lane it names is qualified by repo — the
+// same spelling `holt focus` (and matchLane behind it) accepts, because one
+// name can exist in two repos.
+func TestTrillSendArgsOffersTheLaneAsAClick(t *testing.T) {
+	e, row := notifyEnv(t)
+	args, ok := e.trillSendArgs(map[string]any{
+		"hook_event_name": "Notification",
+		"cwd":             row.Path,
+	})
+	if !ok {
+		t.Fatal("a Notification event must produce a send")
+	}
+	want := "Go to lane=lane:" + filepath.Base(row.Main) + "/" + row.Name
+	i := slices.Index(args, "--action")
+	if i < 0 || i+1 >= len(args) || args[i+1] != want {
+		t.Fatalf("want --action %q, got %q", want, strings.Join(args, " "))
 	}
 }
 

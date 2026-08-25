@@ -17,6 +17,8 @@ A LANE is one agent's branch, checkout and pane, from create to reaped.
   holt                    list every live/parked lane, across all repos
   holt <name>             resume one: rebuild its checkout, reopen its agent
                           --pick to choose the session instead of the newest
+  holt focus <name>       go to the window a lane is already running in
+                          ([hooks] focus; falls back to resume without one)
   holt new [name]         a lane on THIS repo; prints its path: cd "$(holt new)"
                           --open [agent] open a session in it (--agent <id>)
                           --cmd '<command>' run something else in it instead
@@ -117,6 +119,12 @@ func Run(args []string) error {
 
 	case "resume":
 		return env.Resume(firstBare(args[1:]), hasFlag(args, "--pick"))
+
+	// `holt focus` is `holt <name>` minus the reopening: go to the window the
+	// lane is already running in. It is typed rarely and clicked often — it is
+	// what trill runs when a lane's banner is clicked.
+	case "focus":
+		return env.Focus(firstBare(args[1:]))
 
 	case "new":
 		return env.NewCmd(args[1:])

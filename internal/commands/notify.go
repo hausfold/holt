@@ -64,34 +64,52 @@ func (e *Env) trillSendArgs(payload map[string]any) ([]string, bool) {
 	default:
 		return nil, false
 	}
-	name := e.laneNameFor(payload)
-	return []string{"send",
+	name, lane := e.laneFor(payload)
+	args := []string{"send",
 		"--kind", kind,
 		"--title", name,
 		"--body", body,
 		"--source", "claude",
 		"--thread", name,
 		"--symbol", symbol,
-	}, true
+	}
+	// A banner that names a lane and can't take you to it is the whole
+	// friction this hook was supposed to remove: you still had to find the
+	// window yourself. `lane:` is trill's focus_lane action — it runs
+	// `holt focus <name>` and nothing else — and it is qualified by repo
+	// because two repos may hold the same lane name, which is exactly the
+	// ambiguity `holt focus` refuses to guess at.
+	//
+	// Only when a registry row matched: a pane outside every lane still gets
+	// a banner (named after its directory), and there is nothing to focus.
+	if lane != "" {
+		args = append(args, "--action", "Go to lane=lane:"+lane)
+	}
+	return args, true
 }
 
-// laneNameFor names the lane a hook payload came from: the registry row whose
+// laneFor names the lane a hook payload came from: the registry row whose
 // checkout contains the payload's cwd. A pane outside any lane (the main
 // checkout, a ~ pane) still gets a banner — named after its directory, which
 // is the honest answer and still not conversation content.
-func (e *Env) laneNameFor(payload map[string]any) string {
+//
+// Two names come back. The first is what the banner says, short enough to read
+// at a glance. The second is what `holt focus` is given — `<repo>/<name>`, the
+// same qualified spelling matchLane accepts — and it is empty for anything
+// that isn't a lane, which is how the caller knows not to offer a click.
+func (e *Env) laneFor(payload map[string]any) (name, lane string) {
 	cwd, _ := hookField(payload, "cwd")
 	if cwd == "" {
-		return "claude"
+		return "claude", ""
 	}
 	if rows, err := e.Reg.Load(); err == nil {
 		for _, row := range rows {
 			if cwd == row.Path || strings.HasPrefix(cwd, row.Path+string(filepath.Separator)) {
-				return row.Name
+				return row.Name, filepath.Base(row.Main) + "/" + row.Name
 			}
 		}
 	}
-	return filepath.Base(cwd)
+	return filepath.Base(cwd), ""
 }
 
 // trillBinary resolves the trill CLI without assuming anything about the
