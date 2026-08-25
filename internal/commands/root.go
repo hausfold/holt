@@ -51,8 +51,9 @@ A LANE is one agent's branch, checkout and pane, from create to reaped.
   holt runtime eject tart print the built-in backend as an adapter file to edit
   holt hook create        [hook] open a lane — JSON on stdin, path on stdout
   holt hook remove        [hook] retire one without losing work — JSON on stdin
-  holt hook notify        [hook] Notification/Stop → a trill banner for the lane
-                          (ask when blocked on the user, done when finished) —
+  holt hook notify        [hook] client events → a trill banner for the lane:
+                          Notification hangs an ask, Stop replaces it with a
+                          done, UserPromptSubmit/PostToolUse resolve it —
                           JSON on stdin, exit 0 always, no-op without trill
 
   --json                  machine-readable listing: holt --json, holt list --json

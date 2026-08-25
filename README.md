@@ -96,7 +96,7 @@ failing. Don't reach for `git worktree remove`; ask it why.
 | `holt runtime up\|enter\|down <name>` | hand a lane to an isolation backend, and take it back · `--backend <id>` every time, never automatic · `tart` is built in — a headless macOS per lane, so an agent can drive a desktop without taking yours |
 | `holt runtime eject tart` | print the built-in backend as an adapter file, to edit and override it with |
 | `holt hook create` / `remove` | client-hook entry points (this is what `claude --worktree` calls) |
-| `holt hook notify` | Notification/Stop → a [trill](https://github.com/hausfold/trill) banner: an `ask` parked on the ledge when a lane blocks on its user, a `done` when it finishes · clicking it runs `holt focus` on that lane · exit 0 always, silent no-op without trill |
+| `holt hook notify` | client events → a [trill](https://github.com/hausfold/trill) banner for the lane: Notification hangs an `ask` on the ledge when a lane blocks on its user, Stop replaces it with a `done` when the turn finishes, and UserPromptSubmit / PostToolUse take an answered `ask` back down — the session moved again, so the question did too · every banner is keyed by lane, so one lane never hangs two · clicking it runs `holt focus` on that lane · exit 0 always, silent no-op without trill |
 
 `holt --help` is exhaustive. Config, exit codes, and the `--json` lane payload
 are in [docs/reference.md](docs/reference.md).

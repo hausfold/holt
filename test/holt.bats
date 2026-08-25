@@ -643,6 +643,78 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   ! grep -q 'trill' "$FAKE_TRILL_LOG"
 }
 
+@test "notify: a Notification is keyed by lane, so the next one replaces the fin" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(hook_create "$main" sparkle)"
+  mktrill
+  run hook_notify "{\"hook_event_name\":\"Notification\",\"cwd\":\"$dir\"}"
+  [ "$status" -eq 0 ]
+  grep -q -- '--key holt/alpha/sparkle' "$FAKE_TRILL_LOG"
+}
+
+# The other half of the ask: the session moved again, so the question its fin
+# asks has been answered. UserPromptSubmit is the user typing; PostToolUse means
+# a tool actually ran, which is what approving a permission prompt leads to.
+@test "notify: a resume event resolves the lane's fin" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(hook_create "$main" sparkle)"
+  mktrill
+  hook_notify "{\"hook_event_name\":\"Notification\",\"cwd\":\"$dir\"}"
+  : >"$FAKE_TRILL_LOG"
+  run hook_notify "{\"hook_event_name\":\"PostToolUse\",\"cwd\":\"$dir\"}"
+  [ "$status" -eq 0 ]
+  grep -q -- 'trill resolve holt/alpha/sparkle' "$FAKE_TRILL_LOG"
+}
+
+# PostToolUse fires on every tool call in every pane. With no fin outstanding it
+# must not launch trill at all — that binary is Trill.app's, and paying for it
+# per tool call is the whole reason the marker gate exists.
+@test "notify: a resume event with nothing outstanding launches no trill" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(hook_create "$main" sparkle)"
+  mktrill
+  run hook_notify "{\"hook_event_name\":\"UserPromptSubmit\",\"cwd\":\"$dir\"}"
+  [ "$status" -eq 0 ]
+  [ ! -s "$FAKE_TRILL_LOG" ]
+}
+
+# One resolve, not one per tool call: the fin is down after the first.
+@test "notify: the fin resolves once, then the gate is shut again" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(hook_create "$main" sparkle)"
+  mktrill
+  hook_notify "{\"hook_event_name\":\"Notification\",\"cwd\":\"$dir\"}"
+  hook_notify "{\"hook_event_name\":\"PostToolUse\",\"cwd\":\"$dir\"}"
+  : >"$FAKE_TRILL_LOG"
+  run hook_notify "{\"hook_event_name\":\"PostToolUse\",\"cwd\":\"$dir\"}"
+  [ "$status" -eq 0 ]
+  [ ! -s "$FAKE_TRILL_LOG" ]
+}
+
+# Another lane moving is not this lane being answered.
+@test "notify: a resume event from a different lane leaves the fin up" {
+  local main a b; main="$(mkrepo alpha)"
+  a="$(hook_create "$main" sparkle)"; b="$(hook_create "$main" other)"
+  mktrill
+  hook_notify "{\"hook_event_name\":\"Notification\",\"cwd\":\"$a\"}"
+  : >"$FAKE_TRILL_LOG"
+  run hook_notify "{\"hook_event_name\":\"PostToolUse\",\"cwd\":\"$b\"}"
+  [ "$status" -eq 0 ]
+  [ ! -s "$FAKE_TRILL_LOG" ]
+  # …and the fin is still there to be resolved when sparkle itself moves.
+  hook_notify "{\"hook_event_name\":\"PostToolUse\",\"cwd\":\"$a\"}"
+  grep -q -- 'trill resolve holt/alpha/sparkle' "$FAKE_TRILL_LOG"
+}
+
+# A daemon that never took the ask leaves nothing armed: the next tool call must
+# not pay for a resolve of a fin that was never on screen.
+@test "notify: an ask trill refused arms no resolve" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(hook_create "$main" sparkle)"
+  mktrill; export FAKE_TRILL_EXIT=2
+  hook_notify "{\"hook_event_name\":\"Notification\",\"cwd\":\"$dir\"}"
+  export FAKE_TRILL_EXIT=0
+  : >"$FAKE_TRILL_LOG"
+  run hook_notify "{\"hook_event_name\":\"PostToolUse\",\"cwd\":\"$dir\"}"
+  [ "$status" -eq 0 ]
+  [ ! -s "$FAKE_TRILL_LOG" ]
+}
+
 # ── reap ─────────────────────────────────────────────────────────────────────
 
 @test "reap: removes a clean, landed, unoccupied checkout and its branch" {
