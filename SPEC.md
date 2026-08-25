@@ -563,7 +563,7 @@ worth more in a listing than `cozy-otter`, and the brief is right there.
 ```toml
 kind = "namer"
 id   = "claude"
-name = ["claude", "-p", "--model", "haiku", "--strict-mcp-config", "--", "{{.Prompt}}"]
+name = ["claude", "-p", "--model", "haiku", "--strict-mcp-config", "--disable-slash-commands", "--", "{{.Prompt}}"]
 ```
 
 Selected by a top-level `namer = "<id>"` config key, and **absent by default**:

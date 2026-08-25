@@ -19,12 +19,16 @@ const BuiltinNamer = "claude"
 // `--model haiku` is the cheapest and fastest client-side model, an alias
 // rather than a pinned id so it follows the model line rather than rotting;
 // `--strict-mcp-config` drops the machine's MCP servers, which the naming turn
-// cannot use and which measured at roughly half this call's wall clock; and the
-// `--` is the rule SPEC.md §5.3 states for every prompt-carrying argv — a brief
-// routinely begins with a dash, and a bare positional would be read as a flag.
+// cannot use and which measured at roughly half this call's wall clock;
+// `--disable-slash-commands` drops the machine's SKILLS, which is insurance
+// rather than speed — an operator whose global instructions say "load the brief
+// skill every session" was having them loaded into a request for one word;
+// and the `--` is the rule SPEC.md §5.3 states for every prompt-carrying argv —
+// a brief routinely begins with a dash, and a bare positional would be read as
+// a flag.
 const BuiltinNamerTOML = `kind = "namer"
 id   = "claude"
-name = ["claude", "-p", "--model", "haiku", "--strict-mcp-config", "--", "{{.Prompt}}"]
+name = ["claude", "-p", "--model", "haiku", "--strict-mcp-config", "--disable-slash-commands", "--", "{{.Prompt}}"]
 `
 
 // NamerAdapter is a `kind = "namer"` adapter (SPEC.md §5.6): one argv that

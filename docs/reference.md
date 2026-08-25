@@ -37,7 +37,7 @@ the machine's MCP servers switched off:
 ```toml
 kind = "namer"
 id   = "claude"
-name = ["claude", "-p", "--model", "haiku", "--strict-mcp-config", "--", "{{.Prompt}}"]
+name = ["claude", "-p", "--model", "haiku", "--strict-mcp-config", "--disable-slash-commands", "--", "{{.Prompt}}"]
 ```
 
 Every other namer is a file with that shape, and a `claude.toml` of your own
