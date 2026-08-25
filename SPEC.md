@@ -786,6 +786,16 @@ three lines of shell without either having to become the other:
   override (§5.3), so the lane's are **`HOLT_LANE_STATE`** and
   **`HOLT_LANE_AGENT`**.
 
+`focus` is `resume`'s narrower sibling and the seam a desktop wants most: the
+lane is already running, and the question is only which window to raise. holt
+cannot answer that — the join from a lane to a window belongs to whatever opened
+it — so the built-in is `resume`, and a consumer that knows its own windows
+overrides exactly this step. A `focus` hook that **defers** (exit 3) means "no
+window of mine holds that lane", and holt falls back to resume, which opens one:
+a detached lane is running, not gone. Its usual caller is not a human — trill
+runs `holt focus <name>` when a lane's banner is clicked — which is why the
+no-hook path still has to land somewhere useful.
+
 The two action seams that open a session — `resume` and `open` — carry three
 more, because a hook that spawns a pane has to reproduce a decision holt already
 made: `HOLT_CHAT` (the cwd the conversation lives in, which for a spawned lane
@@ -827,6 +837,7 @@ landed   = ["/nix/store/…-holt-landed", "--release-train"] # or an argv
 | `preserve` | predicate | does this dirty tree need a wip commit before removal? | yes, unless it's untracked scratch on a landed branch |
 | `resume` | action | reopen this lane's session | chdir + exec the client — continuing the newest conversation there, or its picker for a shared parent (§5.3) |
 | `open` | action | open a session in a freshly-created lane | chdir + exec the client |
+| `focus` | action | put the window this lane is already running in in front | `resume` — the only go-to holt has without a window layer |
 
 Two things are **not** seams and will not become them, because they are about
 holt not sawing off the branch it is sitting on rather than about policy: the

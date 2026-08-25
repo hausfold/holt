@@ -85,6 +85,14 @@ const (
 	// HookOpen is HookResume's counterpart for a lane that was just
 	// created and has no session yet. Built-in: chdir + exec the client.
 	HookOpen = "open"
+
+	// HookFocus is the action seam behind `holt focus <name>`: the lane is
+	// already running somewhere and the user wants to be looking at it. A
+	// machine that opens a window per lane raises the one it already has here
+	// — the join from a lane to a window is its own, and holt has no business
+	// knowing it. Defer means "no window of mine holds that lane", and holt
+	// falls back to resume, which opens one. Built-in: resume.
+	HookFocus = "focus"
 )
 
 // Answer is what a hook said.

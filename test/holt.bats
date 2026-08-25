@@ -467,6 +467,54 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
   [[ "$output" == *"no lane named 'nope'"* ]]
 }
 
+# ── focus ────────────────────────────────────────────────────────────────────
+
+@test "focus: the hook is handed the lane, and its yes ends it" {
+  local main hook; main="$(mkrepo alpha)"; mkwt "$main" glance >/dev/null
+  hook="$(mkhook focus 'printf "%s %s\n" "$HOLT_NAME" "$HOLT_MAIN" >"'"$TMP"'/focused"; exit 0')"
+  setcfg "[hooks]
+focus = \"$hook\""
+  wt_run focus glance
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TMP/focused")" = "glance $main" ]
+  # Handled means handled: resume must not also run and open a second window
+  # onto the session the hook just raised.
+  [[ "$output" != *"claude --continue"* ]] || fail "resume ran behind the hook: $output"
+}
+
+@test "focus: a hook that defers falls back to resume — a lane with no window still opens one" {
+  local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" detached)"
+  git -C "$main" worktree remove --force "$dir"
+  hook="$(mkhook focus 'exit 3')"
+  setcfg "[hooks]
+focus = \"$hook\""
+  wt_run focus detached
+  [ "$status" -eq 0 ]
+  [ -e "$dir/.git" ]
+  [[ "$output" == *"claude --continue"* ]]
+}
+
+@test "focus: with no hook at all it is resume — holt's own answer to go-to-this-lane" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" plain)"
+  git -C "$main" worktree remove --force "$dir"
+  wt_run focus plain
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"claude --continue"* ]]
+}
+
+@test "focus: an ambiguous or unknown name is refused, never guessed at" {
+  local a b; a="$(mkrepo alpha)"; b="$(mkrepo beta)"
+  mkwt "$a" twin >/dev/null; mkwt "$b" twin >/dev/null
+  wt_run focus twin
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"more than one repo"* ]]
+  wt_run focus nope
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no lane named 'nope'"* ]]
+  wt_run focus
+  [ "$status" -ne 0 ]
+}
+
 @test "resume: a branch checked out OUTSIDE the base is reported live, not re-added" {
   local main out; main="$(mkrepo alpha)"; out="$(mk_stray "$main" manual)"
   wt_run resume manual
