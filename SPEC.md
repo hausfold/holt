@@ -418,10 +418,10 @@ later. Cutover day changes nothing on disk.
 
 ---
 
-## 5. Adapters — one template-variable set, three kinds
+## 5. Adapters — one template-variable set, four kinds
 
 Everything variable becomes a TOML file in a directory: **agent clients**, **forges**,
-**runtime-isolation backends**. Built-ins ship as the same TOML, embedded via
+**runtime-isolation backends**, **namers**. Built-ins ship as the same TOML, embedded via
 `go:embed`, with no privileged code path — the built-in claude adapter is exactly
 the file a user would write.
 
@@ -457,7 +457,7 @@ learn, one table to document.
 | `{{.Base}}` | default branch of the repo |
 | `{{.Parent}}` | the spawning pane's cwd, or empty |
 | `{{.Agent}}` | client id recorded for this lane |
-| `{{.Prompt}}` | initial prompt, when starting a client |
+| `{{.Prompt}}` | initial prompt, when starting a client — and the naming request, for a namer (§5.6) |
 | `{{.Image}}` | path to an attached image, or empty |
 | `{{.Port}}` | the deterministically allocated base port (§6) |
 | `{{.Env}}` | map of the resolved environment |
@@ -553,6 +553,44 @@ setup = ["container", "run", "-d", "--name", "holt-{{.Name}}", "-v", "{{.Path}}:
 enter = ["container", "exec", "-it", "holt-{{.Name}}", "bash"]
 teardown = ["container", "rm", "-f", "holt-{{.Name}}"]
 ```
+
+### 5.6 Namer — one line
+
+A lane opened on a first-turn task (`--prompt`/`--prompt-file`) with no name given
+can be named after that task instead of after an animal. `mobile-nav-jitter` is
+worth more in a listing than `cozy-otter`, and the brief is right there.
+
+```toml
+kind = "namer"
+id   = "claude"
+name = ["claude", "-p", "--model", "haiku", "--strict-mcp-config", "--disable-slash-commands", "--", "{{.Prompt}}"]
+```
+
+Selected by a top-level `namer = "<id>"` config key, and **absent by default**:
+no key, no process, and an unnamed lane keeps taking a random word pair, exactly
+as it did before this kind existed.
+
+`{{.Prompt}}` here is holt's whole naming REQUEST — the instruction, the repo,
+the lane names already taken and the task, composed by holt — and the command
+answers on stdout with the name and nothing else. holt owns that wording so that
+name quality is holt's problem rather than every adapter file's; an adapter that
+disagrees wraps a script and reshapes the text it was handed.
+
+**holt never talks to a model.** It runs one argv and reads a word off stdout, so
+there is no HTTP client here, no vendor and no API key for holt to hold. The
+built-in runs the `claude` binary a machine spawning agents already has, which
+means the naming call is authenticated the same way the agents are; pointing the
+same key at a local model, or at a script with no model in it at all, is a file.
+`claude` is built in for the same reason `tart` is (§5.5) — it is the one every
+install already has a reason to have — and a `claude.toml` on disk still wins.
+
+**It is cosmetic, and it may never cost a lane.** No adapter, an uninstalled
+namer, a timeout, prose instead of a name: every one of them is a warning and a
+fall back to the random pair. The output is a model's text on its way to becoming
+a branch name and a path, so it is not trusted either — what reaches `git
+worktree add` is rebuilt from scratch as one to three `[a-z0-9-]` words, and a
+candidate that is not already shaped like a name is rejected whole rather than
+cleaned up.
 
 ---
 

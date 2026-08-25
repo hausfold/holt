@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // BuiltinRuntime is the one backend id holt answers for with no config file.
@@ -54,33 +53,14 @@ func LoadRuntimeAdapter(id string) (*RuntimeAdapter, error) {
 		return nil, fmt.Errorf("no runtime adapter %q — write one at %s (SPEC.md §5.5), or use the built-in %q backend", id, path, BuiltinRuntime)
 	}
 
-	adapter := &RuntimeAdapter{ID: id}
-	for i, line := range strings.Split(string(raw), "\n") {
-		text := strings.TrimSpace(stripComment(line))
-		if text == "" {
-			continue
-		}
-		key, val, ok := strings.Cut(text, "=")
-		if !ok {
-			return nil, fmt.Errorf("%s:%d isn't `key = value`: %q", path, i+1, text)
-		}
-		key = strings.TrimSpace(key)
-		argv, ok := parseValue(strings.TrimSpace(val))
-		if !ok {
-			return nil, fmt.Errorf("%s:%d — couldn't read a string or a list of strings from %q", path, i+1, strings.TrimSpace(val))
-		}
-		switch key {
-		case "setup":
-			adapter.Setup = argv
-		case "enter":
-			adapter.Enter = argv
-		case "teardown":
-			adapter.Teardown = argv
-		}
-		// kind, id, and anything else this version doesn't know about are
-		// ignored rather than fatal — the file describes one adapter, and a
-		// key this loader doesn't recognize is forward compatibility, not a
-		// typo.
+	keys, err := parseAdapterFile(path, raw)
+	if err != nil {
+		return nil, err
 	}
-	return adapter, nil
+	return &RuntimeAdapter{
+		ID:       id,
+		Setup:    keys["setup"],
+		Enter:    keys["enter"],
+		Teardown: keys["teardown"],
+	}, nil
 }

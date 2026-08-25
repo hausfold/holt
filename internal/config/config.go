@@ -38,6 +38,12 @@ type Config struct {
 	// a constant answer needs no program to return it.
 	Agent string
 
+	// Namer is the top-level `namer = "claude"` key: the id of the adapter
+	// that turns a lane's first-turn task into the lane's name. Empty — the
+	// default, and what every install had before this key existed — means an
+	// unnamed lane keeps taking a random word pair. See SPEC.md §5.6.
+	Namer string
+
 	// Hooks maps a seam name to the argv holt runs for it. Absent means "use
 	// the built-in", which is what an empty config gets and therefore what
 	// every holt install had before hooks existed.
@@ -336,8 +342,11 @@ func Load() (*Config, []string) {
 		}
 		switch section {
 		case "":
-			if key == "agent" {
+			switch key {
+			case "agent":
 				cfg.Agent = argv[0]
+			case "namer":
+				cfg.Namer = argv[0]
 			}
 		case "hooks":
 			cfg.Hooks[key] = argv

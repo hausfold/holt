@@ -2125,6 +2125,138 @@ open = \"$hook\""
   [ ! -e "$CLAUDE_WT_BASE/alpha/clash" ]
 }
 
+# ── namer: a lane named after its task ───────────────────────────────────────
+#
+# Opt-in, cosmetic, and unable to fail a lane. Every test here is one half of
+# that: what happens with no `namer` key (nothing — exactly the behaviour that
+# predates the key), and what happens when the namer misbehaves (a warning and
+# a random name, never a lane that didn't get made). The namer's output is a
+# model's text on its way to a branch name and a path, so the last two are the
+# gate that stands between them.
+
+mknamer() { # mknamer <body> — a namer shim, and the `fake` adapter that runs it
+  mkdir -p "$TMP/hooks" "$XDG_CONFIG_HOME/holt/adapters/namer"
+  printf '#!/usr/bin/env bash\n%s\n' "$1" >"$TMP/hooks/namer"
+  chmod +x "$TMP/hooks/namer"
+  printf 'kind = "namer"\nid = "fake"\nname = ["%s", "{{.Prompt}}"]\n' "$TMP/hooks/namer" \
+    >"$XDG_CONFIG_HOME/holt/adapters/namer/fake.toml"
+}
+
+lane_name() { # lane_name <path> — the basename holt chose
+  basename "$1"
+}
+
+@test "namer: with no namer configured nothing runs, and an unnamed lane is still a random pair" {
+  local b; b="$(mkrepo beta)"
+  mknamer 'touch "'"$TMP"'/ran"; echo mobile-nav-jitter'   # armed, but not named in the config
+  run bash -c "'$WT' spawn '$b' --prompt 'the bar draws a draft PR in the merged colour' 2>/dev/null"
+  [ "$status" -eq 3 ]                      # no open hook — the lane exists, nothing opened it
+  [ ! -e "$TMP/ran" ] || fail "the namer ran with no namer key in the config"
+  [ -d "$output" ] || fail "no lane at $output"
+  [[ "$(lane_name "$output")" =~ ^[a-z]+-[a-z]+$ ]] || fail "not a random pair: $(lane_name "$output")"
+}
+
+@test "namer: a configured namer names the lane, and is told the task, the repo and the neighbours" {
+  local b; b="$(mkrepo beta)"
+  mkwt "$b" tart-backend                   # a neighbour for the namer to avoid
+  mknamer 'printf "%s" "$1" >"'"$TMP"'/req"; echo mobile-nav-jitter'
+  setcfg 'namer = "fake"'
+  run bash -c "'$WT' spawn '$b' --prompt 'the bar draws a draft PR in the merged colour' 2>/dev/null"
+  [ "$status" -eq 3 ]
+  [ "$output" = "$CLAUDE_WT_BASE/beta/mobile-nav-jitter" ] || fail "lane is at $output"
+  [ -d "$CLAUDE_WT_BASE/beta/mobile-nav-jitter" ]
+  git -C "$b" show-ref -q --verify refs/heads/worktree-mobile-nav-jitter
+
+  run cat "$TMP/req"
+  [[ "$output" == *"the bar draws a draft PR in the merged colour"* ]] || fail "no task: $output"
+  [[ "$output" == *"acme/beta"* ]] || fail "no repo: $output"
+  # The neighbours are in there because holt's own collision handling is a
+  # numeric suffix, and `fix-mobile-2` is correct and unreadable.
+  [[ "$output" == *"tart-backend"* ]] || fail "no neighbours: $output"
+}
+
+@test "namer: a name the caller gave always wins, and a lane with no task never asks" {
+  local b main; b="$(mkrepo beta)"; main="$(mkrepo alpha)"
+  mknamer 'touch "'"$TMP"'/ran"; echo mobile-nav-jitter'
+  setcfg 'namer = "fake"'
+
+  run bash -c "'$WT' spawn '$b' notch-flicker --prompt 'fix the notch' 2>/dev/null"
+  [ "$output" = "$CLAUDE_WT_BASE/beta/notch-flicker" ] || fail "the namer overrode a given name: $output"
+  [ ! -e "$TMP/ran" ] || fail "the namer ran for a lane that already had a name"
+
+  # No task, nothing to name after: `holt new` on its own must not start a
+  # process, which is the whole reason the ⌘↵ path is unaffected by this.
+  cd "$main"; wt_run new
+  [ "$status" -eq 0 ]
+  [ ! -e "$TMP/ran" ] || fail "the namer ran for a lane with no prompt"
+}
+
+@test "namer: an answer that isn't a name warns and falls back — the lane is still made" {
+  local b; b="$(mkrepo beta)"
+  mknamer 'echo "I would need more detail about what you want changed."'
+  setcfg 'namer = "fake"'
+  run bash -c "'$WT' spawn '$b' --prompt 'fix the notch' 2>'$TMP/err'"
+  [ "$status" -eq 3 ]
+  [ -d "$output" ] || fail "a bad name cost the lane"
+  [[ "$(lane_name "$output")" =~ ^[a-z]+-[a-z]+$ ]] || fail "prose became a name: $(lane_name "$output")"
+  grep -q "isn't a name" "$TMP/err" || fail "silent fallback: $(cat "$TMP/err")"
+}
+
+@test "namer: a namer that cannot run at all warns and falls back, never fails" {
+  local b; b="$(mkrepo beta)"
+
+  # Named in the config, no adapter file on disk.
+  setcfg 'namer = "ollama"'
+  run bash -c "'$WT' spawn '$b' --prompt 'fix the notch' 2>'$TMP/err'"
+  [ "$status" -eq 3 ]
+  [ -d "$output" ] || fail "a missing adapter cost the lane"
+  grep -q "ollama" "$TMP/err" || fail "the missing adapter went unnamed: $(cat "$TMP/err")"
+
+  # An adapter file whose command isn't installed.
+  mkdir -p "$XDG_CONFIG_HOME/holt/adapters/namer"
+  printf 'kind = "namer"\nid = "gone"\nname = ["holt-namer-not-installed", "{{.Prompt}}"]\n' \
+    >"$XDG_CONFIG_HOME/holt/adapters/namer/gone.toml"
+  setcfg 'namer = "gone"'
+  run bash -c "'$WT' spawn '$b' --prompt 'fix the notch' 2>'$TMP/err'"
+  [ "$status" -eq 3 ]
+  [ -d "$output" ] || fail "an uninstalled namer cost the lane"
+  grep -q "PATH" "$TMP/err" || fail "the dead namer went unexplained: $(cat "$TMP/err")"
+}
+
+@test "namer: nothing a namer prints can escape the lane base or name a flag" {
+  local b; b="$(mkrepo beta)"
+  setcfg 'namer = "fake"'
+  local answer
+  for answer in '../../../etc/passwd' '-rf' '..' '/tmp/holt-namer-escape' 'a; rm -rf ~' 'beta'; do
+    mknamer "printf '%s\n' '$answer'"
+    run bash -c "'$WT' spawn '$b' --prompt 'fix the notch' 2>/dev/null"
+    [ "$status" -eq 3 ] || fail "spawn failed on answer '$answer': $output"
+    [[ "$(dirname "$output")" = "$CLAUDE_WT_BASE/beta" ]] || fail "'$answer' escaped to $output"
+    [[ "$(lane_name "$output")" =~ ^[a-z]+-[a-z]+$ ]] || fail "'$answer' became $(lane_name "$output")"
+  done
+  [ ! -e "/tmp/holt-namer-escape" ]
+  # …and the repo naming itself is dropped rather than spending a word on what
+  # every listing already shows.
+  mknamer 'echo beta-nav-jitter'
+  run bash -c "'$WT' spawn '$b' --prompt 'fix the notch' 2>/dev/null"
+  [ "$(lane_name "$output")" = "nav-jitter" ] || fail "the repo named itself: $(lane_name "$output")"
+}
+
+@test "namer: the namer's stdin is empty, never the brief holt just read off fd 0" {
+  # `--prompt-file -` drains stdin to read the brief, and the client is handed a
+  # terminal back afterwards. A namer that inherited fd 0 would either consume
+  # what is left or block on a pipe nobody is writing to — a client that waits
+  # on a non-tty stdin adds seconds to every single spawn.
+  local b; b="$(mkrepo beta)"
+  printf 'make the bar draw draft PRs in grey\n' >"$TMP/brief.md"
+  mknamer 'cat >"'"$TMP"'/stdin"; echo draft-pr-grey'
+  setcfg 'namer = "fake"'
+  run bash -c "'$WT' spawn '$b' --prompt-file - <'$TMP/brief.md' 2>/dev/null"
+  [ "$status" -eq 3 ]
+  [ "$output" = "$CLAUDE_WT_BASE/beta/draft-pr-grey" ] || fail "lane is at $output"
+  [ ! -s "$TMP/stdin" ] || fail "the namer was handed holt's stdin: $(cat "$TMP/stdin")"
+}
+
 @test "hooks: a lane's own fields never shadow holt's own environment" {
   # Every HOLT_* a hook is given leaks into the pane that hook spawns, and into
   # every window opened from it. So no field may be spelled as a variable holt
