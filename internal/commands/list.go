@@ -175,6 +175,17 @@ func (e *Env) postMergeAhead(main, branch string) (ahead, pr int, diverged bool)
 	if tip == "" || tip == head {
 		return 0, 0, false
 	}
+	// An OPEN PR standing at this exact tip already covers everything since the
+	// merge, so the lane is simply in flight — neither behind a reship nor
+	// sideways. Without this the marker never comes down: the map it reads
+	// lists MERGED PRs only, so the follow-up PR `holt reship` just opened is
+	// invisible to it and the lane goes on being told to reship, forever.
+	// Compared by OID rather than by mere existence, because a commit made
+	// after that push is genuinely uncovered until it is pushed too — and that
+	// is exactly the case the marker is for.
+	if oid, _ := e.openMapLookup(main, branch); oid != "" && oid == tip {
+		return 0, 0, false
+	}
 	// `--not base` is what keeps the count honest. A long-lived lane pulls the
 	// default branch back in — a merge from main, a rebase onto it — and every
 	// commit that ride brings along is reachable from the tip but not from the
@@ -205,7 +216,7 @@ func (e *Env) postMergeAhead(main, branch string) (ahead, pr int, diverged bool)
 	// the same shape of problem (step 3): a rebase preserves the DIFF even
 	// though it changes the SHA, so if `head`'s patch already exists among
 	// commits unique to this branch, the branch built on the merge after all.
-	if !builtOnMerge(main, head, branch) {
+	if !builtOnMerge(main, base, head, branch) {
 		return n, num, true
 	}
 	return n, num, false
@@ -213,7 +224,22 @@ func (e *Env) postMergeAhead(main, branch string) (ahead, pr int, diverged bool)
 
 // builtOnMerge reports whether branch's history — literally, or as an
 // equivalent patch after a rebase — includes what actually merged.
-func builtOnMerge(main, head, branch string) bool {
+func builtOnMerge(main, base, head, branch string) bool {
+	// The default branch being an ancestor of the tip settles it before any
+	// SHA is compared: everything on the default branch is in this history,
+	// and what merged is on the default branch by definition. Neither check
+	// below can see that, because a SQUASH merge puts the branch's content on
+	// the default branch under a NEW sha whose patch is the whole PR at once —
+	// so `head`, the PR's pre-squash tip, is not an ancestor of a branch that
+	// has since rebased onto the default branch, and `git cherry` cannot match
+	// it against that branch's own commits either. Without this, a lane that
+	// did exactly the right thing — squash-merge its PR, rebase onto the
+	// default branch, keep working — read as a stale, sideways checkout, and
+	// both `reap` and `reship` told it to delete itself rather than ship the
+	// real commits sitting on top.
+	if gitx.IsAncestor(main, mergeRef(main, base), branch) {
+		return true
+	}
 	if gitx.IsAncestor(main, head, branch) {
 		return true
 	}
@@ -229,6 +255,57 @@ func builtOnMerge(main, head, branch string) bool {
 	}
 	return strings.HasPrefix(strings.TrimSpace(out), "-")
 }
+
+// mergeRef is the ref the ancestry question above should actually be asked
+// against: the remote-tracking default branch when there is one.
+//
+// A worktree-driven repo's LOCAL default branch is routinely stale — nobody
+// checks it out, every lane branches from origin — and answering "did this
+// build on the merge?" against a stale ref is the one way the check above can
+// say yes when the honest answer is no.
+func mergeRef(main, base string) string {
+	if remote := "origin/" + base; gitx.Rev(main, remote) != "" {
+		return remote
+	}
+	return base
+}
+
+// openMapLookup is mergedMapLookup's other half: the tip and number of this
+// branch's OPEN PR, if it has one. Same one-query-per-repo shape, for the same
+// reason — the listing asks this of every row, and a per-branch query costs
+// ~0.5 s each.
+func (e *Env) openMapLookup(main, branch string) (headOID string, pr int) {
+	slug, err := gitx.RemoteSlug(main)
+	if err != nil || slug == "" {
+		return "", 0
+	}
+	out := e.cachedForge(openMapKey(slug),
+		"pr", "list", "-R", slug, "--state", "open", "--limit", "100",
+		"--json", "number,headRefName,headRefOid",
+		"--jq", `.[] | "\(.headRefName)\t\(.headRefOid)\t\(.number)"`)
+	for _, line := range gitx.Lines(out) {
+		f := strings.Split(line, "\t")
+		if len(f) < 3 {
+			continue
+		}
+		// A cross-repo (fork) PR arrives as owner:branch — same suffix compare
+		// the merged map does, and for the same reason.
+		name := f[0]
+		if i := strings.LastIndex(name, ":"); i >= 0 {
+			name = name[i+1:]
+		}
+		if name == branch {
+			n, _ := strconv.Atoi(f[2])
+			return f[1], n
+		}
+	}
+	return "", 0
+}
+
+// openMapKey is shared with reship, which forgets this entry the moment it
+// opens a PR: the cache holds for 120 s, and a marker that goes on demanding
+// the reship that just succeeded is exactly the bug this map exists to fix.
+func openMapKey(slug string) string { return "open-" + slug }
 
 // mergedMapLookup asks ONE repo-wide question rather than one per branch.
 //

@@ -74,7 +74,11 @@ setup() {
   #   no --head        the repo-wide merged-PR map (merged_map — one call per
   #                    repo, feeds the +N annotations). Answers for the single
   #                    branch FAKE_GH_BRANCH, which is all any test needs.
-  #   --state open     "is a PR already open?" (wt reship) → FAKE_GH_OPEN_URL
+  #   --state open     two shapes, told apart by the fields asked for:
+  #                    --json url  → "is a PR already open?" (reship) →
+  #                    FAKE_GH_OPEN_URL. --json …headRefOid → the repo-wide
+  #                    OPEN map (open_map, the other half of the +N answer) →
+  #                    FAKE_GH_OPEN_BRANCH/_OID/_PR.
   #   pr create        opens one → FAKE_GH_PR_URL
   # Printing nothing is a real gh's answer when offline or unauthenticated.
   cat >"$BIN/gh" <<'EOF'
@@ -87,7 +91,14 @@ case "$1 $2" in
   "repo view") printf '%s' "${FAKE_GH_ARCHIVED:-false}"; exit 0 ;;
 esac
 case " $* " in
-  *" --state open "*) printf '%s' "${FAKE_GH_OPEN_URL:-}"; exit 0 ;;
+  *" --state open "*)
+    case " $* " in
+      *headRefOid*)
+        [ -n "${FAKE_GH_OPEN_BRANCH:-}" ] || exit 0
+        printf '%s\t%s\t%s\n' "$FAKE_GH_OPEN_BRANCH" "${FAKE_GH_OPEN_OID:-}" "${FAKE_GH_OPEN_PR:-8}"
+        exit 0 ;;
+    esac
+    printf '%s' "${FAKE_GH_OPEN_URL:-}"; exit 0 ;;
   *" --state closed "*) printf '%s' "${FAKE_GH_CLOSED_PR:-}"; exit 0 ;;
   *" --head "*)
     [ "${FAKE_GH_MERGED:-0}" = 1 ] || exit 0
@@ -947,6 +958,65 @@ hook_notify() { # hook_notify <json> — drive the notify hook
     || fail "reap pointed a diverged (stale) branch at reship, which would push it: $output"
   git -C "$main" show-ref -q --verify refs/heads/worktree-diverged \
     || fail "the branch was deleted despite Landed() correctly saying no"
+}
+
+# A squash merge puts the branch's content on main under a NEW sha, and the
+# lane then rebases onto main and keeps working — the single most ordinary
+# shape there is. Ancestry against the PR's pre-squash tip says "sideways", and
+# the remedy for sideways is DELETE THE CHECKOUT, so this misread cost real
+# commits. What settles it is that main is an ancestor of the tip.
+@test "reap: a lane rebased past its squash-merged PR is 'outran', not diverged" {
+  local main dir squashed; main="$(mkrepo alpha)"; dir="$(mkwt "$main" rebased)"
+  squashed="$(git -C "$dir" rev-parse HEAD)"   # what the PR was opened at
+  # main squash-merges it: same content, a sha the branch has never seen.
+  git -C "$main" merge -q --squash worktree-rebased
+  git -C "$main" commit -qm "squash merge of #12"
+  # the lane rebases onto main, dropping its own copies, then keeps working
+  git -C "$dir" rebase -q main
+  commit_in "$dir" post.txt "work done after the PR merged"
+  export FAKE_GH_MERGED=1 FAKE_GH_OID="$squashed" FAKE_GH_PR=12
+  export FAKE_GH_BRANCH=worktree-rebased
+  cd "$TMP"; wt_run reap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"kept rebased (alpha) — merged PR #12, 1 commit(s) since"* ]] \
+    || fail "a rebased-past-a-squash lane was not read as new work: $output"
+  [[ "$output" != *"isn't built on what merged"* ]] \
+    || fail "reap told a correctly rebased lane to delete itself: $output"
+  [ -e "$dir/.git" ]
+}
+
+# The +N marker promises "commits no PR covers". It read merged PRs only, so
+# the follow-up PR `holt reship` had just opened was invisible to it and the
+# lane went on demanding a reship that had already happened.
+@test "list: an open PR at the tip clears the +N marker" {
+  local main dir tip; main="$(mkrepo alpha)"; dir="$(mkwt "$main" shipped)"
+  export FAKE_GH_MERGED=1 FAKE_GH_OID="$(git -C "$dir" rev-parse HEAD)" FAKE_GH_PR=12
+  export FAKE_GH_BRANCH=worktree-shipped
+  commit_in "$dir" post.txt "work done after the PR merged"
+  tip="$(git -C "$dir" rev-parse HEAD)"
+  cd "$TMP"; wt_run
+  [[ "$output" == *"live+1"* ]] || fail "the un-shipped commit was not marked: $output"
+  # …now reship it: an open PR stands at exactly that tip.
+  export FAKE_GH_OPEN_BRANCH=worktree-shipped FAKE_GH_OPEN_OID="$tip" FAKE_GH_OPEN_PR=13
+  rm -rf "$CLAUDE_WT_BASE/.cache"
+  cd "$TMP"; wt_run
+  [[ "$output" != *"live+1"* ]] \
+    || fail "the marker still demanded a reship the open PR already covers: $output"
+}
+
+# …but only at the tip. A commit made after the push is genuinely uncovered,
+# and that is the whole case the marker exists for.
+@test "list: a commit made after the open PR's tip is still marked +N" {
+  local main dir tip; main="$(mkrepo alpha)"; dir="$(mkwt "$main" ahead-of-pr)"
+  export FAKE_GH_MERGED=1 FAKE_GH_OID="$(git -C "$dir" rev-parse HEAD)" FAKE_GH_PR=12
+  export FAKE_GH_BRANCH=worktree-ahead-of-pr
+  commit_in "$dir" post.txt "pushed, and the PR covers it"
+  tip="$(git -C "$dir" rev-parse HEAD)"
+  commit_in "$dir" post2.txt "committed after the push — nothing covers this"
+  export FAKE_GH_OPEN_BRANCH=worktree-ahead-of-pr FAKE_GH_OPEN_OID="$tip" FAKE_GH_OPEN_PR=13
+  cd "$TMP"; wt_run
+  [[ "$output" == *"live+2"* ]] \
+    || fail "an open PR behind the tip silenced the marker anyway: $output"
 }
 
 @test "list: a branch that outran its merged PR is marked +N" {

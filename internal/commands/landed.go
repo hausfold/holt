@@ -250,14 +250,9 @@ func (e *Env) mergedPR(main, branch string) (state, headOID string, pr int) {
 	return m[1], m[2], n
 }
 
-// cachedForge runs a forge query, memoised on disk.
-//
-// On disk rather than in memory because the cache must span invocations: the
-// statusline refresher and a `holt` listing seconds apart should cost one query
-// between them, not two. A failed query writes an empty file only when nothing
-// is cached, so an offline run asks once rather than once per row — and never
-// clobbers a good answer with an empty one.
-func (e *Env) cachedForge(key string, args ...string) string {
+// forgeCachePath is where one forge answer is memoised. Dot-prefixed so the
+// $BASE/*/* worktree globs never see it.
+func (e *Env) forgeCachePath(key string) string {
 	safe := strings.Map(func(r rune) rune {
 		switch {
 		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9',
@@ -266,8 +261,23 @@ func (e *Env) cachedForge(key string, args ...string) string {
 		}
 		return '_'
 	}, key)
-	// Dot-prefixed so the $BASE/*/* worktree globs never see it.
-	file := filepath.Join(e.Base, ".cache", safe)
+	return filepath.Join(e.Base, ".cache", safe)
+}
+
+// forgetForge drops a memoised answer, for the caller that just made it wrong.
+// Only writes are entitled to this: a read that finds a stale answer should
+// wait out the TTL rather than stampede the forge.
+func (e *Env) forgetForge(key string) { _ = os.Remove(e.forgeCachePath(key)) }
+
+// cachedForge runs a forge query, memoised on disk.
+//
+// On disk rather than in memory because the cache must span invocations: the
+// statusline refresher and a `holt` listing seconds apart should cost one query
+// between them, not two. A failed query writes an empty file only when nothing
+// is cached, so an offline run asks once rather than once per row — and never
+// clobbers a good answer with an empty one.
+func (e *Env) cachedForge(key string, args ...string) string {
+	file := e.forgeCachePath(key)
 
 	if cacheTTL > 0 {
 		if fi, err := os.Stat(file); err == nil && time.Since(fi.ModTime()) < cacheTTL {
