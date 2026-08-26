@@ -76,6 +76,10 @@ func (e *Env) Reship(want string) error {
 	if err != nil {
 		return exitcode.Usagef("gh pr create failed: %v", err)
 	}
+	// The listing reads open PRs through a 120 s disk cache. Drop this repo's
+	// entry, or the very next `holt` still shows the lane as +N and still says
+	// "covered by no PR" about the PR whose URL we are about to print.
+	e.forgetForge(openMapKey(slug))
 	suffix := ""
 	if ahead > 0 {
 		suffix = " for the " + strconv.Itoa(ahead) + " commit(s) past the merge"

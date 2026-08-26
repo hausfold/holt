@@ -160,18 +160,7 @@ func dirtyNote(entry Entry, porcelain string) string {
 	}
 	paths := make([]string, 0, len(shown))
 	for _, l := range shown {
-		// Porcelain v1 is "XY path"; the status letters are always 2 columns
-		// plus a space, and a rename's " -> " tail is worth keeping as written.
-		if len(l) > 3 {
-			l = l[3:]
-		}
-		// Porcelain C-quotes any path with non-ASCII or special characters
-		// (`?? "caf\303\251.txt"`). Trimming the quotes alone leaves the
-		// escapes in, which is not a path anyone can paste back.
-		if unq, err := strconv.Unquote(l); err == nil {
-			l = unq
-		}
-		paths = append(paths, l)
+		paths = append(paths, porcelainPath(l))
 	}
 	more := ""
 	if len(lines) > len(shown) {
@@ -185,6 +174,33 @@ func dirtyNote(entry Entry, porcelain string) string {
 // dirtyPathsShown caps the named paths, so a checkout with a build tree in it
 // reports a line rather than a screenful.
 const dirtyPathsShown = 3
+
+// porcelainPath is the path out of one `git status --porcelain` line.
+//
+// Porcelain v1 is "XY path": two status columns then a space, and a rename's
+// " -> " tail is worth keeping as written. But the first column is a SPACE for
+// an unstaged-only change (" M path"), and this porcelain reaches us through
+// gitx.Run, which TrimSpace's the whole output — so the FIRST line, and only
+// the first, arrives one column short ("M path"). Cutting a fixed three ate
+// the path's first character, and a lane held back by one modified file
+// reported "odules/core/haus.sh": not a path anyone can paste, and one that
+// reads like corruption rather than an off-by-one. Find the separator instead
+// of counting to it, and both shapes parse.
+func porcelainPath(l string) string {
+	switch {
+	case len(l) > 2 && l[2] == ' ':
+		l = l[3:]
+	case len(l) > 1 && l[1] == ' ':
+		l = l[2:]
+	}
+	// Porcelain C-quotes any path with non-ASCII or special characters
+	// (`?? "caf\303\251.txt"`). Trimming the quotes alone leaves the
+	// escapes in, which is not a path anyone can paste back.
+	if unq, err := strconv.Unquote(l); err == nil {
+		l = unq
+	}
+	return l
+}
 
 // noteRelanded records why a lane declined to be reaped, so it says something
 // instead of silently persisting — and points at the right fix. Three shapes,
