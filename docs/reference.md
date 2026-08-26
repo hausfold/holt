@@ -183,7 +183,7 @@ Each lane:
 | `occupied` / `dirty` | nullable; **`null` means undetermined, not false** |
 | `occupied_by` | the evidence behind `occupied: true` — `[{pid, command, path, via}]`, `via` ∈ `lsof \| leases`. Absent when nothing holds the lane |
 | `landed` | `{verdict: yes\|no\|fresh\|contained, via, confidence}` |
-| `post_merge_ahead` | `{commits, pr, diverged}` — work done after the PR merged |
+| `post_merge_ahead` | `{commits, pr, diverged}` — work done after the PR merged. An open PR at the tip already covers it, so the whole thing reads `{0, 0, false}` (`pr` is a plain int; absent is `0`, never `null`) |
 | `last_commit` | most recent commit |
 
 Two traps for consumers: reading `null` occupancy as clean, and ignoring
