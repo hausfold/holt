@@ -189,7 +189,7 @@ the implied verb. One envelope, so they can version-check without sniffing:
       "ahead": 3,
       "behind": 12,
       "landed": { "verdict": "no", "via": null, "confidence": "certain" },
-      "post_merge_ahead": { "commits": 0, "pr": null, "diverged": false },
+      "post_merge_ahead": { "commits": 0, "pr": 0, "diverged": false },
       "pr": { "number": 189, "state": "OPEN", "url": "https://…", "checks": "passing" },
       "overlap": ["frost"]
     }
@@ -225,11 +225,26 @@ Contract points that matter:
 - Field additions are non-breaking; consumers must ignore unknown keys.
 - `post_merge_ahead.diverged` disambiguates a case `commits` alone cannot: the
   same nonzero count means "committed after the merge" (reshippable) when the
-  merged SHA is an ancestor of the tip, and "this tip never built on what
+  branch's history includes what merged, and "this tip never built on what
   merged" (a stale or sideways checkout — a second local copy of the same
-  branch, a rebase, an amend) when it is not. `holt reship` refuses the latter
-  rather than pushing content the merge already superseded; the CLI marks it
-  `~N` in the state column, distinct from `+N`.
+  branch, an amend) when it does not. `holt reship` refuses the latter rather
+  than pushing content the merge already superseded; the CLI marks it `~N` in
+  the state column, distinct from `+N`. **A rebase is not that case**, whatever
+  it does to the SHAs: the question is settled first by asking whether
+  `origin/<base>` is an ancestor of the tip, because everything that merged is
+  on the default branch by definition and a *squash* merge puts it there under a
+  new SHA that neither ancestry against `headRefOid` nor `git cherry` can match.
+  Squash-merge, rebase onto the default branch, keep working — the lane that did
+  exactly the right thing — read as `~N` until #60, and `~N`'s remedy is "delete
+  this checkout".
+- `post_merge_ahead.pr` is not only the merged PR. An **open** PR standing at
+  this exact tip covers everything since the merge, so the whole marker
+  collapses to `{0, 0, false}` and `+N` comes down: the lane is simply in
+  flight. Compared by OID, never by mere existence, because a commit made after
+  that push is genuinely uncovered and is the case the marker exists for. Before
+  #60 the map behind this listed MERGED PRs only, so the follow-up PR `holt
+  reship` had just opened was invisible and the lane went on being told to
+  reship, forever.
 
 ### 2.3 Hook protocol
 
