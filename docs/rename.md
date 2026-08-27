@@ -431,7 +431,7 @@ whoever picks it up.
 | 4 | **OIDC trusted publishers re-entered** on npm, PyPI, crates | **the user** | ⏳ new package names have no entry to edit (`docs/releasing.md`). Only **PyPI** is doable before the tag (a *pending* publisher, from the account sidebar); npm and crates.io show no Trusted Publisher form until the package exists, so their entries come **after** a hand-published `1.0.0`. Environment name blank in all three |
 | 5 | the family and the web (§6) | — | ✅ all merged 2026-08-27 — workshop#475 + #477 (incl. the checkout `mv`), hausfold.co#171, trill#47, ops#12, .github#25, perch#117, pounce#110, nebelung#51, homebrew-tap#20. snug was not in §6's table and took its own: snug#5. **Two follow-ups open:** hausfold.co#172 (the generated options page was three haus renders behind, so #171 couldn't reach the `scruff` prose inside it) and ops#13 (a comment saying the scoreboard series changes key at the rename) |
 | 6 | haus's `flake.nix` input URL → `github:hausfold/scruff` | — | ✅ merged, haus#551 — no longer leaning on GitHub's redirect |
-| 7 | the host file (`~/.config/nix/hosts/mbp/default.nix`) | **the user** | ⏳ edited 2026-08-27, **awaiting one `haus rebuild`** — and the hand-written namer adapter has been moved to `~/.config/scruff` (it had gone quiet; see §3.4's warning), so this is the last live `holt` on this machine. Verified 2026-08-27: `~/.claude/settings.json` holds exactly one `holt` string — the `Bash(holt:*)` permission — and all six hooks are `scruff`, firing once each. `Bash(holt:*)` needs a `del` (added under `\| unique`, so nothing removes it), plus the two `holt hook create\|remove` commands, the `holt session` palette entry and the namer-adapter paths — then `haus rebuild` |
+| 7 | the host file (`~/.config/nix/hosts/mbp/default.nix`) | **the user** | ✅ **rebuilt** — generation 1082, 2026-08-27 11:03 — and the hand-written namer adapter had already moved to `~/.config/scruff` (it had gone quiet; see §3.4's warning). This was the last live `holt` on this machine. Verified after the rebuild: `permissions.allow` in `~/.claude/settings.json` no longer carries `Bash(holt:*)` (the host file's `retire`/`drop` pair ran), all six hooks are `scruff` and fire once each, and the namer adapter answers from `~/.config/scruff`. The `holt` binary is still on `PATH` — that is the Phase-1 compat symlink, deliberate until 1.1.0. One tidy left over: the `retire` list and its `drop` call have now done their single job and can be deleted, which §8.1's compat sweep already collects |
 | 8 | `bench release scruff 1.0.0` | **the user** | ⏳ **gated on 4's PyPI half alone now** — 5 is done, and the DIRECTORY name it resolves by is `~/code/workshop/scruff` as of workshop#477. npm and crates.io want a hand-published `1.0.0` first; their release jobs no-op on a version already out there, so the tag still runs green |
 | 9 | deprecate the old packages in place (§7) | **the user** | ⏳ after the 1.0.0 publish. Never yank |
 | 10 | `scruff 1.1.0` — the base move and the end of compat (§8) | an agent lane | ⏳ not before a week of green rebuilds |
@@ -441,8 +441,8 @@ whoever picks it up.
 across the family is deliberate in three flavours: the bilingual compat rungs
 (deleted at 1.1.0, §8.1), the frozen `holt/<repo>/<lane>` notify key (decision
 6), and dated history that must keep the old name — ops's snapshots, the Go
-proxy's three paths, `PRESENCE.md`'s register. The cutover now waits on 4, 7, 8
-and 9, and only 7 is free of an irreversible publish.
+proxy's three paths, `PRESENCE.md`'s register. The cutover now waits on 4, 8 and 9 — every
+one of which touches an irreversible publish, now that 7 has rebuilt.
 
 ## 9. The done-list
 
