@@ -448,7 +448,7 @@ func (e *Env) Spawn(target, want string, opts SpawnOpts) error {
 	}
 
 	entry := Entry{Main: main, Branch: "worktree-" + name, Path: dir, State: Live}
-	// HOLT_CHAT is the lane's own checkout: a spawn continues nothing, so there
+	// SCRUFF_CHAT is the lane's own checkout: a spawn continues nothing, so there
 	// is no parent pane whose transcript this belongs to.
 	argv := startArgv(spec, opts.Image, opts.Prompt)
 	res := e.openSession(config.HookOpen, entry, agentID, dir, argv)

@@ -20,7 +20,7 @@ import (
 //
 // The lease is positive-only by default — it can save a checkout from the
 // sweep, never condemn one. See occupancy.Leases for why that asymmetry is the
-// whole safety model, and HOLT_OCCUPANCY=lease for the deployment that is
+// whole safety model, and SCRUFF_OCCUPANCY=lease for the deployment that is
 // entitled to drop it.
 //
 //	scruff heartbeat [path]              take or refresh, held by the CALLING process

@@ -15,7 +15,7 @@
 // somebody else's house style goes, and neither has to know about the other.
 //
 // The protocol is a program, not an expression language. scruff execs the hook's
-// argv, hands it the situation twice over (JSON on stdin for programs, HOLT_*
+// argv, hands it the situation twice over (JSON on stdin for programs, SCRUFF_*
 // environment variables for shell one-liners), and reads the answer off the
 // exit code. Nothing is interpreted, nothing is templated into a shell, and a
 // branch named `--force; rm -rf ~` is just a string in argv.
@@ -33,7 +33,7 @@ import (
 	"github.com/hausfold/scruff/internal/compat"
 )
 
-// Config is the resolved contents of ~/.config/holt/config.toml.
+// Config is the resolved contents of ~/.config/scruff/config.toml.
 type Config struct {
 	// Agent is the top-level `agent = "codex"` key: the client a new lane
 	// opens in. It is the static, zero-process spelling of the `agent` hook —
@@ -61,7 +61,7 @@ type Config struct {
 // required configuration.
 const (
 	// HookAgent answers "which client should this new lane open in?".
-	// stdout: the client id. Built-in: the `agent` config key, then HOLT_AGENT,
+	// stdout: the client id. Built-in: the `agent` config key, then SCRUFF_AGENT,
 	// then claude.
 	HookAgent = "agent"
 
@@ -246,16 +246,16 @@ func decode(s string) map[string]any {
 	return m
 }
 
-// hookEnv is the payload again, as HOLT_* variables, so a hook can be three
+// hookEnv is the payload again, as SCRUFF_* variables, so a hook can be three
 // lines of shell instead of a program with a JSON parser. Same data as stdin,
 // same names as the adapter template variables (SPEC.md §5.2).
 //
 // Three collisions to know about, all the same shape: scruff's own environment
 // got to the name first, so a field named after it would hand scruff back its own
-// input. HOLT_BASE is the lane base DIRECTORY, so the repo's default branch is
-// HOLT_BASE_BRANCH. HOLT_STATE is the state DIRECTORY and HOLT_AGENT is the
+// input. SCRUFF_BASE is the lane base DIRECTORY, so the repo's default branch is
+// SCRUFF_BASE_BRANCH. SCRUFF_STATE is the state DIRECTORY and SCRUFF_AGENT is the
 // one-invocation default-client override (both env.go), so the lane's fields
-// are HOLT_LANE_STATE and HOLT_LANE_AGENT.
+// are SCRUFF_LANE_STATE and SCRUFF_LANE_AGENT.
 //
 // This is not hypothetical tidiness. A hook that spawns a pane leaks this whole
 // environment into the shell it starts, and into every window opened from it —
@@ -263,7 +263,7 @@ func decode(s string) map[string]any {
 // machine-global state to the relative path "live" under the cwd (a git
 // checkout, routinely), and read the lane's own client as an override sitting
 // ABOVE the operator's config key. A hook that wants the client scruff was about
-// to run has HOLT_COMMAND, which is the resolved invocation rather than an id.
+// to run has SCRUFF_COMMAND, which is the resolved invocation rather than an id.
 //
 // Renaming any of the three would break something that already exists.
 //

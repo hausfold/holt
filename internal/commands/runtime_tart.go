@@ -16,7 +16,7 @@ import (
 // The built-in `tart` backend — the one runtime adapter scruff ships rather than
 // reads from a file.
 //
-// Every other backend is a `~/.config/holt/adapters/runtime/<id>.toml` the
+// Every other backend is a `~/.config/scruff/adapters/runtime/<id>.toml` the
 // caller writes, and that stays the mechanism: this file is one adapter's worth
 // of default, not a new seam. It exists because of what §5.5's three-argv
 // contract costs the person who has nothing yet. A container backend is one
@@ -61,7 +61,7 @@ func tartBase() (string, error) {
 		return b, nil
 	}
 	return "", exitcode.Refusedf(
-		"set HOLT_TART_BASE to the image lanes clone from — either one you have already (`tart list`), or:\n" +
+		"set SCRUFF_TART_BASE to the image lanes clone from — either one you have already (`tart list`), or:\n" +
 			"  tart pull ghcr.io/cirruslabs/macos-tahoe-base:latest\n" +
 			"  export SCRUFF_TART_BASE=ghcr.io/cirruslabs/macos-tahoe-base:latest\n" +
 			"A bare base boots, but it has none of your stack in it — bake an image once and point this at that instead")
@@ -229,9 +229,9 @@ func tartIP(vm, wait string) (string, error) {
 // tartLogPath is where a guest's console output lands: scruff's STATE dir, not
 // $TMPDIR (because "why did my VM never come up" is asked hours later) and not
 // the config dir (because config is a packager's to own — haus ships
-// ~/.config/holt as read-only symlinks into the nix store, and a log that
+// ~/.config/scruff as read-only symlinks into the nix store, and a log that
 // wants to be written there fails, after the clone has already happened).
-// Same resolver as every other piece of machine-global state, so HOLT_STATE
+// Same resolver as every other piece of machine-global state, so SCRUFF_STATE
 // moves this with the rest.
 func tartLogPath(vm string) string {
 	dir, _ := resolveStateDir()
@@ -268,7 +268,7 @@ func tartLog(vm string) (*os.File, error) {
 // wrong for them, and the fastest way to be wrong again is a TOML that looks
 // complete and silently drops the wait-for-an-address step.
 func tartAdapterTOML() string {
-	return `# Save as ~/.config/holt/adapters/runtime/tart.toml — a file with this id
+	return `# Save as ~/.config/scruff/adapters/runtime/tart.toml — a file with this id
 # takes precedence over scruff's built-in tart backend.
 #
 # The setup step is a multi-command dance (clone, boot headless with the lane
@@ -276,7 +276,7 @@ func tartAdapterTOML() string {
 # it at a script of your own. scruff's built-in is the reference for what that
 # script has to do:
 #
-#   tart clone "$HOLT_TART_BASE" "scruff-$1"
+#   tart clone "$SCRUFF_TART_BASE" "scruff-$1"
 #   tart run "scruff-$1" --no-graphics --dir="work:$2" &   # backgrounded!
 #   tart ip "scruff-$1" --wait 60
 #
