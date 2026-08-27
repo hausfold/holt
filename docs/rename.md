@@ -428,13 +428,13 @@ whoever picks it up.
 | 2 | haus flips (§4) | — | ✅ shipped, rebuilt on this machine |
 | 3 | the repo/module/package/`--json` rename (§5) | — | ✅ merged, scruff#72. GitHub repos renamed; both old names left unclaimed |
 | 3b | the old-name strings the binary still **said** | — | ⏳ scruff#76. The tart refusal asked for `HOLT_TART_BASE` (while the next line of the same message showed `SCRUFF_TART_BASE`), the ejected adapter template pointed at `~/.config/holt`, the no-`lsof` sweep warning named `HOLT_OCCUPANCY`. Output, not comments — the three places a 1.0.0 binary would still teach a stranger the dead name |
-| 4 | **OIDC trusted publishers re-entered** on npm, PyPI, crates | **the user** | 🔶 **PyPI done** (pending publisher, entered 2026-08-27). npm and crates.io showed no Trusted Publisher form until the package existed, so `1.0.0` was hand-published to both (see 8a) and **their entries are now reachable and still to be made** — they first bite at 1.1.0, not at this tag. Environment name blank in all three |
+| 4 | **OIDC trusted publishers re-entered** on npm, PyPI, crates | **the user** | ✅ all three entered 2026-08-27 — PyPI as a *pending* publisher before the tag, npm and crates.io after the hand publish made their forms reachable (8a). Owner `hausfold`, repo `scruff`, workflow **`release.yml`** as a bare filename, environment blank; npm's allowed-actions is `npm publish` only. None of the three was exercised by this tag — npm and crates no-opped, PyPI published over its pending entry. The npm and crates entries first do real work at 1.1.0 |
 | 5 | the family and the web (§6) | — | ✅ all merged 2026-08-27 — workshop#475 + #477 (incl. the checkout `mv`), hausfold.co#171, trill#47, ops#12, .github#25, perch#117, pounce#110, nebelung#51, homebrew-tap#20. snug was not in §6's table and took its own: snug#5. **Two follow-ups open:** hausfold.co#172 (the generated options page was three haus renders behind, so #171 couldn't reach the `scruff` prose inside it) and ops#13 (a comment saying the scoreboard series changes key at the rename) |
 | 6 | haus's `flake.nix` input URL → `github:hausfold/scruff` | — | ✅ merged, haus#551 — no longer leaning on GitHub's redirect |
 | 7 | the host file (`~/.config/nix/hosts/mbp/default.nix`) | **the user** | ✅ **rebuilt** — generation 1082, 2026-08-27 11:03 — and the hand-written namer adapter had already moved to `~/.config/scruff` (it had gone quiet; see §3.4's warning). This was the last live `holt` on this machine. Verified after the rebuild: `permissions.allow` in `~/.claude/settings.json` no longer carries `Bash(holt:*)` (the host file's `retire`/`drop` pair ran), all six hooks are `scruff` and fire once each, and the namer adapter answers from `~/.config/scruff`. The `holt` binary is still on `PATH` — that is the Phase-1 compat symlink, deliberate until 1.1.0. One tidy left over: the `retire` list and its `drop` call have now done their single job and can be deleted, which §8.1's compat sweep already collects |
-| 8 | `bench release scruff 1.0.0` | **the user** | ⏳ **ungated — ready to run** — 5 is done, and the DIRECTORY name it resolves by is `~/code/workshop/scruff` as of workshop#477. The npm and crates bootstrap it was waiting on is done (8a) |
+| 8 | `bench release scruff 1.0.0` | — | ✅ **released 2026-08-27**, [run 33095423641](https://github.com/hausfold/scruff/actions/runs/33095423641) — all 11 jobs green from tag `v1.0.0` (`38403e6`). All six artifacts verified on their registries, not from the log: npm `1.0.0` is `latest`, PyPI has both wheel and sdist, crates `1.0.0`, the GitHub release, `sdk/go/v1.0.0` (proxy-warmed by the job's own probe), and `1.0.0` on the scruff-swift mirror. `bench ship` has since rippled it into haus: this machine's `/run/current-system/sw/bin/scruff --version` says `1.0.0` at generation 1086 |
 | 8a | `1.0.0` hand-published to npm + crates | — | ✅ 2026-08-27. `@hausfold/scruff@1.0.0` (26 files, shasum `995059f…`) and `hausfold-scruff 1.0.0`. Both registries refuse to show a trusted-publisher form for a package that doesn't exist, so this is the bootstrap `docs/releasing.md` prescribes — **not** a second release. The release run's npm and crates jobs both check "already published?" and no-op, so the tag still goes green. PyPI is untouched and publishes over its pending publisher when the tag runs |
-| 9 | deprecate the old packages in place (§7) | **the user** | ⏳ after the 1.0.0 publish. Never yank |
+| 9 | deprecate the old packages in place (§7) | — | ✅ 2026-08-27. npm: all 21 `@hausfold/holt` versions carry `renamed to @hausfold/scruff`. PyPI and crates.io have no deprecate flag, so both took a final `hausfold-holt` **0.5.1** whose manifest and README are the pointer — `Development Status :: 7 - Inactive` on PyPI, `deprecated` in the crates keywords. **Its code is byte-identical to 0.5.0** (`diff -rq` against `v0.5.0`: four files, all manifest or README), because 0.5.1 is what `^0.5` now resolves to and a stub would have broken every consumer on the way out. Nothing yanked |
 | 10 | `scruff 1.1.0` — the base move and the end of compat (§8) | an agent lane | ⏳ not before a week of green rebuilds |
 
 **The code half is done; what's left is yours.** Every repo that had a live
@@ -442,23 +442,23 @@ whoever picks it up.
 across the family is deliberate in three flavours: the bilingual compat rungs
 (deleted at 1.1.0, §8.1), the frozen `holt/<repo>/<lane>` notify key (decision
 6), and dated history that must keep the old name — ops's snapshots, the Go
-proxy's three paths, `PRESENCE.md`'s register. The cutover now waits on 8, then 9 — 4's
-PyPI half is entered and its other two are no longer on the critical path, and 7
-has rebuilt.
+proxy's three paths, `PRESENCE.md`'s register. **Every step of the 1.0.0 cutover is
+done.** What remains is the three done-list checks that need eyes rather than a
+terminal, and §8's 1.1.0 work — the base move and the end of compat.
 
 ## 9. The done-list
 
 **At `1.0.0` — the rename is shipped when all of these are true:**
 
 - [ ] `grep -ri holt` across all family repos returns **only** dated/historical statements
-- [ ] `~/.claude/settings.json` contains no `holt` string, and a lane fires **one** notification
+- [x] `~/.claude/settings.json` contains no `holt` string, and a lane fires **one** notification
 - [ ] ⌘↵ → spawn → park → resume → reap round-trips on a fresh `haus rebuild`
-- [ ] all five SDK suites pass from their own directories
-- [ ] `scruff --version` reports `1.0.0` (proves `LDFLAGS` and `go.mod` agree)
-- [ ] npm/PyPI/crates show the deprecation pointer on the old names
-- [ ] `hausfold/holt` and `hausfold/holt-swift` remain **unclaimed** on GitHub
+- [x] all five SDK suites pass from their own directories — CI's `sdks` and `swift-sdk` jobs, green at `v1.0.0`
+- [x] `scruff --version` reports `1.0.0` (proves `LDFLAGS` and `go.mod` agree) — the installed binary, not just a local build
+- [x] npm/PyPI/crates show the deprecation pointer on the old names — npm on all 21 versions, PyPI and crates via `hausfold-holt` 0.5.1
+- [x] `hausfold/holt` and `hausfold/holt-swift` remain **unclaimed** on GitHub — both still answer 301 to the renamed repos
 - [ ] `hausfold.co` renders the family index with the accent colour intact
-- [ ] `ai/SKILL.md` and `ai/handoff/SKILL.md` pass the `nix/skill.nix` guards under their new directory names
+- [x] `ai/SKILL.md` and `ai/handoff/SKILL.md` pass the `nix/skill.nix` guards under their new directory names — `nix build .#scruff-skill` yields `scruff/`, `handoff/` and the compat `holt/`
 
 **At `1.1.0` — the rename is *done* when these are also true:**
 
