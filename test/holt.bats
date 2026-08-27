@@ -1459,6 +1459,24 @@ mkremote() { # mkremote <main> — give a repo a bare origin it can actually pus
   [[ "$output" != *"opencode --continue"* ]]
 }
 
+# The fourth client, end to end: the row records it, and `resume` picks pi's
+# continue-the-newest rung rather than the machine default's.
+@test "new: a pi lane records pi, and reopens with pi --continue" {
+  local b dir; b="$(mkrepo beta)"
+  shim_agent pi
+  cd "$b"
+  run "$WT" new pi-task pi
+  [ "$status" -eq 0 ]
+  dir="$CLAUDE_WT_BASE/beta/pi-task"
+  [ "$(awk -F'\t' -v p="$dir" '$4==p{print $6}' "$REG")" = pi ]
+  [[ "$output" == *"ran pi"* ]]
+
+  HAUS_AGENT_DEFAULT=claude run "$WT" resume pi-task
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"pi --continue"* ]]
+  [[ "$output" != *"claude --continue"* ]]
+}
+
 @test "resume: pre-client registry rows remain Claude worktrees" {
   local main dir; main="$(mkrepo alpha)"; dir="$CLAUDE_WT_BASE/alpha/legacy"
   git -C "$main" branch worktree-legacy
@@ -1498,7 +1516,7 @@ EOF
 @test "agent start: a prompt starting with a dash reaches the client as text" {
   local prompt='- update the README
 - and its footer'
-  for client in claude codex opencode; do
+  for client in claude codex opencode pi; do
     cat >"$BIN/$client" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$@"

@@ -67,7 +67,7 @@ export interface HoltLane {
   branch: string;
   path: string;
   parent: string;
-  /** The client this lane opens (`claude` | `codex` | `opencode`, or
+  /** The client this lane opens (`claude` | `codex` | `opencode` | `pi`, or
    * whatever adapters are configured) — never the lane's own identity. */
   agent: string;
   state: LaneState;

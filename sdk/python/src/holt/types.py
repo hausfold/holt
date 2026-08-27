@@ -90,7 +90,7 @@ class HoltLane:
     branch: str
     path: str
     parent: str
-    # The client this lane opens (claude | codex | opencode, or whatever
+    # The client this lane opens (claude | codex | opencode | pi, or whatever
     # adapters are configured) — never the lane's own identity.
     agent: str
     state: LaneState

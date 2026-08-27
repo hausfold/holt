@@ -81,7 +81,7 @@ type Lane struct {
 	Branch string `json:"branch"`
 	Path   string `json:"path"`
 	Parent string `json:"parent"`
-	// Agent is the client this lane opens (claude | codex | opencode, or
+	// Agent is the client this lane opens (claude | codex | opencode | pi, or
 	// whatever adapters are configured) — never the lane's own identity.
 	Agent          string         `json:"agent"`
 	State          LaneState      `json:"state"`

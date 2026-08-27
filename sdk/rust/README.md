@@ -90,7 +90,7 @@ watch` process (`kill_on_drop`) — that's the only way to stop it, since
 
 **Interactive (a real terminal TUI).** `new_interactive` / `resume_interactive`
 inherit the calling process's stdio, so when holt execs the configured
-agent client (`claude`, `codex`, `opencode`), it takes over the real
+agent client (`claude`, `codex`, `opencode`, `pi`), it takes over the real
 terminal — same as running `holt new` by hand — and control returns to you
 when that session ends.
 

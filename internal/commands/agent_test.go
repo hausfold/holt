@@ -87,15 +87,18 @@ func TestTrustWorktreeRefusesUntrustedParent(t *testing.T) {
 	}
 }
 
-func TestTrustWorktreeIgnoresOtherClients(t *testing.T) {
+// ~/.claude.json is Claude Code's, and only the claude arm may write into it.
+// pi is in this loop even though it DOES have a trust model, because the thing
+// being asserted is that its decision lands in pi's own file and never here.
+func TestTrustWorktreeWritesClaudesFileOnlyForClaude(t *testing.T) {
 	path := withHome(t, claudeConfig)
-	for _, agent := range []string{"codex", "opencode", ""} {
+	for _, agent := range []string{"codex", "opencode", "pi", ""} {
 		trustWorktree(agent, "/repo", "/wt/"+agent)
 	}
 	projects := readProjects(t, path)
-	for _, agent := range []string{"codex", "opencode", ""} {
+	for _, agent := range []string{"codex", "opencode", "pi", ""} {
 		if _, ok := projects["/wt/"+agent]; ok {
-			t.Errorf("%q is not Claude Code and has no trust model to seed", agent)
+			t.Errorf("%q wrote into Claude Code's ~/.claude.json", agent)
 		}
 	}
 }
@@ -197,6 +200,12 @@ func TestStartArgvEndsOptionParsingBeforeThePrompt(t *testing.T) {
 		{"codex", "", []string{"codex", "--", dashed}},
 		{"codex", "/tmp/shot.png", []string{"codex", "-i", "/tmp/shot.png", "--", dashed}},
 		{"opencode", "", []string{"opencode", "--prompt=" + dashed}},
+		{"pi", "", []string{"pi", "--", dashed}},
+		// pi's attachment is a message element (`@path`), not a flag, so it
+		// rides AFTER the `--` — which is why the property test below asks
+		// whether SOMETHING earlier ended option parsing rather than only the
+		// element immediately before the prompt.
+		{"pi", "/tmp/shot.png", []string{"pi", "--", "@/tmp/shot.png", dashed}},
 	}
 	for _, tc := range cases {
 		spec, ok := specFor(tc.agent)
@@ -211,20 +220,146 @@ func TestStartArgvEndsOptionParsingBeforeThePrompt(t *testing.T) {
 }
 
 // Whatever the prompt, it must never arrive as an argv element a parser could
-// still read as a flag — the property, not the three spellings above.
+// still read as a flag — the property, not the four spellings above. Checked
+// with an image as well as without, because pi's attachment sits between the
+// terminator and the prompt and an earlier version of this test would have
+// called that argv unsafe.
 func TestStartNeverHandsAClientABareDashedPrompt(t *testing.T) {
-	for _, agent := range []string{"claude", "codex", "opencode"} {
+	for _, agent := range []string{"claude", "codex", "opencode", "pi"} {
 		spec, _ := specFor(agent)
-		argv := spec.start("", "-x")
-		for i, arg := range argv {
-			if arg != "-x" {
-				continue
-			}
-			if i == 0 || !terminatesOptions(argv[i-1]) {
-				t.Errorf("%s: prompt at argv[%d] of %q is still option-parsed", agent, i, argv)
+		for _, image := range []string{"", "/tmp/shot.png"} {
+			argv := spec.start(image, "-x")
+			for i, arg := range argv {
+				if arg != "-x" {
+					continue
+				}
+				if !optionsTerminatedBefore(argv[:i]) {
+					t.Errorf("%s: prompt at argv[%d] of %q is still option-parsed", agent, i, argv)
+				}
 			}
 		}
 	}
 }
 
-func terminatesOptions(prev string) bool { return prev == "--" }
+// Did anything earlier in the argv end option parsing? A bare `--` does it for
+// everything after it, however many elements intervene — `--prompt=<text>`
+// carries the prompt inside one element and never exposes it at all, which is
+// why the loop above finds nothing to check for opencode.
+func optionsTerminatedBefore(before []string) bool {
+	for _, arg := range before {
+		if arg == "--" {
+			return true
+		}
+	}
+	return false
+}
+
+// ── pi's half of the same favour ─────────────────────────────────────────────
+//
+// pi's trust file is flat and INHERITED, so these tests are about the walk: the
+// nearest saved decision to the main checkout wins, and only a yes is copied.
+
+func withPiTrust(t *testing.T, body string) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, ".pi", "agent")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "trust.json")
+	if body != "" {
+		if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return path
+}
+
+func readPiTrust(t *testing.T, path string) map[string]bool {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]bool
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("wrote invalid JSON: %v", err)
+	}
+	return doc
+}
+
+// The case every lane on this machine hits: `~/code` is trusted, the repo is
+// under it, and the worktree is not.
+func TestTrustWorktreePiInheritsFromAnAncestor(t *testing.T) {
+	path := withPiTrust(t, `{"/home/code": true}`)
+	trustWorktree("pi", "/home/code/workshop", "/cache/worktrees/workshop/lane")
+
+	if !readPiTrust(t, path)["/cache/worktrees/workshop/lane"] {
+		t.Error("worktree of a trusted repo still faces pi's trust prompt")
+	}
+}
+
+// The nearest decision wins, and a `no` is propagated by writing nothing.
+func TestTrustWorktreePiHonoursANearerRefusal(t *testing.T) {
+	path := withPiTrust(t, `{"/home/code": true, "/home/code/vendor": false}`)
+	trustWorktree("pi", "/home/code/vendor/thing", "/cache/worktrees/thing/lane")
+
+	if _, ok := readPiTrust(t, path)["/cache/worktrees/thing/lane"]; ok {
+		t.Error("granted trust under a folder the user explicitly refused")
+	}
+}
+
+// holt never grants trust the user never gave.
+func TestTrustWorktreePiRefusesUnknownParent(t *testing.T) {
+	path := withPiTrust(t, `{"/home/code": true}`)
+	trustWorktree("pi", "/elsewhere/repo", "/cache/worktrees/repo/lane")
+
+	if _, ok := readPiTrust(t, path)["/cache/worktrees/repo/lane"]; ok {
+		t.Error("granted trust for a repo with no saved decision")
+	}
+}
+
+// No trust file at all is the first-run state, and it must cost a prompt, not a
+// crash or an invented file.
+func TestTrustWorktreePiWithNoFileIsANoOp(t *testing.T) {
+	path := withPiTrust(t, "")
+	trustWorktree("pi", "/home/code/workshop", "/cache/worktrees/workshop/lane")
+
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Error("invented a trust file pi never wrote")
+	}
+}
+
+// Everything else in the file survives, including a refusal we must not flip.
+func TestTrustWorktreePiPreservesEverythingElse(t *testing.T) {
+	path := withPiTrust(t, `{"/home/code": true, "/home/other": false}`)
+	trustWorktree("pi", "/home/code/workshop", "/cache/worktrees/workshop/lane")
+
+	doc := readPiTrust(t, path)
+	if !doc["/home/code"] {
+		t.Error("dropped the decision it read")
+	}
+	if v, ok := doc["/home/other"]; !ok || v {
+		t.Errorf(`"/home/other" = %v, %v; want false, true`, v, ok)
+	}
+}
+
+// The file is pi's, and holt must hand it back the way it found it — an
+// os.CreateTemp default of 0600 carried through the rename would tighten a
+// file holt does not own.
+func TestTrustWorktreePiKeepsPisFileMode(t *testing.T) {
+	path := withPiTrust(t, `{"/home/code": true}`)
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	trustWorktree("pi", "/home/code/workshop", "/cache/worktrees/workshop/lane")
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Errorf("mode = %o, want 644", got)
+	}
+}

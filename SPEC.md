@@ -81,7 +81,7 @@ means something narrower and the overload was the bug:
 | word | means, and only this |
 |---|---|
 | **worktree** | git's — the checkout on disk. A *parked* lane has none, so "worktree" cannot name the unit; §0's whole point is that the branch is the durable artifact and the directory is disposable. |
-| **agent** | the **client**: `claude`, `codex`, `opencode`. Registry field 6, `--json` `agent`, `--agent`, `HOLT_AGENT`. Frozen (§2.1) — a lane *runs* an agent, it is not one. |
+| **agent** | the **client**: `claude`, `codex`, `opencode`, `pi`. Registry field 6, `--json` `agent`, `--agent`, `HOLT_AGENT`. Frozen (§2.1) — a lane *runs* an agent, it is not one. |
 | **session** | somebody else's: zellij's session, and each client's own transcript/resume session. holt never names its own unit this. |
 
 `pane` stays available for the terminal pane a lane is (or isn't) occupied by.
@@ -122,7 +122,7 @@ name    main-checkout    branch    checkout-path    parent    agent
 ```
 
 Field 4 (checkout path) is the primary key. Field 6 is the client id
-(`claude|codex|opencode`); **a row with fewer than 6 fields means `claude`** —
+(`claude|codex|opencode|pi`); **a row with fewer than 6 fields means `claude`** —
 that's the already-shipped v0 migration case and it must survive. So does a
 field 6 naming a client holt no longer knows (`jcode`, accepted through
 0.2.x): it reads as `claude`, and the next write persists that. Narrowing this
@@ -634,7 +634,7 @@ means here."
 for the repo. **The split on repo-local config is by execution, not by file:**
 
 The machine config's implemented top-level default is `agent = "claude"` (or
-`codex` / `opencode`), plus the `[hooks]` table of §6.5. Agent resolution is
+`codex` / `opencode` / `pi`), plus the `[hooks]` table of §6.5. Agent resolution is
 `HOLT_AGENT`, then the `agent` **hook**, then this key, then the legacy
 `HAUS_AGENT_DEFAULT` environment fallback, then Claude. This keeps the
 default stable for long-running callers while retaining a one-invocation
@@ -1258,7 +1258,7 @@ either way.
 ```
 holt-core (Go)        invariants, git, registry. Knows nothing about lsof or zellij.
   providers           occupancy: lsof | leases | /proc     forge: gh | glab
-                      adapter: claude | codex | opencode
+                      adapter: claude | codex | opencode | pi
   transports          exec + --json  ·  watch/NDJSON  ·  (later) unix socket · HTTP
 SDKs (ts/py/swift)    thin. Speak the wire schema. Hold a lease. That is all.
 ```
@@ -1422,7 +1422,7 @@ lines; add one:
 kind    = "agent"
 id      = "claude"
 ...
-instructions_file = "CLAUDE.md"      # codex/opencode/amp: "AGENTS.md"
+instructions_file = "CLAUDE.md"      # codex/opencode/pi/amp: "AGENTS.md"
 ```
 
 **Injection is opt-in and idempotent**, wired the same way §6.3's `copy` and

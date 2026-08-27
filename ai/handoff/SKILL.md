@@ -67,7 +67,7 @@ holt spawn "$repo" <name> --prompt-file <that file>
   shell, so none of that can be mangled.
 - **Another repo?** Pass its main checkout as `repo` — that is the whole reason
   the path is an argument, so "kick this off in <other repo>" stays one call.
-- `--agent claude|codex|opencode` picks the client (default: the machine's);
+- `--agent claude|codex|opencode|pi` picks the client (default: the machine's);
   `--image <file>` puts a screenshot in front of the first turn — attached where
   the client can do that, named in the prompt where it can't.
 

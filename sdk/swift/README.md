@@ -72,7 +72,7 @@ for try await event in holt.watchLane(path: dir) {
 
 **Interactive (a real terminal app).** `newInteractive` /
 `resumeInteractive` inherit the calling process's stdio, so when holt
-execs the configured agent client (`claude`, `codex`, `opencode`), it
+execs the configured agent client (`claude`, `codex`, `opencode`, `pi`), it
 takes over the real terminal — same as running `holt new` by hand — and
 control returns to you when that session ends.
 
