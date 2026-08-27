@@ -261,21 +261,41 @@ func (e *Env) Child(target, want string) error {
 
 	// Default the child's name to THIS pane's own lane name, so a child lane
 	// shares its parent's identity (…-sparkle in both repos).
-	if want == "" {
+	//
+	// A pane that is NOT in a lane has no identity to share — and the basename
+	// of its cwd is not one. That is a REPO name, the same string for every
+	// child ever spawned from that checkout, which is exactly where cross-repo
+	// work starts: `scruff child ../haus` from `~/code/workshop` named the lane
+	// `haus/workshop`, every later child from that pane collided with it, and a
+	// listing read "the workshop's lane" rather than one task. A throwaway word
+	// pair says no less and says it uniquely.
+	derived := want == ""
+	if derived {
 		if b := gitx.CurrentBranch(e.Cwd); len(b) > 9 && b[:9] == "worktree-" {
 			want = b[9:]
 		} else {
-			want = filepath.Base(e.Cwd)
+			want = randomName()
 		}
 	}
 
 	dir := filepath.Join(e.Base, e.bucketFor(main), want)
-	if _, err := os.Stat(dir); err == nil {
-		return exitcode.Usagef("a lane already exists at %s — pass another name: scruff child %s <name>", dir, target)
-	}
-	if gitx.HasBranch(main, "worktree-"+want) {
-		return exitcode.Usagef("branch worktree-%s already exists in %s — pass another name: scruff child %s <name>",
-			want, filepath.Base(main), target)
+	// A name scruff CHOSE steps aside from a collision the way `new` does — the
+	// caller never picked it, so a suffix costs them nothing. A name they TYPED
+	// is refused instead: silently working in `-2` is not what they asked for.
+	if derived {
+		free, freeDir, err := e.freeName(main, want)
+		if err != nil {
+			return err
+		}
+		want, dir = free, freeDir
+	} else {
+		if _, err := os.Stat(dir); err == nil {
+			return exitcode.Usagef("a lane already exists at %s — pass another name: scruff child %s <name>", dir, target)
+		}
+		if gitx.HasBranch(main, "worktree-"+want) {
+			return exitcode.Usagef("branch worktree-%s already exists in %s — pass another name: scruff child %s <name>",
+				want, filepath.Base(main), target)
+		}
 	}
 	if err := e.addWorktree(main, want, dir); err != nil {
 		return err

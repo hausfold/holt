@@ -1437,6 +1437,25 @@ mkremote() { # mkremote <main> — give a repo a bare origin it can actually pus
   [ "$output" = "$CLAUDE_WT_BASE/beta/shared" ]
 }
 
+@test "child: a pane that is NOT in a lane gets a name, not its repo's" {
+  # The cwd's basename is a REPO name — the same string for every child that
+  # pane ever spawns — so it is never the default. See Child() in new.go.
+  local a b dir; a="$(mkrepo alpha)"; b="$(mkrepo beta)"
+  run bash -c "cd '$a' && '$WT' child '$b' 2>/dev/null"
+  [ "$status" -eq 0 ]
+  dir="$output"
+  [ "$dir" != "$CLAUDE_WT_BASE/beta/alpha" ]
+  [[ "$(basename "$dir")" =~ ^[a-z]+-[a-z]+$ ]]
+}
+
+@test "child: two unnamed children of one non-lane pane both land" {
+  local a b one two; a="$(mkrepo alpha)"; b="$(mkrepo beta)"
+  one="$(cd "$a" && "$WT" child "$b" 2>/dev/null)"
+  two="$(cd "$a" && "$WT" child "$b" 2>/dev/null)"
+  [ -d "$one" ] && [ -d "$two" ]
+  [ "$one" != "$two" ]
+}
+
 @test "child: refuses a name whose branch or path already exists" {
   local a b; a="$(mkrepo alpha)"; b="$(mkrepo beta)"
   "$WT" child "$b" taken >/dev/null 2>&1
