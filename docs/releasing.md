@@ -103,6 +103,20 @@ wire before the tag; **npm and crates.io both insist the package exist first**, 
 publish `1.0.0` to those two by hand once and let CI take every release after it.
 Leave *environment name* blank everywhere — no job here declares an
 `environment:`, and a claim that names one never matches.
+
+⚠️ **The npm bootstrap needs a passkey, and an npm CLI new enough to ask for
+one.** npm stopped enrolling TOTP authenticators, so a hand publish hits 2FA
+with no six-digit code to type. The machine-readable hand-off that makes `npm
+publish` print an auth URL instead of dying on a bare `EOTP` landed in **npm CLI
+11.9**; an older CLI just fails with no way forward. `npx --yes npm@11.19.1
+publish --access public` is enough (it wants node ≥22.9). `npm login
+--auth-type=web` first if the stored token is a narrow granular one — and note
+that login **overwrites** `_authToken` in `~/.npmrc`, so copy it aside. Once the
+trusted publisher is wired none of this recurs: OIDC has no 2FA step.
+
+crates.io's bootstrap has the matching trap: the token must carry the
+**`publish-new`** scope, and a crate-scoped token can't be made for a crate that
+doesn't exist yet — so mint one with the crate-scope field empty.
 The old names stay published forever — deprecate them in place, never yank
 (docs/rename.md §7).
 
