@@ -8,6 +8,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/hausfold/holt/internal/compat"
 	"github.com/hausfold/holt/internal/exitcode"
 	"github.com/hausfold/holt/internal/ui"
 )
@@ -44,7 +45,7 @@ func tartVM(name string) string { return "holt-" + name }
 // tartUser is the guest account `enter` sshes in as. cirruslabs' macOS base
 // images all ship `admin`; anything else is a custom image, hence the override.
 func tartUser() string {
-	if u := os.Getenv("HOLT_TART_USER"); u != "" {
+	if u := compat.Getenv("TART_USER"); u != "" {
 		return u
 	}
 	return "admin"
@@ -56,13 +57,13 @@ func tartUser() string {
 // stack baked in is the point — so an unset variable gets the two commands
 // that fix it rather than a surprise download.
 func tartBase() (string, error) {
-	if b := os.Getenv("HOLT_TART_BASE"); b != "" {
+	if b := compat.Getenv("TART_BASE"); b != "" {
 		return b, nil
 	}
 	return "", exitcode.Refusedf(
 		"set HOLT_TART_BASE to the image lanes clone from — either one you have already (`tart list`), or:\n" +
 			"  tart pull ghcr.io/cirruslabs/macos-tahoe-base:latest\n" +
-			"  export HOLT_TART_BASE=ghcr.io/cirruslabs/macos-tahoe-base:latest\n" +
+			"  export SCRUFF_TART_BASE=ghcr.io/cirruslabs/macos-tahoe-base:latest\n" +
 			"A bare base boots, but it has none of your stack in it — bake an image once and point this at that instead")
 }
 

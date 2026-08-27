@@ -171,14 +171,21 @@ func TestHookEnvRenamesStateAwayFromHoltsOwnStateDir(t *testing.T) {
 		k, v, _ := strings.Cut(kv, "=")
 		got[k] = v
 	}
-	if _, ok := got["HOLT_STATE"]; ok {
-		t.Errorf("HOLT_STATE is holt's state DIRECTORY — a hook must not set it; got %q", got["HOLT_STATE"])
+	// Both spellings, because the collision is a property of the NAME and not
+	// of the prefix: SCRUFF_STATE is the state directory exactly as HOLT_STATE
+	// was, so the rename must not quietly reintroduce the bug it fixed.
+	for _, k := range []string{"HOLT_STATE", "SCRUFF_STATE"} {
+		if _, ok := got[k]; ok {
+			t.Errorf("%s is the state DIRECTORY — a hook must not set it; got %q", k, got[k])
+		}
 	}
 	if got["HOLT_LANE_STATE"] != "live" {
 		t.Errorf("HOLT_LANE_STATE = %q, want %q", got["HOLT_LANE_STATE"], "live")
 	}
-	if _, ok := got["HOLT_AGENT"]; ok {
-		t.Errorf("HOLT_AGENT is holt's one-invocation client override — a hook must not set it; got %q", got["HOLT_AGENT"])
+	for _, k := range []string{"HOLT_AGENT", "SCRUFF_AGENT"} {
+		if _, ok := got[k]; ok {
+			t.Errorf("%s is the one-invocation client override — a hook must not set it; got %q", k, got[k])
+		}
 	}
 	if got["HOLT_LANE_AGENT"] != "claude" {
 		t.Errorf("HOLT_LANE_AGENT = %q, want %q", got["HOLT_LANE_AGENT"], "claude")
@@ -188,5 +195,41 @@ func TestHookEnvRenamesStateAwayFromHoltsOwnStateDir(t *testing.T) {
 	}
 	if got["HOLT_PATH"] != "/tmp/lane" {
 		t.Errorf("HOLT_PATH = %q, want %q", got["HOLT_PATH"], "/tmp/lane")
+	}
+}
+
+// Every hook variable goes out under BOTH spellings for the length of the
+// rename (docs/rename.md §3). This is the half an OLD consumer depends on:
+// haus's lane hooks read HOLT_NAME, HOLT_REPO, HOLT_PATH, HOLT_MAIN,
+// HOLT_CHAT and HOLT_COMMAND by those names, so a binary that emitted only the
+// new spelling would blank the bar on a machine whose haus hadn't been flipped.
+//
+// Delete this with internal/compat at 1.1.0.
+func TestHookEnvSpeaksBothNames(t *testing.T) {
+	env := hookEnv("open", map[string]string{
+		"name":  "lane",
+		"state": "live",
+		"agent": "claude",
+		"base":  "main",
+	})
+	got := map[string]string{}
+	for _, kv := range env {
+		k, v, _ := strings.Cut(kv, "=")
+		got[k] = v
+	}
+	for scruffKey, want := range map[string]string{
+		"SCRUFF_HOOK":        "open",
+		"SCRUFF_NAME":        "lane",
+		"SCRUFF_LANE_STATE":  "live",
+		"SCRUFF_LANE_AGENT":  "claude",
+		"SCRUFF_BASE_BRANCH": "main",
+	} {
+		if got[scruffKey] != want {
+			t.Errorf("%s = %q, want %q", scruffKey, got[scruffKey], want)
+		}
+		holtKey := "HOLT_" + strings.TrimPrefix(scruffKey, "SCRUFF_")
+		if got[holtKey] != want {
+			t.Errorf("%s = %q, want %q — an un-flipped consumer still reads this", holtKey, got[holtKey], want)
+		}
 	}
 }

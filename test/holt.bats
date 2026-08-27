@@ -1209,7 +1209,7 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   git -C "$main" show-ref -q --verify refs/heads/worktree-undoable && fail "drop didn't delete"
   # Read the SHA back out of the ledger, not out of the test's own variable —
   # that is the path a human actually walks.
-  local recorded; recorded="$(awk -F'\t' '$3=="undoable"{print $5}' "$XDG_STATE_HOME/holt/reaped.log")"
+  local recorded; recorded="$(awk -F'\t' '$3=="undoable"{print $5}' "$XDG_STATE_HOME/scruff/reaped.log")"
   [ "$recorded" = "$sha" ] || fail "ledger SHA $recorded != $sha"
   git -C "$main" branch worktree-undoable "$recorded"
   [ "$(git -C "$main" rev-parse worktree-undoable)" = "$sha" ] || fail "the branch came back wrong"
@@ -2628,4 +2628,37 @@ teardown() {
   while IFS= read -r line; do
     [[ "$line" == \{*\} ]] || fail "a stdout line wasn't a bare JSON object: $line"
   done <"$WATCH_OUT"
+}
+
+# ── the rename (docs/rename.md §3) ───────────────────────────────────────────
+#
+# One binary, two names, until 1.1.0. These two tests are the black-box half of
+# the bilingual release: they prove the old spelling still works from OUTSIDE
+# the process, which is where every consumer that matters lives.
+
+@test "rename: the binary answers to both names, identically" {
+  local dir; dir="$(dirname "$WT")"
+  [ -e "$dir/scruff" ] || skip "no scruff binary beside $WT — run make build"
+
+  run "$dir/scruff" --version
+  [ "$status" -eq 0 ]
+  local new="$output"
+
+  run "$dir/holt" --version
+  [ "$status" -eq 0 ]
+  [ "$output" = "$new" ]
+}
+
+# The deprecation notice is for a HUMAN and nobody else. Every non-interactive
+# caller of this binary is one that would be hurt by a stray line on stderr:
+# Claude Code's WorktreeCreate/Remove hooks, the bar plugins polling several
+# times a minute, and anything parsing --json. stdout is a pipe here, so this
+# asserts the gate holds.
+@test "rename: invoking the old name is silent when stderr is not a terminal" {
+  local dir; dir="$(dirname "$WT")"
+  [ -e "$dir/holt" ] || skip "no holt symlink beside $WT — run make build"
+
+  run "$dir/holt" --version
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"now \`scruff\`"* ]]
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/hausfold/holt/internal/compat"
 	"github.com/hausfold/holt/internal/config"
 	"github.com/hausfold/holt/internal/gitx"
 	"github.com/hausfold/holt/internal/occupancy"
@@ -26,16 +27,21 @@ type Env struct {
 
 // baseDir resolves where worktree checkouts live.
 //
-// CLAUDE_WT_BASE is honoured ahead of HOLT_BASE and the default path still ends
-// in `claude-worktrees`, both for the same reason: on cutover day holt must find
-// the worktrees the bash `wt` already made (SPEC.md §10). The name is historical
-// — every client shares the directory — and renaming it is a migration, not a
-// rename, so it waits for registry v1.
+// CLAUDE_WT_BASE is honoured ahead of SCRUFF_BASE/HOLT_BASE and the default
+// path still ends in `claude-worktrees`, both for the same reason: on cutover
+// day this tool must find the worktrees the bash `wt` already made (SPEC.md
+// §10). That rung keeps its priority through the scruff rename untouched — it
+// predates both spellings and answers to neither.
+//
+// The base path itself is the ONE thing the rename moves on disk, and it moves
+// at 1.1.0, not here (docs/rename.md decision 2 and §8.2): a live lane's gitdir
+// holds an absolute path, so relocating the base is a `git worktree repair`
+// sweep, and a failure there strands work. Invariant 1 outranks a tidy path.
 func baseDir() string {
 	if b := os.Getenv("CLAUDE_WT_BASE"); b != "" {
 		return b
 	}
-	if b := os.Getenv("HOLT_BASE"); b != "" {
+	if b := compat.Getenv("BASE"); b != "" {
 		return b
 	}
 	home, err := os.UserHomeDir()
@@ -60,42 +66,51 @@ func stateDir() string {
 // resolveStateDir is stateDir plus the reason it ignored an override, so the
 // caller that can warn (NewEnv) does, exactly once per invocation.
 //
-// A RELATIVE $HOLT_STATE is refused rather than honoured, and that refusal is
-// load-bearing: this state is machine-global, so resolving it against the
+// A RELATIVE $SCRUFF_STATE — or its $HOLT_STATE predecessor — is refused rather
+// than honoured, and that refusal is load-bearing: this state is
+// machine-global, so resolving it against the
 // process cwd scatters it into whatever directory holt happened to be run
 // from — routinely a git checkout, where it shows up as an untracked dir and
 // can be swept into a `wip:` commit by holt's own park path. An operator who
 // wants state somewhere else can always say where absolutely; nobody has ever
 // meant "put the machine's lease and ledger under my cwd".
 func resolveStateDir() (dir, warning string) {
-	if s := os.Getenv("HOLT_STATE"); s != "" {
+	if s, key := compat.Lookup("STATE"); s != "" {
 		if filepath.IsAbs(s) {
 			return s, ""
 		}
+		// Names the spelling the operator actually set: a warning about a bad
+		// value that cites a variable they never touched reads as a bug in us.
 		warning = fmt.Sprintf(
-			"HOLT_STATE=%q is not an absolute path — ignoring it and using %s. "+
+			"%s=%q is not an absolute path — ignoring it and using %s. "+
 				"State is machine-global; a relative path would write it under the current directory.",
-			s, defaultStateDir())
+			key, s, defaultStateDir())
 	}
 	return defaultStateDir(), warning
 }
 
+// defaultStateDir prefers the scruff-named directory and falls back to the
+// holt-named one only on a machine that already has it — see compat.Dir.
 func defaultStateDir() string {
 	if s := os.Getenv("XDG_STATE_HOME"); s != "" {
-		return filepath.Join(s, "holt")
+		return compat.Dir(filepath.Join(s, compat.Name), filepath.Join(s, compat.OldName))
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = os.Getenv("HOME")
 	}
-	return filepath.Join(home, ".local", "state", "holt")
+	return compat.Dir(
+		filepath.Join(home, ".local", "state", compat.Name),
+		filepath.Join(home, ".local", "state", compat.OldName),
+	)
 }
 
 // leasesAreSole reports whether a lease may answer for ABSENCE as well as
 // presence — see occupancy.Leases.
 //
-// HOLT_OCCUPANCY=lease is the embedder's switch: it declares that every session
-// in this deployment is one holt spawned, so a lane nobody leased is a lane
+// SCRUFF_OCCUPANCY=lease — HOLT_OCCUPANCY still answers — is the embedder's
+// switch: it declares that every session in this deployment is one this tool
+// spawned, so a lane nobody leased is a lane
 // nobody is in. On a developer machine that is false — someone can always cd
 // into a checkout without telling holt — which is why the default is the
 // cautious one, and why this is opt-in by an explicit env var rather than
@@ -107,13 +122,14 @@ func defaultStateDir() string {
 // wants to become a config seam (`occupied`, alongside HookLanded and
 // HookPreserve) — that is the shape SPEC.md §14.2's callback lands in, and it
 // is one more occupancy.Provider when it does.
-func leasesAreSole() bool { return os.Getenv("HOLT_OCCUPANCY") == "lease" }
+func leasesAreSole() bool { return compat.Getenv("OCCUPANCY") == "lease" }
 
 // defaultAgent is the client a new lane opens in when nothing says
 // otherwise.
 //
-// The ladder, most explicit first: HOLT_AGENT is a one-invocation override; the
-// `agent` hook is a program, for a machine that picks per repo or per time of
+// The ladder, most explicit first: SCRUFF_AGENT (or HOLT_AGENT) is a
+// one-invocation override; the `agent` hook is a program, for a machine that
+// picks per repo or per time of
 // day; the `agent` config key is the static answer, which is what almost
 // everyone wants and costs no process; HAUS_AGENT_DEFAULT is a cutover
 // fallback for pre-config rice builds; claude is the last word.
@@ -122,7 +138,7 @@ func leasesAreSole() bool { return os.Getenv("HOLT_OCCUPANCY") == "lease" }
 // rather than fatal — an unknown agent must not turn every `holt new` into a
 // hard failure when a working default is one rung down.
 func (e *Env) defaultAgent() string {
-	if a := os.Getenv("HOLT_AGENT"); registry.KnownAgent(a) {
+	if a := compat.Getenv("AGENT"); registry.KnownAgent(a) {
 		return a
 	}
 	if e.Cfg.Defined(config.HookAgent) {

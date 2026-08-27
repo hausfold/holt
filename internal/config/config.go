@@ -29,6 +29,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/hausfold/holt/internal/compat"
 )
 
 // Config is the resolved contents of ~/.config/holt/config.toml.
@@ -264,33 +266,49 @@ func decode(s string) map[string]any {
 // to run has HOLT_COMMAND, which is the resolved invocation rather than an id.
 //
 // Renaming any of the three would break something that already exists.
+//
+// Every variable goes out under BOTH spellings — SCRUFF_* and HOLT_* — for the
+// length of the rename (docs/rename.md §3). This is the export half of the
+// bilingual release and the half an OLD consumer depends on: haus's lane hooks
+// read HOLT_NAME, HOLT_REPO, HOLT_PATH, HOLT_MAIN, HOLT_CHAT and HOLT_COMMAND
+// by those names, so a binary that emitted only the new spelling would blank
+// the bar on any machine whose haus hadn't been flipped yet. The three
+// collisions above apply identically to the new prefix, and the test asserts
+// SCRUFF_STATE and SCRUFF_AGENT stay absent for exactly the reason HOLT_STATE
+// and HOLT_AGENT do.
 func hookEnv(hook string, payload map[string]string) []string {
-	env := []string{"HOLT_HOOK=" + hook}
+	env := compat.Pair("HOOK", hook)
 	for k, v := range payload {
-		key := "HOLT_" + strings.ToUpper(k)
+		suffix := strings.ToUpper(k)
 		switch k {
 		case "base":
-			key = "HOLT_BASE_BRANCH"
+			suffix = "BASE_BRANCH"
 		case "state":
-			key = "HOLT_LANE_STATE"
+			suffix = "LANE_STATE"
 		case "agent":
-			key = "HOLT_LANE_AGENT"
+			suffix = "LANE_AGENT"
 		}
-		env = append(env, key+"="+v)
+		env = append(env, compat.Pair(suffix, v)...)
 	}
 	return env
 }
 
 // ── loading ──────────────────────────────────────────────────────────────────
 
-// Dir is holt's config directory: $XDG_CONFIG_HOME/holt, or ~/.config/holt.
+// Dir is the config directory: $XDG_CONFIG_HOME/scruff, or ~/.config/scruff,
+// falling back to the holt-named directory on a machine that already has one.
 //
 // ~/.config on every platform, macOS included, rather than os.UserConfigDir's
-// Application Support — holt is a terminal tool and its config lives where the
+// Application Support — this is a terminal tool and its config lives where the
 // rest of a terminal user's config lives.
+//
+// The fallback is a stat, never a move (compat.Dir says why). It also carries
+// every ADAPTER for free: runtime and namer adapters resolve under this
+// directory, so a machine's ~/.config/holt/adapters keeps working untouched
+// while a fresh one writes ~/.config/scruff/adapters from the start.
 func Dir() string {
 	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
-		return filepath.Join(d, "holt")
+		return compat.Dir(filepath.Join(d, compat.Name), filepath.Join(d, compat.OldName))
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -299,7 +317,10 @@ func Dir() string {
 	if home == "" {
 		return ""
 	}
-	return filepath.Join(home, ".config", "holt")
+	return compat.Dir(
+		filepath.Join(home, ".config", compat.Name),
+		filepath.Join(home, ".config", compat.OldName),
+	)
 }
 
 // Load reads the machine config. A missing file is not an error — it is the

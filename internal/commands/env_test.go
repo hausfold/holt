@@ -94,7 +94,7 @@ func writeHook(t *testing.T, name, body string) string {
 	return path
 }
 
-// A relative HOLT_STATE is refused, not honoured: this state is machine-global,
+// A relative SCRUFF_STATE is refused, not honoured: this state is machine-global,
 // so resolving it against the cwd scatters leases and the reap ledger into
 // whatever directory holt was run from — which is how `holt reap` in an agent
 // pane created an untracked `live/` inside a git checkout.
@@ -104,11 +104,11 @@ func TestStateDirRefusesRelativeOverride(t *testing.T) {
 	t.Setenv("HOLT_STATE", "live")
 
 	dir, warning := resolveStateDir()
-	if want := filepath.Join(home, "holt"); dir != want {
+	if want := filepath.Join(home, "scruff"); dir != want {
 		t.Errorf("state dir = %q, want the default %q", dir, want)
 	}
 	if warning == "" {
-		t.Error("a silently ignored HOLT_STATE is worse than an honoured one — want a warning")
+		t.Error("a silently ignored SCRUFF_STATE is worse than an honoured one — want a warning")
 	}
 }
 
@@ -125,7 +125,7 @@ func TestNewEnvKeepsStateOutOfTheCwdAndSaysSo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(state, "holt")
+	want := filepath.Join(state, "scruff")
 	if got := e.LeaseDir; got != filepath.Join(want, "live") {
 		t.Errorf("LeaseDir = %q, want %q", got, filepath.Join(want, "live"))
 	}
@@ -147,5 +147,71 @@ func TestStateDirHonoursAbsoluteOverride(t *testing.T) {
 	}
 	if warning != "" {
 		t.Errorf("unexpected warning for an absolute override: %q", warning)
+	}
+}
+
+// ── the rename (docs/rename.md §3) ───────────────────────────────────────────
+//
+// These die with internal/compat at 1.1.0. Until then they are the proof that
+// ONE binary answers to both names, which is the only reason haus and this repo
+// can move in either order.
+
+// Both spellings resolve, and the new one wins when both are set — the updated
+// half of the machine is the half that decides.
+func TestEnvVarsAnswerToBothNames(t *testing.T) {
+	t.Setenv("CLAUDE_WT_BASE", "")
+	t.Setenv("HOLT_BASE", "/old")
+	if got := baseDir(); got != "/old" {
+		t.Errorf("HOLT_BASE alone: base = %q, want %q — an old haus must keep working", got, "/old")
+	}
+	t.Setenv("SCRUFF_BASE", "/new")
+	if got := baseDir(); got != "/new" {
+		t.Errorf("both set: base = %q, want %q — the new spelling decides", got, "/new")
+	}
+
+	t.Setenv("HOLT_AGENT", "codex")
+	e := &Env{Cfg: &config.Config{}}
+	if got := e.defaultAgent(); got != "codex" {
+		t.Errorf("HOLT_AGENT alone: agent = %q, want codex", got)
+	}
+	t.Setenv("SCRUFF_AGENT", "opencode")
+	if got := e.defaultAgent(); got != "opencode" {
+		t.Errorf("both set: agent = %q, want opencode", got)
+	}
+}
+
+// CLAUDE_WT_BASE keeps its priority over BOTH spellings. It predates them and
+// answers to neither — SPEC.md §10's cutover rung, untouched by this rename.
+func TestClaudeWTBaseStillOutranksBothSpellings(t *testing.T) {
+	t.Setenv("CLAUDE_WT_BASE", "/wt")
+	t.Setenv("SCRUFF_BASE", "/new")
+	t.Setenv("HOLT_BASE", "/old")
+	if got := baseDir(); got != "/wt" {
+		t.Errorf("base = %q, want %q", got, "/wt")
+	}
+}
+
+// A machine that already has ~/.local/state/holt keeps using it; a fresh one
+// starts under the name it will keep. Neither case moves a file.
+func TestStateDirFallsBackToTheOldDirOnlyWhenItExists(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", home)
+	t.Setenv("SCRUFF_STATE", "")
+	t.Setenv("HOLT_STATE", "")
+
+	if got, want := stateDir(), filepath.Join(home, "scruff"); got != want {
+		t.Errorf("fresh machine: state dir = %q, want %q", got, want)
+	}
+	if err := os.MkdirAll(filepath.Join(home, "holt"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := stateDir(), filepath.Join(home, "holt"); got != want {
+		t.Errorf("existing holt dir: state dir = %q, want %q — state must not appear to vanish", got, want)
+	}
+	if err := os.MkdirAll(filepath.Join(home, "scruff"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := stateDir(), filepath.Join(home, "scruff"); got != want {
+		t.Errorf("both dirs: state dir = %q, want %q", got, want)
 	}
 }

@@ -3,6 +3,7 @@
 # TWO skills, one derivation, one directory each:
 #
 #   ai/SKILL.md          → $out/holt/SKILL.md      driving the lifecycle
+#                        → $out/scruff/SKILL.md    the same, under the new name
 #   ai/handoff/SKILL.md  → $out/handoff/SKILL.md   filling a lane's first turn
 #
 # The second one is not a second copy of the first. `holt` teaches an agent the
@@ -52,6 +53,27 @@ runCommand "holt-skill"
 
     mkdir -p "$out/holt"
     cp "$ai/SKILL.md" "$out/holt/SKILL.md"
+
+    # The same skill under the new name, for the length of the rename
+    # (docs/rename.md §3). It is here rather than in haus because the INSTALLER
+    # links `$out/<name>`: haus's tool-skills.nix names the directories it
+    # wants, so it cannot flip `holt` → `scruff` unless this derivation already
+    # offers both. Shipping both is what keeps the two repos free to move in
+    # either order — the whole point of the bilingual release.
+    #
+    # `name:` has to be rewritten with the directory, or the guard below fails
+    # on the copy: a skill whose frontmatter name disagrees with its directory
+    # installs, lists, and is never loaded. Only ONE of the two is ever linked
+    # into ~/.claude/skills, so no agent sees the skill twice.
+    #
+    # Both this block and $out/holt go at 1.1.0 (§8.1), leaving one directory
+    # named scruff.
+    mkdir -p "$out/scruff"
+    sed '0,/^name: holt$/s//name: scruff/' "$ai/SKILL.md" > "$out/scruff/SKILL.md"
+    grep -q '^name: scruff$' "$out/scruff/SKILL.md" || {
+      echo "skill.nix: ai/SKILL.md has no 'name: holt' line to rewrite" >&2
+      exit 1
+    }
     for dir in "$ai"/*/; do
       [ -f "$dir/SKILL.md" ] || continue
       name="$(basename "$dir")"

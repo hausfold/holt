@@ -7,7 +7,7 @@
 agent = "codex"
 ```
 
-`HOLT_AGENT` overrides it for one invocation.
+`SCRUFF_AGENT` overrides it for one invocation.
 
 ## Naming a lane after its task
 
@@ -77,9 +77,9 @@ running until a separate `down`.
 ### `tart` — the one that ships built in
 
 ```sh
-export HOLT_TART_BASE=ghcr.io/cirruslabs/macos-tahoe-base:latest   # or your own image
+export SCRUFF_TART_BASE=ghcr.io/cirruslabs/macos-tahoe-base:latest   # or your own image
 holt runtime up    my-lane --backend tart    # clone it, boot it headless, wait for an address
-holt runtime enter my-lane --backend tart    # ssh in as $HOLT_TART_USER (default: admin)
+holt runtime enter my-lane --backend tart    # ssh in as $SCRUFF_TART_USER (default: admin)
 holt runtime down  my-lane --backend tart    # stop and delete the clone
 ```
 
@@ -90,9 +90,9 @@ and draws the real UI, it just draws it to nothing, which is the whole point
 for an agent that needs to SEE a change without taking the display its user is
 sitting at. `screencapture -x` over ssh returns real pixels from it.
 
-Two environment variables and no config file: `HOLT_TART_BASE` (required — the
+Two environment variables and no config file: `SCRUFF_TART_BASE` (required — the
 image to clone, because the images are tens of GB and which one you want is a
-real choice) and `HOLT_TART_USER` (the guest account, `admin` by default, which
+real choice) and `SCRUFF_TART_USER` (the guest account, `admin` by default, which
 is what every cirruslabs base image ships). Needs `tart` on `PATH`; without it
 the verb degrades with the install command rather than failing.
 
@@ -125,28 +125,35 @@ Three failures worth telling apart:
 | | |
 |---|---|
 | no such adapter file | **2** — refused, naming the path it looked for. `tart` is the one id that falls back to a built-in instead |
-| `--backend tart` with no `HOLT_TART_BASE` | **2** — refused, naming the image to pull. holt never pulls tens of GB you didn't ask for |
+| `--backend tart` with no `SCRUFF_TART_BASE` | **2** — refused, naming the image to pull. holt never pulls tens of GB you didn't ask for |
 | the backend's binary isn't on `PATH` | **3** — degraded. Install it and the same command works |
 | the backend ran and exited non-zero | **1** — it attempted the thing and failed at it (a VM that already exists, a full disk, a bad image) |
 
 ## Environment
 
+⚠️ **Every variable here has two spellings.** holt is being renamed to
+**scruff** ([rename.md](./rename.md)), and from 0.5.0 one binary answers to both
+names: `SCRUFF_*` is read first and `HOLT_*` is the fallback rung, exactly as
+`CLAUDE_WT_BASE` has always sat above `HOLT_BASE`. Hooks are handed **both**
+spellings, so a consumer reading the old names keeps working untouched. The
+`HOLT_*` half is deleted at 1.1.0 — write the new one in anything new.
+
 | | |
 |---|---|
-| `HOLT_AGENT` | the default client, for one invocation |
-| `HOLT_BASE` | where checkouts live (default `~/.cache/claude-worktrees`) |
-| `HOLT_STATE` | where machine state lives — the occupancy leases and the reap ledger (default `$XDG_STATE_HOME/holt`, else `~/.local/state/holt`) |
-| `HOLT_OCCUPANCY` | `lease` declares that every session here is one holt spawned, so a lane nobody leased is a lane nobody is in |
+| `SCRUFF_AGENT` | the default client, for one invocation |
+| `SCRUFF_BASE` | where checkouts live (default `~/.cache/claude-worktrees`, moving to `~/.cache/scruff` at 1.1.0) |
+| `SCRUFF_STATE` | where machine state lives — the occupancy leases and the reap ledger (default `$XDG_STATE_HOME/scruff`, else `~/.local/state/scruff`; the `holt`-named directory is still used on a machine that already has one) |
+| `SCRUFF_OCCUPANCY` | `lease` declares that every session here is one this tool spawned, so a lane nobody leased is a lane nobody is in |
 
-`HOLT_STATE` **must be absolute**. A relative value is refused with a warning
+`SCRUFF_STATE` **must be absolute**. A relative value is refused with a warning
 and the default is used: this state is machine-global, so resolving it against
 the current directory would scatter the lease and the ledger into whatever
 directory holt was run from — routinely a git checkout, where they show up as
 an untracked dir and can be swept into a `wip:` commit by `holt park`.
 
-A hook is handed the lane as `HOLT_*` too, and none of the above is among them:
-the lane's own fields are `HOLT_LANE_AGENT`, `HOLT_LANE_STATE` and
-`HOLT_BASE_BRANCH`, spelled apart precisely so a hook's environment — which it
+A hook is handed the lane as `SCRUFF_*` (and `HOLT_*`) too, and none of the
+above is among them: the lane's own fields are `SCRUFF_LANE_AGENT`,
+`SCRUFF_LANE_STATE` and `SCRUFF_BASE_BRANCH`, spelled apart precisely so a hook's environment — which it
 leaks into any pane it spawns — can never feed holt back its own input. See
 [lifecycle.md](./lifecycle.md).
 
