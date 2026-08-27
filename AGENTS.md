@@ -103,7 +103,7 @@ of surprise.
 The rest of this section is about both files.
 
 It is bound by the family standard, [the workshop's
-`notes/agent-surface.md`](https://github.com/hausfold/workshop/blob/main/notes/agent-surface.md) —
+`docs/agent-surface.md`](https://github.com/hausfold/workshop/blob/main/docs/agent-surface.md) —
 ≤150 lines, no flag dumps (that's `holt --help`), and the `description`
 frontmatter names **the phrases a user says**, not the features holt has. A
 description written as a feature summary is true, well written, and never loads.
