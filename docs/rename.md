@@ -22,8 +22,8 @@ Five, and four have a recommendation you can accept silently.
 
 | # | decision | recommendation |
 |---|---|---|
-| 1 | **Cutover version** — `1.0.0` or `0.6.0`? | **`1.0.0`.** Renaming every package on five registries is the largest break this repo will ever ship; there is no bigger number to save it for, and "1.0" is the marketing moment the rename gives you for free. Counter: SPEC's `batch`/`overlap` are unbuilt, so 1.0 claims a completeness the feature set doesn't have. If that bothers you, `0.6.0` costs nothing but the moment. |
-| 2 | **`~/.cache/claude-worktrees` → `~/.cache/scruff`?** | **No — not in this cutover.** `internal/commands/env.go:29` already defers this to "registry v1", and for a good reason: every live lane's `.git/worktrees/<n>/gitdir` holds an absolute path, so moving the base means a `git worktree repair` sweep across every checkout on the machine, and a failure there strands work. That is invariant 1 against a cosmetic gain. Ship it with registry v1, behind `scruff doctor --migrate-base`, with the old path read as a fallback forever. |
+| 1 | **Cutover version** | **`1.0.0`. Decided.** Renaming every package on five immutable registries is the largest break this repo will ever ship; there is no bigger number to save it for. |
+| 2 | **`~/.cache/claude-worktrees` → `~/.cache/scruff`?** | **Yes. Decided — but it ships at `1.1.0`, not in the cutover.** The destination is settled so nothing has to be re-litigated; only the timing is deferred, and §8 specs the migration. Why not now: the path is the one surface where "final rename" and invariant 1 actually collide, and it is *not* holt's private business — haus reads `$BASE/registry.tsv` by hardcoded path and two shell hooks match `$HOME/.cache/claude-worktrees/*` prefixes, so this is a coordinated multi-repo move, not a `filepath.Join` edit. Doing it at `1.1.0` puts it on the one disruption boundary the plan already has instead of inventing a second. |
 | 3 | **`worktree-<name>` branch prefix?** | **Leave it.** Nothing about it says "holt" — it's descriptive. Changing it strands every live branch and breaks `sed 's/^worktree-//'` in the host file and haus's lane scripts. |
 | 4 | **Keep `holt` as a permanent alias?** | **No.** Ship it through `1.0.x` printing a deprecation to stderr, delete it at `1.1.0`. A permanent alias means the old name never leaves anyone's muscle memory or anyone's docs. |
 | 5 | **Recreate `hausfold/holt` as a tombstone repo?** | **Never.** GitHub's rename redirect (web *and* git) lives only as long as the old name stays unclaimed. Creating a stub kills every redirect permanently — the same rule `ops/PRESENCE.md` records for keeping the `nebelhaus` org alive. Same for `holt-swift`. |
@@ -74,8 +74,11 @@ forgets the old name only after nothing asks it the old one.**
        ↓
  P5  registries  — deprecate the old packages in place.
        ↓
- P6  holt 1.1.0  — delete the compat shims.
+ P6  scruff 1.1.0 — the base move to ~/.cache/scruff, and the compat shims die.
 ```
+
+Phases 1–5 are the rename. Phase 6 is the one migration it defers, and it is the
+only phase that moves a byte of anyone's work on disk.
 
 ---
 
@@ -219,19 +222,74 @@ public artifacts; the job is to make them point somewhere.
 
 ---
 
-## 8. Phase 6 — delete the compat, `1.1.0`
+## 8. Phase 6 — `1.1.0`: the base move, and the end of compat
 
-One release later, and not before a `haus rebuild` has been green for a week:
-drop `cmd/holt/`, the `HOLT_*` fallback rungs, the old config/state path
-fallbacks, and the both-spellings jq filters in haus and the host file. Leave
-decision 2's `~/.cache/claude-worktrees` fallback in place — it is not compat,
-it is the base path, and it goes with registry v1.
+One release later, and not before a `haus rebuild` has been green for a week.
+Two things land together because they share a disruption boundary.
+
+### 8.1 Delete the compat
+
+Drop `cmd/holt/`, the `HOLT_*` fallback rungs, the old config/state path
+fallbacks, and the both-spellings jq filters in haus and the host file.
+
+### 8.2 `~/.cache/claude-worktrees` → `~/.cache/scruff`
+
+This is the only step in the whole rename that moves work on disk, so it is
+specified rather than described.
+
+**Why it isn't a one-line default change.** The base path is a de-facto
+cross-repo contract:
+
+| consumer | how it depends on the path |
+|---|---|
+| every live lane | its `.git` file points at `<main>/.git/worktrees/<n>`, and that dir's `gitdir` file points **absolutely** back at the checkout |
+| `$BASE/registry.tsv` | the registry itself lives in the base — the move is a registry move |
+| `haus/modules/launcher/commands/spawn-agent.sh:117` | reads `${CLAUDE_WT_BASE:-$HOME/.cache/claude-worktrees}/registry.tsv` **by hardcoded path**, not by asking the binary |
+| `haus/modules/terminal/default.nix:793, 856` | two shell hooks match on the `$HOME/.cache/claude-worktrees/*` prefix (stale-cwd detection, and the auto-`cd` out of a dead lane) |
+| `haus/modules/ai/default.nix:204`, `workshop/AGENTS.md:164` | state the path as documentation an agent reads and believes |
+| occupied panes | have a `cwd` *inside* the thing being moved |
+
+**The migration, as `scruff doctor --migrate-base`:**
+
+1. **Refuse if any lane is occupied.** Exit 2 — holt's own "refused for safety",
+   not an error. You cannot move the ground out from under a live pane, and
+   "close your panes and re-run" is a complete answer. This is invariant 2
+   applied to the tool's own migration, which is the right way for it to behave.
+2. Take the registry lock for the whole operation. It is one lock, one write.
+3. `mv` the base, then `git worktree repair <path>` for every checkout — it is
+   idempotent and it is exactly the operation git ships for this.
+4. Rewrite `registry.tsv` paths in the same locked window, `.bak` first (the
+   existing `registry.tsv.bak.relocate` convention already covers this shape).
+5. Leave a symlink `~/.cache/claude-worktrees → ~/.cache/scruff` for one release,
+   so anything holding a stale absolute path lands somewhere real.
+6. On failure at any step, roll back to the `.bak` and leave the old tree in
+   place. The failure direction stays "nothing moved", never "half moved".
+
+**Fallback, permanently:** `baseDir()` prefers `~/.cache/scruff`, but falls back
+to `~/.cache/claude-worktrees` when that exists and holds a `registry.tsv`. That
+fallback is what keeps this a **minor** rather than a major — no one who skips
+the migration is broken by it. The env ladder becomes `SCRUFF_BASE` →
+`HOLT_BASE` → `CLAUDE_WT_BASE`; the last rung stays because SPEC §10's bash
+predecessor is still the reason it exists.
+
+**Run migration and haus in one rebuild:** the haus PR that flips
+`spawn-agent.sh` and the two shell prefixes must land in the same `haus rebuild`
+that ships `scruff 1.1.0`, or the bar reads a registry that has moved.
+
+**Also here, and easy to forget:** the sentence "checkouts live under
+`~/.cache/claude-worktrees/<repo>/<name>` whichever client you are — the path
+name is historical" is *generated instructions* every agent on this machine
+reads (`haus/modules/ai/default.nix:204`, mirrored into `workshop/AGENTS.md:164`
+and `docs/reference.md:137`). After the move it is no longer historical and no
+longer true — it becomes `~/.cache/scruff/<repo>/<name>`, and the apology for the
+name goes away with it. That sentence disappearing is the actual finish line of
+this rename.
 
 ---
 
 ## 9. The done-list
 
-The rename is finished when all of these are true:
+**At `1.0.0` — the rename is shipped when all of these are true:**
 
 - [ ] `grep -ri holt` across all family repos returns **only** dated/historical statements
 - [ ] `~/.claude/settings.json` contains no `holt` string, and a lane fires **one** notification
@@ -242,6 +300,14 @@ The rename is finished when all of these are true:
 - [ ] `hausfold/holt` and `hausfold/holt-swift` remain **unclaimed** on GitHub
 - [ ] `hausfold.co` renders the family index with the accent colour intact
 - [ ] `ai/SKILL.md` and `ai/handoff/SKILL.md` pass the `nix/skill.nix` guards under their new directory names
+
+**At `1.1.0` — the rename is *done* when these are also true:**
+
+- [ ] `scruff doctor --migrate-base` exits 2 with a lane occupied, and succeeds with none
+- [ ] every lane resumes and `git status` cleanly from `~/.cache/scruff/<repo>/<name>`
+- [ ] the bar, `spawn-agent.sh` and both shell hooks read the new base
+- [ ] no `HOLT_`, `cmd/holt`, or both-spellings jq filter survives anywhere
+- [ ] the "path name is historical" sentence is **deleted**, not updated — §8.2
 
 ---
 
