@@ -91,15 +91,18 @@ has to be told to trust this repo and workflow **once**, in a browser:
 | registry | where | what to enter |
 |---|---|---|
 | npm | npmjs.com → `@hausfold/scruff` → Settings → Trusted Publisher | GitHub Actions, org `hausfold`, repo `scruff`, workflow `release.yml` |
-| PyPI | pypi.org → `hausfold-scruff` → Publishing → Add a trusted publisher | owner `hausfold`, repo `scruff`, workflow `release.yml` |
+| PyPI | pypi.org → **your account** → Publishing → Add a *pending* publisher (the project sidebar only exists once the project does) | PyPI project `hausfold-scruff`, owner `hausfold`, repo `scruff`, workflow `release.yml` |
 | crates.io | crates.io → `hausfold-scruff` → Settings → Trusted Publishing | repo `hausfold/scruff`, workflow `release.yml` |
 
 ⚠️ **1.0.0 renamed all three packages** (`@hausfold/holt` → `@hausfold/scruff`,
 `hausfold-holt` → `hausfold-scruff`, and the repo with them). A trusted publisher
 matches on repo *and* package name, so none of the old entries carries over and
 the first 1.0.0 run fails on all three until they are re-entered. PyPI calls the
-pre-creation form a *pending* publisher; where a registry insists the package
-exist first, publish `1.0.0` by hand once and let CI take every release after it.
+pre-creation form a *pending* publisher and is the only one of the three you can
+wire before the tag; **npm and crates.io both insist the package exist first**, so
+publish `1.0.0` to those two by hand once and let CI take every release after it.
+Leave *environment name* blank everywhere — no job here declares an
+`environment:`, and a claim that names one never matches.
 The old names stay published forever — deprecate them in place, never yank
 (docs/rename.md §7).
 
