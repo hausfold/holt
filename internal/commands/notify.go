@@ -204,7 +204,7 @@ func laneID(main, name string) string {
 
 // trillBinary resolves the trill CLI without assuming anything about the
 // machine: Trill.app is routinely installed while `trill` is on nobody's PATH,
-// because the app binary IS the CLI. HOLT_TRILL is authoritative when set —
+// because the app binary IS the CLI. SCRUFF_TRILL is authoritative when set —
 // including set to something missing, which is how a machine (or a test) says
 // "no banners" — and an empty answer means exactly that, silently.
 func trillBinary() string {

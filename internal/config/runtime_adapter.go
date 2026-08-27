@@ -26,7 +26,7 @@ type RuntimeAdapter struct {
 	Builtin string
 }
 
-// LoadRuntimeAdapter reads ~/.config/holt/adapters/runtime/<id>.toml.
+// LoadRuntimeAdapter reads ~/.config/scruff/adapters/runtime/<id>.toml.
 //
 // A missing file is an error for every id but one, rather than a silent Defer
 // the way the policy-seam hooks in config.go behave: `scruff runtime

@@ -45,7 +45,7 @@ type NamerAdapter struct {
 	Name []string // argv, unrendered — RenderArgv fills in the template
 }
 
-// LoadNamerAdapter reads ~/.config/holt/adapters/namer/<id>.toml.
+// LoadNamerAdapter reads ~/.config/scruff/adapters/namer/<id>.toml.
 //
 // A missing file is an error for every id but `claude`, the same way runtime
 // backends behave and for the same reason: a namer is named explicitly in the

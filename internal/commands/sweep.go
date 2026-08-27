@@ -56,8 +56,8 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 		// "No provider vouched for absence", which on a developer machine means
 		// no lsof. Leases alone never reach this branch: they assert presence
 		// only, so a lane nobody leased is still an open question. An embedder
-		// that owns every session it serves says so with HOLT_OCCUPANCY=lease.
-		e.Warn("no lsof — can't tell which checkouts have a pane open, so only PARKED lanes were swept (an embedder that owns every session can answer with HOLT_OCCUPANCY=lease)")
+		// that owns every session it serves says so with SCRUFF_OCCUPANCY=lease.
+		e.Warn("no lsof — can't tell which checkouts have a pane open, so only PARKED lanes were swept (an embedder that owns every session can answer with SCRUFF_OCCUPANCY=lease)")
 	}
 	selfTop, _ := gitx.Toplevel(e.Cwd)
 
