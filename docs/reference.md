@@ -185,7 +185,7 @@ Each lane:
 | `branch` | full branch name |
 | `path` | checkout path on disk — empty once `parked` |
 | `parent` | the pane that spawned it via `holt child`, or `""` |
-| `agent` | `claude` \| `codex` \| `opencode` |
+| `agent` | `claude` \| `codex` \| `opencode` \| `pi` |
 | `state` | `live` \| `parked` \| `stray` — a closed set |
 | `occupied` / `dirty` | nullable; **`null` means undetermined, not false** |
 | `occupied_by` | the evidence behind `occupied: true` — `[{pid, command, path, via}]`, `via` ∈ `lsof \| leases`. Absent when nothing holds the lane |

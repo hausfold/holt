@@ -342,9 +342,10 @@ func trustWorktreeClaude(main, dir string) {
 
 // trustWorktreePi is the same favour for pi, whose trust model is shaped
 // differently in the one way that matters here: pi's `~/.pi/agent/trust.json`
-// is a flat path → bool map and it DOES inherit from a parent folder, so a
-// `{"~/code": true}` covers every repo underneath it. That inheritance is also
-// exactly why a lane still prompts: holt's checkouts live at
+// is a flat path → bool map and it DOES inherit from a parent folder, so one
+// `{"/Users/you/code": true}` covers every repo underneath it. (Absolute — pi
+// writes the resolved path and nothing here expands `~`.) That inheritance is
+// also exactly why a lane still prompts: holt's checkouts live at
 // `~/.cache/claude-worktrees/<repo>/<name>`, outside whatever tree the user
 // trusted, so no ancestor of the new directory has a decision saved.
 //
@@ -355,15 +356,25 @@ func trustWorktreeClaude(main, dir string) {
 // propagated by writing nothing at all: the lane prompts, which is what an
 // untrusted repo should do.
 //
-// Same three narrowings as the Claude path, and the same blast radius: every
-// failure here costs one trust prompt. The file is small and pi's own
-// (`/trust` writes it), so it is re-encoded whole with two-space indent.
+// Same three narrowings as the Claude path. The blast radius is NOT quite the
+// same, and the difference is worth naming: this is read-modify-write with no
+// lock on a file pi also owns, so a `/trust` that flips the repo to `false`
+// between the read and the rename gets the `true` written back over it. On the
+// Claude side losing that race costs one extra prompt; here it costs a trust
+// the user had just revoked — for one spawn, on one worktree path, and only
+// while those two writes interleave. Re-encoded whole (the file is small and
+// flat), preserving the mode pi left on it rather than tightening to 0600:
+// `~/.claude.json` earns that mode by holding credentials and this does not.
 func trustWorktreePi(main, dir string) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = os.Getenv("HOME")
 	}
 	path := filepath.Join(home, ".pi", "agent", "trust.json")
+	info, err := os.Stat(path)
+	if err != nil {
+		return
+	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return
@@ -399,6 +410,9 @@ func trustWorktreePi(main, dir string) {
 	if err := tmp.Close(); err != nil {
 		return
 	}
+	// CreateTemp makes 0600 and the rename would carry it, silently tightening
+	// a file holt does not own. Put pi's own mode back first.
+	_ = os.Chmod(tmp.Name(), info.Mode().Perm())
 	_ = os.Rename(tmp.Name(), path)
 }
 

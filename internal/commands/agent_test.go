@@ -87,7 +87,10 @@ func TestTrustWorktreeRefusesUntrustedParent(t *testing.T) {
 	}
 }
 
-func TestTrustWorktreeIgnoresOtherClients(t *testing.T) {
+// ~/.claude.json is Claude Code's, and only the claude arm may write into it.
+// pi is in this loop even though it DOES have a trust model, because the thing
+// being asserted is that its decision lands in pi's own file and never here.
+func TestTrustWorktreeWritesClaudesFileOnlyForClaude(t *testing.T) {
 	path := withHome(t, claudeConfig)
 	for _, agent := range []string{"codex", "opencode", "pi", ""} {
 		trustWorktree(agent, "/repo", "/wt/"+agent)
@@ -95,7 +98,7 @@ func TestTrustWorktreeIgnoresOtherClients(t *testing.T) {
 	projects := readProjects(t, path)
 	for _, agent := range []string{"codex", "opencode", "pi", ""} {
 		if _, ok := projects["/wt/"+agent]; ok {
-			t.Errorf("%q is not Claude Code and has no trust model to seed", agent)
+			t.Errorf("%q wrote into Claude Code's ~/.claude.json", agent)
 		}
 	}
 }
@@ -339,5 +342,24 @@ func TestTrustWorktreePiPreservesEverythingElse(t *testing.T) {
 	}
 	if v, ok := doc["/home/other"]; !ok || v {
 		t.Errorf(`"/home/other" = %v, %v; want false, true`, v, ok)
+	}
+}
+
+// The file is pi's, and holt must hand it back the way it found it — an
+// os.CreateTemp default of 0600 carried through the rename would tighten a
+// file holt does not own.
+func TestTrustWorktreePiKeepsPisFileMode(t *testing.T) {
+	path := withPiTrust(t, `{"/home/code": true}`)
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	trustWorktree("pi", "/home/code/workshop", "/cache/worktrees/workshop/lane")
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != 0o644 {
+		t.Errorf("mode = %o, want 644", got)
 	}
 }
