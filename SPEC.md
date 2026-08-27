@@ -1047,6 +1047,28 @@ unknown still resolves to **keep**, exactly as when `lsof` was the only answer.
 registry lives, because no state-dir knob may be able to relocate the file
 cutover day has to read (§10).
 
+**The ask markers.** `$HOLT_STATE/asks/<key>`, one empty file per banner
+`holt hook notify` has up, named for the key trill knows it by with the slashes
+flattened to dots (`holt/<repo>/<lane>` → `holt.<repo>.<lane>`). It is a cache
+and only a cache: it exists so that the resume events — which fire on every
+tool call in every pane — can answer "is anything waiting?" with one directory
+read instead of a registry load and a launch of trill's binary. Nothing may
+treat it as the truth about what is on screen, because anything can take a
+banner down without telling holt.
+
+Two shapes of marker never get the tool call that would clear them — a lane
+blocked on you when its pane closed, and a pane outside every lane whose
+session has ended — so the sweep prunes both: reaping a lane clears its marker
+(and resolves its banner, which now names somewhere that no longer exists), and
+anything older than a day goes regardless. Without that the directory is never
+empty again and the cheap answer becomes permanently the expensive one.
+
+⚠️ **A desktop may read this directory** to find out whether any lane is
+waiting before doing something costlier of its own; hausfold/haus does exactly
+that. The path, the flattening and "empty means nothing is waiting" are
+therefore a contract with more than holt in it, and changing the naming breaks
+a reader that cannot be seen from here.
+
 A **relative** `$HOLT_STATE` is refused — holt warns and uses the default. This
 state is machine-global, so resolving it against the process cwd scatters the
 lease and the ledger into whatever directory holt was run from, routinely a git

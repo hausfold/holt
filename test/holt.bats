@@ -738,6 +738,59 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   [ "$(reg_rows)" -eq 0 ]
 }
 
+# ── the ask markers a reap is the only answer to ─────────────────────────────
+# `holt hook notify` keeps its resolve path cheap with one marker file per fin
+# it put up, and clears that marker when the SESSION moves. Two shapes never
+# move again: a lane blocked on you when its pane closed (it is answered by
+# being reaped) and a pane outside every lane, keyed by session id. Left alone
+# they accumulate one per abandoned question, the dir is never empty again, and
+# the gate answers "yes, something is waiting" on every tool call in every pane
+# for the life of the machine.
+
+@test "reap: a lane reaped while it was blocked takes its fin down with it" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" sweepme)"
+  git -C "$main" merge -q --no-edit worktree-sweepme
+  mktrill
+  local asks="$XDG_STATE_HOME/holt/asks"
+  mkdir -p "$asks"; : >"$asks/holt.alpha.sweepme"
+
+  cd "$TMP"; wt_run reap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"reaped sweepme (alpha)"* ]]
+  # The marker is gone, and so is the fin: its `Go to lane` action would run
+  # `holt focus` against a lane that no longer exists.
+  [ ! -e "$asks/holt.alpha.sweepme" ]
+  grep -q -- 'resolve holt/alpha/sweepme' "$FAKE_TRILL_LOG"
+  # And never the directory itself — something else on the machine watches it.
+  [ -d "$asks" ]
+}
+
+@test "reap: an ordinary reap launches no trill at all" {
+  local main; main="$(mkrepo alpha)"; mkwt "$main" sweepme >/dev/null
+  git -C "$main" merge -q --no-edit worktree-sweepme
+  mktrill
+  cd "$TMP"; wt_run reap
+  [ "$status" -eq 0 ]
+  # The marker is the gate on the launch, not an afterthought to it: a lane
+  # that ended its turn cleanly has nothing on the ledge, and a sweep of forty
+  # of them must not start forty processes.
+  [ ! -s "$FAKE_TRILL_LOG" ]
+}
+
+@test "list: a marker older than a day is dropped, whatever it named" {
+  local asks="$XDG_STATE_HOME/holt/asks"
+  mkdir -p "$asks"
+  : >"$asks/holt.session.7f3c"        # a pane outside every lane; its session ended
+  : >"$asks/holt.alpha.fresh"
+  touch -t 202001010000 "$asks/holt.session.7f3c"
+
+  cd "$TMP"; wt_run                   # the listing sweeps
+  [ "$status" -eq 0 ]
+  [ ! -e "$asks/holt.session.7f3c" ]
+  # Today's marker is exactly what the gate is for.
+  [ -e "$asks/holt.alpha.fresh" ]
+}
+
 @test "reap: keeps a landed checkout that a pane is still standing in" {
   local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" busy)"
   git -C "$main" merge -q --no-edit worktree-busy
