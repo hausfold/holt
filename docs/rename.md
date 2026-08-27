@@ -387,6 +387,26 @@ this rename.
 
 ---
 
+## 8.5 Where the cutover stands, and whose step is next
+
+Updated 2026-08-27, after Phase 3 merged (scruff#72). The phases above say what
+each step IS; this says which are done and who holds the next one. Keep it
+current — a plan that can't say where it stopped gets re-derived from scratch by
+whoever picks it up.
+
+| # | step | holder | state |
+|---|---|---|---|
+| 1 | scruff 0.5.0, bilingual (§3) | — | ✅ released |
+| 2 | haus flips (§4) | — | ✅ shipped, rebuilt on this machine |
+| 3 | the repo/module/package/`--json` rename (§5) | — | ✅ merged, scruff#72. GitHub repos renamed; both old names left unclaimed |
+| 4 | **OIDC trusted publishers re-entered** on npm, PyPI, crates | **the user** | ⏳ **blocks the tag** — new package names have no entry to edit (`docs/releasing.md`) |
+| 5 | the family and the web (§6) | an agent lane | ⏳ workshop, hausfold.co, trill, ops, four prose repos — one PR each |
+| 6 | haus's `flake.nix` input URL → `github:hausfold/scruff` | an agent lane | ⏳ resolves through GitHub's redirect meanwhile, so it rides with #5's rebuild |
+| 7 | the host file (`~/.config/nix/hosts/mbp/default.nix`) | **the user** | ⏳ `Bash(holt:*)` needs a `del` (added under `\| unique`, so nothing removes it), plus the two `holt hook create\|remove` commands, the `holt session` palette entry and the namer-adapter paths — then `haus rebuild` |
+| 8 | `bench release scruff 1.0.0` | **the user** | ⏳ gated on 4 and 5. ⚠️ resolves the repo by DIRECTORY name — `~/code/workshop/holt` must be renamed first, and that is a `git worktree repair` job (§6) |
+| 9 | deprecate the old packages in place (§7) | **the user** | ⏳ after the 1.0.0 publish. Never yank |
+| 10 | `scruff 1.1.0` — the base move and the end of compat (§8) | an agent lane | ⏳ not before a week of green rebuilds |
+
 ## 9. The done-list
 
 **At `1.0.0` — the rename is shipped when all of these are true:**
