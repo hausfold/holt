@@ -38,7 +38,7 @@ Measured, not estimated (2026-08-27):
 |---|---|---|
 | `hausfold/holt` (this repo) | 2232 refs, 10 paths | code, docs, tests, 5 SDKs |
 | `hausfold/haus` | 623 refs, 39 files | **wiring** — env vars, hooks, statusline, launcher, flake input |
-| `workshop` root (`AGENTS.md`, `notes/`, `docs/`, `bench`, `test/`) | ~330 refs | family docs + the release path |
+| `workshop` root (`AGENTS.md`, `docs/`, `bench`, `test/`) | ~330 refs | family docs + the release path |
 | `hausfold.co` | ~130 refs in `content/`, `src/`, `public/` | public docs + a CSS accent token |
 | `hausfold/trill` | 57 refs | docs + two Swift doc-comments |
 | `hausfold/ops` | ~34 refs | **mostly historical — see §6** |
@@ -241,7 +241,7 @@ Independent of each other; run them as parallel lanes via `holt child`.
 
 | repo | what moves |
 |---|---|
-| **workshop** | `AGENTS.md` (the family table, the lane section, the release rules), `notes/agent-surface.md`, `docs/`, `test/`, `script/`, and `bench`'s `FAMILY` entry + release path |
+| **workshop** | `AGENTS.md` (the family table, the lane section, the release rules), `docs/` (incl. `agent-surface.md`), `test/`, `script/`, and `bench`'s `FAMILY` entry + release path |
 | **hausfold.co** | `content/docs/haus/rooms/ai.mdx` (59), `reference/options.mdx` (28), `internals/contributing.mdx`, `agent-rebuilds.mdx`; `src/app/page.tsx` (the family index entry + `data-accent`), `src/lib/shared.ts:37`. **⚠️ The CSS accent token `--a-holt` is defined in `public/hausfold.css` and consumed in `src/app/global.css:966` as `--nb-token-link` — rename it in both or a doc-link colour silently falls back.** No page slug contains `holt`, so **no redirects are needed** |
 | **trill** | `ARCHITECTURE.md`, `AGENTS.md`, `CLAUDE.md`, `.gitignore` comment, and two doc-comments in `Trill/Platform/SystemIntegration.swift` (one of which states the `$HOME/.cache` registry fact — keep it accurate per decision 2) |
 | **homebrew-tap / perch / pounce / nebelung** | prose only, 12 refs total |

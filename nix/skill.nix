@@ -20,8 +20,8 @@
 # consumer installs the skills without pulling the Go toolchain, and this
 # derivation depends on those files rather than on the whole repo.
 #
-# `$out/<name>/SKILL.md` is the family standard's §6 layout (the workshop's
-# notes/agent-surface.md): one nesting level, named for the SKILL — which is
+# `$out/<name>/SKILL.md` is the family standard's compliant-tool layout (the workshop's
+# docs/agent-surface.md): one nesting level, named for the SKILL — which is
 # the tool's own name when it ships one, and one directory per skill when it
 # ships several. A consumer links a directory that is already called the right
 # thing, and the TOOL decides those names rather than whoever installs it.
