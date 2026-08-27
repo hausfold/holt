@@ -8,16 +8,16 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hausfold/holt/internal/exitcode"
-	"github.com/hausfold/holt/internal/gitx"
-	"github.com/hausfold/holt/internal/registry"
-	"github.com/hausfold/holt/internal/ui"
+	"github.com/hausfold/scruff/internal/exitcode"
+	"github.com/hausfold/scruff/internal/gitx"
+	"github.com/hausfold/scruff/internal/registry"
+	"github.com/hausfold/scruff/internal/ui"
 )
 
 // hookField reads the first present key from a hook payload.
 //
 // Key names drift across Claude Code versions — the docs say
-// worktree_name/base_path, 2.1.x sends name/cwd — so holt accepts a set of
+// worktree_name/base_path, 2.1.x sends name/cwd — so scruff accepts a set of
 // aliases per logical field, first hit wins (SPEC.md §2.3). Which alias fired
 // is worth knowing when a future bump changes them again, so it is reported to
 // the caller rather than swallowed.
@@ -48,7 +48,7 @@ func readHookPayload(r io.Reader) (map[string]any, error) {
 // new checkout path on stdout.
 //
 // The stdout-purity rule is load-bearing, not stylistic: Claude Code reads the
-// path off stdout, and `cd "$(holt child …)"` does too. Every diagnostic goes
+// path off stdout, and `cd "$(scruff child …)"` does too. Every diagnostic goes
 // to stderr.
 func (e *Env) HookCreate(stdin io.Reader) error {
 	payload, err := readHookPayload(stdin)
@@ -72,12 +72,12 @@ func (e *Env) HookCreate(stdin io.Reader) error {
 		return err
 	}
 
-	// Record it so holt can rebuild and reopen this lane later — even after the
+	// Record it so scruff can rebuild and reopen this lane later — even after the
 	// checkout is gone, and even for a repo it has never otherwise heard of.
 	// The spawning pane's cwd is the parent, so a pane can be shown only the
 	// lanes IT spawned. This is Claude Code's own hook, so the client is known
 	// even when the machine-wide default is Codex or OpenCode.
-	// NOT ignored. A checkout with no registry row is a lane holt can no
+	// NOT ignored. A checkout with no registry row is a lane scruff can no
 	// longer find, resume, or reap — the branch survives, but every affordance
 	// around it is gone. Say so loudly rather than let a lock timeout eat it
 	// silently; the caller still gets the path, because the checkout is real.
@@ -85,7 +85,7 @@ func (e *Env) HookCreate(stdin io.Reader) error {
 		Name: name, Main: main, Branch: "worktree-" + name,
 		Path: dir, Parent: base, Agent: "claude",
 	}); err != nil {
-		ui.Warn("the checkout exists but the registry row could not be written (%v) — `holt` won't list it until you re-run this", err)
+		ui.Warn("the checkout exists but the registry row could not be written (%v) — `scruff` won't list it until you re-run this", err)
 	}
 	ui.Out("%s\n", dir)
 	return nil
@@ -109,7 +109,7 @@ func (e *Env) addWorktree(repo, name, dir string) error {
 	if !gitx.HasCommits(repo) {
 		// A repo with no commits yet has no HEAD to branch from. --orphan gives
 		// the lane a real checkout on an unborn branch; the ref appears with
-		// its first commit. Without this, `holt new` in a freshly-inited repo
+		// its first commit. Without this, `scruff new` in a freshly-inited repo
 		// fails at exactly the moment a scaffolding agent is most useful.
 		args = []string{"worktree", "add", "--orphan", "-b", branch, dir}
 	}

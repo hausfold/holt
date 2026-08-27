@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/hausfold/holt/internal/config"
+	"github.com/hausfold/scruff/internal/config"
 )
 
 // writeConfig plants a machine config for the test and returns an Env holding
@@ -14,11 +14,11 @@ func envWith(t *testing.T, body string) *Env {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
-	if err := os.MkdirAll(filepath.Join(dir, "holt"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "scruff"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if body != "" {
-		if err := os.WriteFile(filepath.Join(dir, "holt", "config.toml"), []byte(body), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "scruff", "config.toml"), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -70,13 +70,13 @@ func TestDefaultAgentHookDeferFallsThrough(t *testing.T) {
 	}
 }
 
-// A hook that cannot run is a warning and a fallback, never a failure: holt is
+// A hook that cannot run is a warning and a fallback, never a failure: scruff is
 // in the path of every pane open, and a stale store path must not close that door.
 func TestDefaultAgentBrokenHookWarnsAndFallsBack(t *testing.T) {
 	t.Setenv("HOLT_AGENT", "")
 	t.Setenv("HAUS_AGENT_DEFAULT", "")
 
-	e := envWith(t, "agent = \"codex\"\n\n[hooks]\nagent = \"/nonexistent/holt-agent-hook\"\n")
+	e := envWith(t, "agent = \"codex\"\n\n[hooks]\nagent = \"/nonexistent/scruff-agent-hook\"\n")
 	if got := e.defaultAgent(); got != "codex" {
 		t.Fatalf("defaultAgent() = %q, want the config key after the hook failed to run", got)
 	}
@@ -96,7 +96,7 @@ func writeHook(t *testing.T, name, body string) string {
 
 // A relative SCRUFF_STATE is refused, not honoured: this state is machine-global,
 // so resolving it against the cwd scatters leases and the reap ledger into
-// whatever directory holt was run from — which is how `holt reap` in an agent
+// whatever directory scruff was run from — which is how `scruff reap` in an agent
 // pane created an untracked `live/` inside a git checkout.
 func TestStateDirRefusesRelativeOverride(t *testing.T) {
 	home := t.TempDir()

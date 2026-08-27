@@ -1,23 +1,23 @@
 import XCTest
-@testable import Holt
+@testable import Scruff
 
-/// `fake-holt.sh` stands in for the real binary so tests don't need a Go
-/// build — it's a fixture, not a spec of holt's behavior, kept in sync by
-/// hand with `sdk/ts/test/fake-holt.sh` / `sdk/python/tests/fake-holt.sh`.
+/// `fake-scruff.sh` stands in for the real binary so tests don't need a Go
+/// build — it's a fixture, not a spec of scruff's behavior, kept in sync by
+/// hand with `sdk/ts/test/fake-scruff.sh` / `sdk/python/tests/fake-scruff.sh`.
 final class ClientTests: XCTestCase {
     private var bin: String!
 
     override func setUpWithError() throws {
-        bin = try XCTUnwrap(Bundle.module.url(forResource: "fake-holt", withExtension: "sh")).path
+        bin = try XCTUnwrap(Bundle.module.url(forResource: "fake-scruff", withExtension: "sh")).path
     }
 
-    private func client() -> HoltClient {
-        HoltClient(options: HoltClientOptions(bin: bin))
+    private func client() -> ScruffClient {
+        ScruffClient(options: ScruffClientOptions(bin: bin))
     }
 
     func testListParsesTheJSONEnvelopeWithNullableDisciplineIntact() async throws {
         let envelope = try await client().list()
-        XCTAssertEqual(envelope.schema, 1)
+        XCTAssertEqual(envelope.schema, 2)
         XCTAssertEqual(envelope.lanes.count, 2)
 
         let sparkle = envelope.lanes[0]
@@ -41,7 +41,7 @@ final class ClientTests: XCTestCase {
 
     func testWatchLaneFiltersToOneLanesEventsOnly() async throws {
         var seen: [String] = []
-        for try await event in watchLane(path: "/repo/.holt/haus/fresh", options: RunOptions(bin: bin)) {
+        for try await event in watchLane(path: "/repo/.scruff/haus/fresh", options: RunOptions(bin: bin)) {
             seen.append(event.kind.rawValue)
             break
         }
@@ -50,7 +50,7 @@ final class ClientTests: XCTestCase {
 
     func testClientWatchLaneFiltersTheSameWayOnItsOwnOptions() async throws {
         var seen: [String] = []
-        for try await event in client().watchLane(path: "/repo/.holt/haus/fresh") {
+        for try await event in client().watchLane(path: "/repo/.scruff/haus/fresh") {
             seen.append(event.kind.rawValue)
             break
         }
@@ -62,7 +62,7 @@ final class ClientTests: XCTestCase {
     /// Pinned because three doc comments used to claim the opposite.
     func testWatchLanePassesALanesSyncThrough() async throws {
         var seen: [String] = []
-        for try await event in client().watchLane(path: "/repo/.holt/haus/sparkle") {
+        for try await event in client().watchLane(path: "/repo/.scruff/haus/sparkle") {
             seen.append(event.kind.rawValue)
             break
         }
@@ -71,7 +71,7 @@ final class ClientTests: XCTestCase {
 
     func testChildReturnsOnlyTheNewCheckoutPath() async throws {
         let dir = try await client().child("/repo/other")
-        XCTAssertEqual(dir, "/repo/.holt/other/new-lane")
+        XCTAssertEqual(dir, "/repo/.scruff/other/new-lane")
     }
 
     func testResumeCapturedStdoutNeverExecsReturnsTheReopenInstructionsAsText() async throws {
@@ -79,11 +79,11 @@ final class ClientTests: XCTestCase {
         XCTAssertTrue(out.contains("claude --resume"))
     }
 
-    func testNonZeroExitThrowsHoltErrorCarryingTheRealExitCode() async throws {
+    func testNonZeroExitThrowsScruffErrorCarryingTheRealExitCode() async throws {
         do {
-            _ = try await Holt.run(["reap-refused"], options: RunOptions(bin: bin))
-            XCTFail("expected HoltError to be thrown")
-        } catch let error as HoltError {
+            _ = try await Scruff.run(["reap-refused"], options: RunOptions(bin: bin))
+            XCTFail("expected ScruffError to be thrown")
+        } catch let error as ScruffError {
             XCTAssertEqual(error.code, 2)
             XCTAssertTrue(error.refused)
             XCTAssertTrue(error.stderr.contains("occupied"))
@@ -91,8 +91,8 @@ final class ClientTests: XCTestCase {
     }
 
     func testLeaseReleaseCallsHeartbeatRelease() async throws {
-        let lease = try await client().lease(path: "/repo/.holt/haus/sparkle", pid: 12345)
+        let lease = try await client().lease(path: "/repo/.scruff/haus/sparkle", pid: 12345)
         await lease.release()
-        // No throw: fake-holt's heartbeat branch accepts --release silently.
+        // No throw: fake-scruff's heartbeat branch accepts --release silently.
     }
 }

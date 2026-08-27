@@ -1,12 +1,12 @@
-export { HoltClient, Lease, type HoltClientOptions } from "./client.js";
-export { HoltError } from "./errors.js";
+export { ScruffClient, Lease, type ScruffClientOptions } from "./client.js";
+export { ScruffError } from "./errors.js";
 export { watchAll, watchLane } from "./watch.js";
 export { run, runJSON, type RunOptions, type RunResult } from "./exec.js";
 export {
-  HoltExitCode,
+  ScruffExitCode,
   isWatchHello,
-  type HoltEnvelope,
-  type HoltLane,
+  type ScruffEnvelope,
+  type ScruffLane,
   type LaneState,
   type LandedInfo,
   type LandedVerdict,

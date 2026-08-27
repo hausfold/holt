@@ -9,7 +9,7 @@ from .types import WatchEvent, WatchLine, parse_watch_line
 
 
 async def watch_all(opts: Optional[RunOptions] = None) -> AsyncGenerator[WatchLine, None]:
-    """`holt watch --json` as an async iterator of typed lines. One object
+    """`scruff watch --json` as an async iterator of typed lines. One object
     per NDJSON line on stdout, in order: `hello`, a `sync` burst for every
     lane already alive, `ready`, then live changes for as long as the
     process runs (SPEC.md §14.3 step 2).
@@ -24,7 +24,7 @@ async def watch_all(opts: Optional[RunOptions] = None) -> AsyncGenerator[WatchLi
     ```python
     from contextlib import aclosing
 
-    async with aclosing(holt.watch()) as stream:
+    async with aclosing(scruff.watch()) as stream:
         async for line in stream:
             ...
     ```
@@ -33,7 +33,7 @@ async def watch_all(opts: Optional[RunOptions] = None) -> AsyncGenerator[WatchLi
     condition, by design (SPEC.md §14).
     """
     opts = opts or RunOptions()
-    bin_ = opts.bin or "holt"
+    bin_ = opts.bin or "scruff"
     proc = await asyncio.create_subprocess_exec(
         bin_,
         "watch",

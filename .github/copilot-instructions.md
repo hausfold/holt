@@ -7,7 +7,7 @@ duplication below; if the two ever disagree, `AGENTS.md` wins.)
 
 The short version:
 
-- holt is the **worktree-lifecycle substrate** for parallel coding agents: a Go
+- scruff is the **worktree-lifecycle substrate** for parallel coding agents: a Go
   CLI plus five SDKs, published from this repo under **one** version number.
   It is a substrate, not an orchestrator — no scheduling, no agent supervision,
   no TUI, no knowledge of anyone's build system.
@@ -19,10 +19,10 @@ The short version:
 - **`SPEC.md` §2 is frozen** — registry schema, `--json` output, hook protocol,
   exit codes. Downstreams pin them, so changing one is a semver *major*
   conversation, not a refactor.
-- **The `github.com/hausfold/holt` module path is deliberate.** It's published
-  on Go's immutable proxy and can't move; it is not a missed hit from the org
-  rename. Everything else says `hausfold`.
-- **`sdk/swift` is the source; `hausfold/holt-swift` is a generated mirror** —
+- **`github.com/hausfold/holt` in a released tag is deliberate.** Go's proxy is
+  immutable, so the pre-1.0.0 path stays resolvable forever and is not a missed
+  hit from the scruff rename. New code says `github.com/hausfold/scruff`.
+- **`sdk/swift` is the source; `hausfold/scruff-swift` is a generated mirror** —
   never propose edits to the mirror.
 - Verify the CLI with `make check` (gofmt, vet, `go test ./...`, and the
   black-box bats acceptance suite), on macOS **and** Linux — CI runs both.

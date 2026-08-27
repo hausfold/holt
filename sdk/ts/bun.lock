@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@hausfold/holt",
+      "name": "@hausfold/scruff",
       "devDependencies": {
         "@types/node": "^26.1.2",
         "typescript": "^7.0.2",

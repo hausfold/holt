@@ -13,15 +13,15 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/hausfold/holt/internal/exitcode"
+	"github.com/hausfold/scruff/internal/exitcode"
 )
 
-// Watch is holt's lifecycle event stream — one NDJSON object per line on
+// Watch is scruff's lifecycle event stream — one NDJSON object per line on
 // stdout, for as long as the process runs. SPEC.md §14.2 names this `onOpen`
 // for embedders: every language can read a subprocess pipe, which is why the
 // SDKs are built on a stream rather than a callback or a daemon (§14.1).
 //
-// stdout carries EVENTS ONLY, the same rule as everywhere else in holt
+// stdout carries EVENTS ONLY, the same rule as everywhere else in scruff
 // (internal/ui's doc comment) — a consumer is parsing this line by line, and
 // every diagnostic goes to stderr instead. Nothing here assumes a terminal:
 // the first real consumer (SPEC.md §14) is a server holding one `watch` per
@@ -36,7 +36,7 @@ import (
 // rebuild), `reaped` (Delete/Prune). Watching the file is a free, instant
 // signal for those.
 //
-// `parked` is not, for the common case. `holt park` only commits — the
+// `parked` is not, for the common case. `scruff park` only commits — the
 // checkout stays live on disk — and the actual live→parked transition is the
 // pane CLOSING (HookRemove / `git worktree remove`), which only touches the
 // registry when the branch is already landed (to drop its row). An unlanded
@@ -45,7 +45,7 @@ import (
 // to rewrite. The state that changed is purely on disk (checkoutState reads
 // `.git`'s presence), which fsnotify-on-the-registry structurally cannot see.
 // pollInterval below is the backstop for exactly that gap: a plain periodic
-// rescan, same cost as one `holt list` (mostly local git, forge answers
+// rescan, same cost as one `scruff list` (mostly local git, forge answers
 // served from landed.go's disk cache), independent of the registry watch.
 //
 // `landed` and `post_merge_ahead` are a different gap, and NOT one
@@ -59,19 +59,19 @@ import (
 // a feature — pollInterval avoids it by hitting only local git and the
 // existing disk-cached forge lookup, never issuing a fresh `gh` call on its
 // own account. A consumer that wants fresher landedness than the cache still
-// polls `holt --json` at whatever cadence it can afford. A forge-derived
+// polls `scruff --json` at whatever cadence it can afford. A forge-derived
 // event family is additive later — new `kind` values, `source: "forge"` on
 // the events that carry them — and every field that choice needs (`source`,
 // `capabilities`) is already in this schema so that day doesn't cost a
 // schema bump. See watchEvent's doc comment.
 func (e *Env) Watch(args []string) error {
 	for _, a := range args {
-		// Accepted for spelling symmetry with `holt list --json` — watch has
+		// Accepted for spelling symmetry with `scruff list --json` — watch has
 		// no other output mode, so this is a no-op, not a switch.
 		if a == "--json" {
 			continue
 		}
-		return exitcode.Usagef("unknown flag %q — try `holt watch --json`", a)
+		return exitcode.Usagef("unknown flag %q — try `scruff watch --json`", a)
 	}
 
 	regDir := filepath.Dir(e.Reg.Path())
@@ -106,8 +106,8 @@ func (e *Env) Watch(args []string) error {
 
 	if err := emitHello(watchHello{
 		Kind:         "hello",
-		Holt:         Version,
-		Schema:       1,
+		Scruff:       Version,
+		Schema:       2,
 		Capabilities: []string{"registry"},
 	}); err != nil {
 		return err
@@ -210,25 +210,25 @@ const watchDebounce = 200 * time.Millisecond
 // comment for what it covers and why it's cheap. 3s is fast enough that a
 // pane closing reads as a lifecycle event within one human "huh, did that
 // register?" pause, and slow enough that it costs nothing: each tick is one
-// `e.rows()`, the same call `holt list` makes, and landed.go's disk cache
+// `e.rows()`, the same call `scruff list` makes, and landed.go's disk cache
 // (120s TTL) means the overwhelming majority of ticks issue zero forge calls.
 const pollInterval = 3 * time.Second
 
 // watchHello is the first line of every stream — a version header so a
 // consumer can check compatibility once, up front, rather than sniffing the
-// first event. Same rationale as the --json envelope's {holt, schema} pair
+// first event. Same rationale as the --json envelope's {scruff, schema} pair
 // (SPEC.md §2.2), and deliberately the same two field names.
 //
 // capabilities exists so a consumer can ask "will this stream ever emit a
 // forge-derived event?" instead of guessing from which kinds happen to have
-// shown up yet, or hardcoding a kind list that a later holt version might
+// shown up yet, or hardcoding a kind list that a later scruff version might
 // extend. v1 always sends exactly one value, "registry"; the day source
 // "forge" exists, its build advertises "forge" here too — additively, no
 // schema bump.
 type watchHello struct {
 	Kind         string   `json:"kind"` // always "hello"
 	Seq          int      `json:"seq"`
-	Holt         string   `json:"holt"`
+	Scruff       string   `json:"scruff"`
 	Schema       int      `json:"schema"`
 	Capabilities []string `json:"capabilities"`
 }
@@ -259,8 +259,8 @@ type watchHello struct {
 // seq is a monotonic counter over the WHOLE stream — hello included, every
 // kind consumes one — so a consumer fanning this out over its own transport
 // (websockets, for the server SPEC.md §14 names as the first real consumer)
-// can detect a dropped line without holt knowing anything about that
-// transport. ts is when THIS holt process observed the change, not when it
+// can detect a dropped line without scruff knowing anything about that
+// transport. ts is when THIS scruff process observed the change, not when it
 // happened at the source — for a registry mutation those are the same thing
 // to within the debounce window; they will not be, later, for a forge event.
 //

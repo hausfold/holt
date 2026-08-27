@@ -3,14 +3,14 @@ use std::time::Duration;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
-use crate::client::HoltClient;
-use crate::errors::HoltError;
+use crate::client::ScruffClient;
+use crate::errors::ScruffError;
 
 /// Comfortably under the 90s TTL (`internal/occupancy.TTL`) that applies
 /// when there's no pid to watch.
 const DEFAULT_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
 
-/// Configures [`HoltClient::lease`](crate::HoltClient::lease).
+/// Configures [`ScruffClient::lease`](crate::ScruffClient::lease).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct LeaseOptions {
     /// When `Some`, ties the lease to a real local process: the kernel
@@ -28,8 +28,8 @@ pub struct LeaseOptions {
 /// SPEC.md §14.2) should hold from connect to disconnect:
 ///
 /// ```no_run
-/// # async fn go(client: holt::HoltClient, lane_dir: &str) -> Result<(), holt::HoltError> {
-/// let mut lease = client.lease(lane_dir, holt::LeaseOptions::default());
+/// # async fn go(client: scruff::ScruffClient, lane_dir: &str) -> Result<(), scruff::ScruffError> {
+/// let mut lease = client.lease(lane_dir, scruff::LeaseOptions::default());
 /// // ... serve the session ...
 /// lease.release().await?;
 /// # Ok(())
@@ -40,13 +40,13 @@ pub struct LeaseOptions {
 /// "nobody leased it" isn't proof nobody's there (SPEC.md §14.2).
 ///
 /// The first heartbeat fires in the background rather than being awaited by
-/// [`HoltClient::lease`](crate::HoltClient::lease) itself — that method
+/// [`ScruffClient::lease`](crate::ScruffClient::lease) itself — that method
 /// isn't async, so a failure to take the lease surfaces on the next
 /// refresh/release call rather than at construction. Call
 /// `client.heartbeat(...)` yourself first if you need the initial take to
 /// be synchronous.
 pub struct Lease {
-    client: HoltClient,
+    client: ScruffClient,
     path: String,
     released: bool,
     cancel_tx: Option<oneshot::Sender<()>>,
@@ -54,7 +54,7 @@ pub struct Lease {
 }
 
 impl Lease {
-    pub(crate) fn new(client: HoltClient, path: String, options: LeaseOptions) -> Self {
+    pub(crate) fn new(client: ScruffClient, path: String, options: LeaseOptions) -> Self {
         let (cancel_tx, cancel_rx) = oneshot::channel();
         let handle = spawn_refresh_loop(client.clone(), path.clone(), options, cancel_rx);
         Self {
@@ -68,7 +68,7 @@ impl Lease {
 
     /// Drops the lease and stops refreshing it. Safe to call more than
     /// once.
-    pub async fn release(&mut self) -> Result<(), HoltError> {
+    pub async fn release(&mut self) -> Result<(), ScruffError> {
         if self.released {
             return Ok(());
         }
@@ -98,7 +98,7 @@ impl Drop for Lease {
 }
 
 fn spawn_refresh_loop(
-    client: HoltClient,
+    client: ScruffClient,
     path: String,
     options: LeaseOptions,
     mut cancel_rx: oneshot::Receiver<()>,

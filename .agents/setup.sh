@@ -2,8 +2,8 @@
 # .agents/setup.sh — the one session bootstrap, for every harness.
 #
 # Cloud agent sessions (Claude Code on the web, Codex cloud, an OpenCode
-# container, CI) boot a bare Linux box with no Nix. holt is consumed as a flake —
-# the rice takes `github:hausfold/holt` as an input and ships the binary on PATH
+# container, CI) boot a bare Linux box with no Nix. scruff is consumed as a flake —
+# the rice takes `github:hausfold/scruff` as an input and ships the binary on PATH
 # — so without Nix a session can't evaluate `flake.nix` or regenerate
 # `flake.lock`. This installs Determinate Nix once, puts it on PATH for the rest
 # of the session, and points Nix at the agent proxy's CA.

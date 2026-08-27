@@ -1,6 +1,6 @@
 # AGENTS.md
 
-**holt** — the worktree-lifecycle substrate for parallel coding agents. A single
+**scruff** — the worktree-lifecycle substrate for parallel coding agents. A single
 Go binary plus five SDKs, published from this one repo under one version number.
 
 **This file is the one set of instructions, for every agent** — Claude Code,
@@ -13,9 +13,9 @@ of record, [`docs/lifecycle.md`](./docs/lifecycle.md) the state machine,
 [`docs/reference.md`](./docs/reference.md) config and exit codes,
 [`docs/releasing.md`](./docs/releasing.md) the six-artifact release.
 
-## What holt is, and what it must never become
+## What scruff is, and what it must never become
 
-holt's product is **not** "make worktrees" — every vendor ships creation and
+scruff's product is **not** "make worktrees" — every vendor ships creation and
 stops there. It is the **state machine and its safety invariants**. Three of
 them, in priority order; everything else in this repo is subordinate:
 
@@ -36,7 +36,7 @@ restart, no fullscreen TUI, no hosted anything, no knowledge of your build syste
 agent you run. "Substrate, not orchestrator" is the whole thesis — the actions at
 each transition belong to the user.
 
-**holt is repo-agnostic and client-agnostic.** No repo-local adapters, no
+**scruff is repo-agnostic and client-agnostic.** No repo-local adapters, no
 `bench`, no haus paths, no *new* code that assumes the consumer is the family.
 Adapters are template-driven (`SPEC.md` §5); if a need can only be met by
 hardcoding one caller, it belongs in that caller.
@@ -57,7 +57,7 @@ A **lane** is the unit — one agent's branch, checkout and pane, `create` →
 |---|---|
 | **worktree** | git's — the checkout on disk. A *parked* lane has none, so it can't name the unit. |
 | **agent** | the **client**: `claude`, `codex`, `opencode`, `pi`. A lane *runs* an agent; it is not one. |
-| **session** | somebody else's — the multiplexer's, or a client's transcript. holt never names its own unit this. |
+| **session** | somebody else's — the multiplexer's, or a client's transcript. scruff never names its own unit this. |
 
 `pane` is available, and is exactly what `occupied` reports.
 
@@ -76,17 +76,17 @@ freeze. See below.
 ## The agent surface (`ai/`) — two skills
 
 **Don't confuse it with this file.** `AGENTS.md` is for an agent working **on**
-holt, from a checkout. `ai/` is for an agent **using** it — on a stranger's
+scruff, from a checkout. `ai/` is for an agent **using** it — on a stranger's
 machine, with no checkout, when their human says *"what worktrees do I have
 open?"* or *"park this"*.
 
 | file | skill | teaches |
 |---|---|---|
-| [`ai/SKILL.md`](./ai/SKILL.md) | `holt` | the lifecycle: verbs, the six exit codes, the `--json` fields, and when the answer is to do nothing |
-| [`ai/handoff/SKILL.md`](./ai/handoff/SKILL.md) | `handoff` | the one thing with no verb — how to write the brief a cold session can act on, ending on the clipboard or in `holt spawn --prompt-file` |
+| [`ai/SKILL.md`](./ai/SKILL.md) | `scruff` | the lifecycle: verbs, the six exit codes, the `--json` fields, and when the answer is to do nothing |
+| [`ai/handoff/SKILL.md`](./ai/handoff/SKILL.md) | `handoff` | the one thing with no verb — how to write the brief a cold session can act on, ending on the clipboard or in `scruff spawn --prompt-file` |
 
-**Why `handoff` is holt's and not a consumer's.** The lane it opens is holt's
-unit, and `--prompt` is holt's flag; the brief is that flag's argument, and an
+**Why `handoff` is scruff's and not a consumer's.** The lane it opens is scruff's
+unit, and `--prompt` is scruff's flag; the brief is that flag's argument, and an
 argument nobody knows how to write is a flag nobody uses well. It stays inside
 the non-goals: it describes handing work **over** and stops there — no
 scheduling, no supervision, no opinion about what the receiving agent then does.
@@ -104,22 +104,22 @@ The rest of this section is about both files.
 
 It is bound by the family standard, [the workshop's
 `docs/agent-surface.md`](https://github.com/hausfold/workshop/blob/main/docs/agent-surface.md) —
-≤150 lines, no flag dumps (that's `holt --help`), and the `description`
-frontmatter names **the phrases a user says**, not the features holt has. A
+≤150 lines, no flag dumps (that's `scruff --help`), and the `description`
+frontmatter names **the phrases a user says**, not the features scruff has. A
 description written as a feature summary is true, well written, and never loads.
 
-The vocabulary rule above still binds it: holt's own unit is a **lane**, never a
+The vocabulary rule above still binds it: scruff's own unit is a **lane**, never a
 "session". The exception is the quoted user phrases — *"resume that session from
 yesterday"* is what a person says, and matching it is the whole job of the
 `description`.
 
 Two things it carries that no other family skill does, and both are the whole
-point of holt existing:
+point of scruff existing:
 
-- **`holt park`, never `git stash`.** The stash stack is shared across every
+- **`scruff park`, never `git stash`.** The stash stack is shared across every
   worktree of a repo, so parallel agents pop each other's entries. The skill's
   `description` says this out loud precisely so it loads on the word "stash".
-- **Exit 2 is holt working, not holt failing.** An agent that reads "refused for
+- **Exit 2 is scruff working, not scruff failing.** An agent that reads "refused for
   safety" as an error and reaches for `git worktree remove` has defeated
   invariant 2 from the outside. The skill says so twice.
 
@@ -129,17 +129,17 @@ with `null` meaning *undetermined*, and `warnings` being the only channel a
 degraded run has under `--json`. Those are SPEC 2.2's own warnings, aimed at the
 newest consumer.
 
-`nix/skill.nix` ships both as `pkgs.holt-skill` (`$out/holt/SKILL.md` and
+`nix/skill.nix` ships both as `pkgs.scruff-skill` (`$out/scruff/SKILL.md` and
 `$out/handoff/SKILL.md`, one directory per skill) — its own derivation so a
 consumer can install them with no Go toolchain and no binary. It does **not** isolate the Go build's hash: `src = ./.` is unfiltered,
-so `ai/` is inside that closure and a prose edit moves holt's drvPath either way
+so `ai/` is inside that closure and a prose edit moves scruff's drvPath either way
 (measured, not assumed). The build runs the same guards over each: it fails if the
 frontmatter is missing or unterminated, if `name:` disagrees with the directory,
 or if the file passes 150 lines — each of those produces a skill that installs,
 lists, and is never loaded.
 
 ⚠️ **The verb's name is not settled.** This file and the family standard say
-`holt skill`; `SPEC.md` §14.5 already reserves the same capability as `holt docs
+`scruff skill`; `SPEC.md` §14.5 already reserves the same capability as `scruff docs
 agent [--format=md|json]`, with a `{version, body}` envelope. Different verb,
 different output shape, same job — resolve it before either is implemented,
 not by whichever lands first.
@@ -157,27 +157,29 @@ are downstream consumers of them.
 number**. Five clients agreeing about one wire format is the invariant the SDK CI
 job exists to protect, so a change to one SDK's surface is a change to all five.
 
-- **`sdk/swift` is the source; [`hausfold/holt-swift`](https://github.com/hausfold/holt-swift)
+- **`sdk/swift` is the source; [`hausfold/scruff-swift`](https://github.com/hausfold/scruff-swift)
   is a generated mirror** (`git subtree split`). Never edit the mirror — changes
   there are overwritten on the next sync. `release.yml` runs
   `sdk/swift/sync-mirror.sh --tag <version>` at every `v*` tag, and a tag on the
   mirror *is* the SwiftPM release, so don't hand-run it after a release. The
   bare form (no `--tag`) mirrors `main` only, and exists for one case: getting
   an unreleased change in front of a consumer pinning a branch.
-- **The Go module path is `github.com/hausfold/holt`**, in `go.mod`,
+- **The Go module path is `github.com/hausfold/scruff`**, in `go.mod`,
   `sdk/go/go.mod` and the `Makefile`'s `LDFLAGS`. Keep the three spellings in
   step — a mismatch between `go.mod` and `LDFLAGS` builds fine and reports the
-  wrong version. ⚠️ Go's proxy is immutable, and the path moved here after
-  `v0.2.8`: everything up to that tag stays resolvable under the previous owner
-  forever, and nothing released after it is. An importer on an old path either
-  edits its import line or pins v0.2.8.
+  wrong version. ⚠️ Go's proxy is immutable and this path has moved **twice** —
+  `github.com/nebelhaus/holt` through `v0.2.8` (the org rename),
+  `github.com/hausfold/holt` through `v0.5.0` (the scruff rename), and
+  `github.com/hausfold/scruff` from `v1.0.0`. Each old path stays resolvable at
+  the tags published under it forever, and at nothing after. An importer on one
+  either edits its import line or pins that path's last tag.
 
 ## Verify by running it
 
 ```sh
 make check        # gofmt -w + go vet + go test ./... + the bats acceptance suite
 make test         # just the suites
-make build        # ./holt
+make build        # ./scruff
 ```
 
 ⚠️ **`make check` covers the CLI only — never the SDKs.** `sdk/go` has its own
@@ -189,7 +191,7 @@ own suite from its directory — `bun test`, `pytest`, `cargo test`, `swift test
 step is `gofmt -w`: it **rewrites** your tree, while CI gates on `gofmt -l`. A
 suddenly-dirty tree after `make check` is that, not a bug.
 
-The acceptance suite (`test/holt.bats`) is **black-box**: it drives the built
+The acceptance suite (`test/scruff.bats`) is **black-box**: it drives the built
 binary with shim `gh`/`lsof` on `PATH`, inherited from the bash predecessor so
 the contract is provably unmoved. `go test ./...` covers the one thing a
 black-box suite structurally can't — code that rewrites a file belonging to
@@ -202,10 +204,10 @@ only passes on one is not done.
 **Never tag by hand.** Releases are cut from the workshop:
 
 ```sh
-bench release holt <X.Y.Z>      # stamps every manifest, commits, tags, watches CI
+bench release scruff <X.Y.Z>      # stamps every manifest, commits, tags, watches CI
 ```
 
-holt is the family's **one semver repo**, and it's forced, not chosen: three of
+scruff is the family's **one semver repo**, and it's forced, not chosen: three of
 the five registries are immutable and already hold published numbers, so the
 version is a compatibility contract rather than a date. Picking the bump means
 reading `git diff <last-tag>..main -- sdk/` against the *published SDK surface* —
@@ -225,24 +227,24 @@ Standing rules for any agent working here:
   the code is gone by the time anyone feel-tests it, so `gh pr view` has to carry
   the recovery context. For this repo, **Verify** means the command someone else
   can run, and **Watch out** names the invariant or frozen contract you went near.
-- Working on another repo from a holt pane? `holt child <repo>` — never a raw
-  `git worktree add`, which skips the registry (holt's own dogfooding rule, and
+- Working on another repo from a scruff pane? `scruff child <repo>` — never a raw
+  `git worktree add`, which skips the registry (scruff's own dogfooding rule, and
   the reason the statusline can see a child's PR at all).
 
-## Where holt sits in the family
+## Where scruff sits in the family
 
-The layer ([hausfold/haus](https://github.com/hausfold/haus)) takes holt as a
-flake input and ships it on `PATH`. Its **⌘↵** lane chord runs `holt new` for
+The layer ([hausfold/haus](https://github.com/hausfold/haus)) takes scruff as a
+flake input and ships it on `PATH`. Its **⌘↵** lane chord runs `scruff new` for
 every client — claude, codex, opencode and pi alike; `claude --worktree` is
 deliberately not the path it takes, because that runs the client in the pane it
 was launched from and never asks `[hooks] open`, the seam a lane's own window
-arrives through. The `WorktreeCreate`/`WorktreeRemove` hooks still call `holt
-hook create` / `holt hook remove`, so a hand-run `--worktree` lands in the
+arrives through. The `WorktreeCreate`/`WorktreeRemove` hooks still call `scruff
+hook create` / `scruff hook remove`, so a hand-run `--worktree` lands in the
 registry too. Either way this repo is the plumbing.
 
-holt IS a family repo for *shipping* purposes — it's in the workshop's `FAMILY`,
+scruff IS a family repo for *shipping* purposes — it's in the workshop's `FAMILY`,
 so a merged commit here is invisible to haus until `bench ship` bumps that lock.
-But the dependency runs **one way only**: haus consumes holt, and new code here
+But the dependency runs **one way only**: haus consumes scruff, and new code here
 doesn't get to know haus exists (the two grandfathered exceptions are named
-above). The day holt needs a *third* hausfold-shaped special case is the day the
+above). The day scruff needs a *third* hausfold-shaped special case is the day the
 abstraction was wrong.

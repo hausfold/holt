@@ -1,8 +1,8 @@
-# Project-scoped Codex config for holt.
+# Project-scoped Codex config for scruff.
 #
 # Instructions: AGENTS.md at the repo root — Codex reads it natively, no wiring.
 # Flows: none repo-local; the cross-repo ones (/ship, /docs-sync, /release) live
-# in the workshop, because they move changes BETWEEN repos and holt is
+# in the workshop, because they move changes BETWEEN repos and scruff is
 # deliberately ignorant of the family. Both are shared with every other client;
 # see .agents/README.md.
 #

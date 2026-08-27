@@ -29,7 +29,7 @@ body:
   - type: dropdown
     id: area
     attributes:
-      label: Where in holt?
+      label: Where in scruff?
       description: A guess is fine. It only routes the first look.
       options:
         - creating a lane
@@ -50,7 +50,7 @@ body:
       label: |-
         Version and platform
       description: |-
-        `holt --version`, your OS, and which client you spawned the lane with (Claude Code, Codex, OpenCode…).
+        `scruff --version`, your OS, and which client you spawned the lane with (Claude Code, Codex, OpenCode…).
       render: text
     validations:
       required: false

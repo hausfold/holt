@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hausfold/holt/internal/gitx"
-	"github.com/hausfold/holt/internal/occupancy"
-	"github.com/hausfold/holt/internal/registry"
+	"github.com/hausfold/scruff/internal/gitx"
+	"github.com/hausfold/scruff/internal/occupancy"
+	"github.com/hausfold/scruff/internal/registry"
 )
 
 type sweepMode int
@@ -17,7 +17,7 @@ const (
 	// could be sitting in is at risk, which is why the listing runs it.
 	sweepParked sweepMode = iota
 	// sweepAll additionally considers live checkouts — clean, landed and
-	// unoccupied ones only. Opt-in, via `holt reap`.
+	// unoccupied ones only. Opt-in, via `scruff reap`.
 	sweepAll
 )
 
@@ -38,10 +38,10 @@ type SweepResult struct {
 // Every `continue` in here is a safety invariant, not an optimisation. The
 // failure direction is always "a branch lingers": a branch that outlives its
 // usefulness is a nuisance, a branch reaped with work still on it is the thing
-// holt exists to never do.
+// scruff exists to never do.
 //
 // What makes a lane reapable is not yet a policy seam (SPEC.md §6.5). It is
-// the one decision here that reaches through THREE of holt's inherited
+// the one decision here that reaches through THREE of scruff's inherited
 // opinions at once — occupancy, dirtiness and landedness — and a seam over the
 // lot of them has to wait for the shape those settle into.
 func (e *Env) reapSweep(mode sweepMode) SweepResult {
@@ -65,7 +65,7 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 		switch entry.State {
 		case Stray:
 			// A husk: the contents are preserved but git has disowned it.
-			// Reported, never swept — `holt <name>` moves it aside and rebuilds.
+			// Reported, never swept — `scruff <name>` moves it aside and rebuilds.
 			res.Strays = append(res.Strays,
 				entry.Name()+" ("+filepath.Base(entry.Main)+") → "+entry.Path)
 			continue
@@ -91,7 +91,7 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 				// and this is the branch that DELETES. Uncertainty resolves to
 				// keep, out loud.
 				res.Dirty = append(res.Dirty, entry.Name()+" ("+filepath.Base(entry.Main)+")"+
-					" — git could not read the checkout, so holt cannot tell whether"+
+					" — git could not read the checkout, so scruff cannot tell whether"+
 					" there is unsaved work in it; nothing is reaped on a guess: "+entry.Path)
 				continue
 			}
@@ -99,7 +99,7 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 				// Say so. Every other refusal in this loop leaves a note, and
 				// this one used to `continue` in silence — so a landed,
 				// unoccupied lane held back by one stray untracked file read as
-				// a lane holt had simply forgotten, with the summary line's
+				// a lane scruff had simply forgotten, with the summary line's
 				// "unmerged, dirty, or in use" left to guess between.
 				res.Dirty = append(res.Dirty, dirtyNote(entry, dirt))
 				continue // uncommitted work — leave it for a human
@@ -117,7 +117,7 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 			_ = e.Reg.Delete(entry.Path)
 			// The lane is gone, so a fin still asking you to go to it is asking
 			// about somewhere that no longer exists — its `Go to lane` action
-			// would run `holt focus` against a name nothing can match. Being
+			// would run `scruff focus` against a name nothing can match. Being
 			// reaped IS this lane's answer, so take the fin down and drop the
 			// marker, which is one of the two shapes nothing else would ever
 			// clear (notify.go's section header has both).
@@ -144,7 +144,7 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 }
 
 // occupiedNote names WHO is standing there, because "a pane is open in it" is a
-// claim holt cannot actually make and the user cannot check.
+// claim scruff cannot actually make and the user cannot check.
 //
 // lsof observes a cwd, not a pane. The two coincide for a terminal and diverge
 // for everything else a checkout accumulates — a dev server, a language server,
@@ -154,7 +154,7 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 // verdict is unchanged either way (invariant 2: occupied ⇒ keep) — what changes
 // is that the evidence outlives the sweep that found it.
 //
-// Deliberately NOT a suggestion to kill anything. holt does not know whose
+// Deliberately NOT a suggestion to kill anything. scruff does not know whose
 // process that is, and the whole point of naming it is that the human can tell.
 func occupiedNote(entry Entry, held []occupancy.Holder) string {
 	return entry.Name() + " (" + filepath.Base(entry.Main) + ")" +
@@ -168,7 +168,7 @@ func occupiedNote(entry Entry, held []occupancy.Holder) string {
 // usually the whole answer (the case that prompted this was one untracked
 // directory a tool had dropped there, obvious junk the moment it was named).
 //
-// Deliberately NOT "holt park it": park commits the tree as a `wip:` commit,
+// Deliberately NOT "scruff park it": park commits the tree as a `wip:` commit,
 // which makes the branch unlanded and moves the lane from this refusal to the
 // next one. The two real ways out are commit it or clean it.
 func dirtyNote(entry Entry, porcelain string) string {
@@ -225,14 +225,14 @@ func porcelainPath(l string) string {
 // instead of silently persisting — and points at the right fix. Three shapes,
 // mutually exclusive, each with its own remedy:
 //
-//   - "moved on" — real work after the merge → `holt reship`.
+//   - "moved on" — real work after the merge → `scruff reship`.
 //   - "diverged" — a stale or sideways tip that never built on what merged (a
 //     second checkout of the same branch that pushed first, a rebase, an amend).
 //     Same nonzero commit count as "moved on" and the opposite remedy: its
 //     content already landed, so reshipping would push and PR what the merge
 //     already superseded. Remove the checkout instead.
 //   - "dead end" — no merged PR at all, and there never will be one, because the
-//     PR was closed unmerged or the repo is archived → `holt drop`.
+//     PR was closed unmerged or the repo is archived → `scruff drop`.
 //
 // The dead-end question is asked LAST and only when the count is zero, so its
 // two forge calls stay off the path every healthy lane walks.
@@ -245,7 +245,7 @@ func (e *Env) noteRelanded(res *SweepResult, entry Entry) {
 		// reads exactly like one still in flight and outlives everything around it.
 		if why := e.deadEnd(entry.Main, entry.Branch); why != "" {
 			res.DeadEnds = append(res.DeadEnds,
-				name+" — "+why+": rescue the commits, or holt drop "+entry.Name())
+				name+" — "+why+": rescue the commits, or scruff drop "+entry.Name())
 		}
 		return
 	}
@@ -257,7 +257,7 @@ func (e *Env) noteRelanded(res *SweepResult, entry Entry) {
 	}
 	res.Relanded = append(res.Relanded,
 		name+" — merged PR #"+itoa(pr)+
-			", "+itoa(n)+" commit(s) since, covered by no PR: holt reship "+entry.Name())
+			", "+itoa(n)+" commit(s) since, covered by no PR: scruff reship "+entry.Name())
 }
 
 // reapBranch deletes a branch, and ONLY once it has provably landed.
@@ -275,7 +275,7 @@ func (e *Env) reapBranch(main, branch string) bool {
 	}
 	// The ledger is written BEFORE the delete and only here, because this is the
 	// single choke point every deletion goes through — the listing's parked
-	// sweep, `holt reap`, and the remove hook all arrive at this function. The
+	// sweep, `scruff reap`, and the remove hook all arrive at this function. The
 	// SHA is only resolvable while the branch still exists, and it is the whole
 	// point: `git branch -D` takes the branch's reflog with it, so without this
 	// line a lane that went away is unrecoverable AND unexplainable.

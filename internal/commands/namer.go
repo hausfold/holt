@@ -10,30 +10,30 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hausfold/holt/internal/config"
-	"github.com/hausfold/holt/internal/gitx"
-	"github.com/hausfold/holt/internal/ui"
+	"github.com/hausfold/scruff/internal/config"
+	"github.com/hausfold/scruff/internal/gitx"
+	"github.com/hausfold/scruff/internal/ui"
 )
 
-// Naming a lane after its task, for the one case where holt has a task to read:
+// Naming a lane after its task, for the one case where scruff has a task to read:
 // a lane opened on a first-turn prompt (`--prompt`/`--prompt-file`) with no name
 // given. `mobile-nav-jitter` is worth more in a listing than `cozy-otter`, and
 // the brief is right there.
 //
-// Three things keep this from becoming something holt shouldn't be:
+// Three things keep this from becoming something scruff shouldn't be:
 //
 //   - It is OFF unless `namer = "<id>"` is in the config. No key, no processes,
 //     no behaviour change from before it existed. A lane that was going to be
 //     called `cozy-otter` still is.
-//   - holt does not talk to a model. It runs ONE argv from an adapter file
+//   - scruff does not talk to a model. It runs ONE argv from an adapter file
 //     (SPEC.md §5.6) and reads a word off stdout — so there is no HTTP client
-//     here, no vendor, and no API key for holt to hold. The built-in runs the
+//     here, no vendor, and no API key for scruff to hold. The built-in runs the
 //     `claude` binary that a machine spawning agents already has, which means
 //     the naming call is authenticated the same way the agents are. Pointing it
 //     at a local model, or at a script with no model at all, is a file.
 //   - It is COSMETIC and it cannot fail the lane. Every failure — no adapter,
 //     a namer that isn't installed, a timeout, prose instead of a name — is a
-//     warning and a fall back to randomName(). A lane holt could not name is
+//     warning and a fall back to randomName(). A lane scruff could not name is
 //     still a lane; refusing to create it would trade invariant 1 for a nicety.
 //
 // The output is UNTRUSTED text on its way to becoming a branch name and a
@@ -113,9 +113,9 @@ func (e *Env) nameFromPrompt(main, prompt string) string {
 //
 // Three deliberate choices about the child's file descriptors and lifetime:
 //
-//   - fd 0 is /dev/null (a nil Stdin), never holt's own. Inheriting it would
+//   - fd 0 is /dev/null (a nil Stdin), never scruff's own. Inheriting it would
 //     let a client that waits on a non-tty stdin add seconds to every spawn,
-//     and `holt new --prompt-file -` has ALREADY drained fd 0 to read the brief
+//     and `scruff new --prompt-file -` has ALREADY drained fd 0 to read the brief
 //     — a namer must not be able to touch what the client is about to be given
 //     back (see restoreStdin).
 //   - stderr is captured rather than inherited: a namer's progress chatter is
@@ -123,7 +123,7 @@ func (e *Env) nameFromPrompt(main, prompt string) string {
 //     line comes back attached to the failure, which is when it matters.
 //   - WaitDelay bounds the wait for a killed process's grandchildren to let go
 //     of the pipes. The clients this runs are node and their subprocesses
-//     outlive them; without it a timeout could still hang holt on the read.
+//     outlive them; without it a timeout could still hang scruff on the read.
 func runNamer(argv []string, cwd string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), namerTimeout)
 	defer cancel()
@@ -152,7 +152,7 @@ func runNamer(argv []string, cwd string) (string, error) {
 // namingRequest is the whole prompt the namer is given: what to answer, what
 // not to say, what is already taken, and the task.
 //
-// The taken names are in there because holt's own collision handling is a
+// The taken names are in there because scruff's own collision handling is a
 // numeric suffix — `freeName` turns a repeat into `fix-mobile-2`, which is
 // correct and useless to read. A namer that can see the neighbours picks a
 // different third word instead, and that is the whole reason a listing of six

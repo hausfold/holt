@@ -1,9 +1,9 @@
-package holt
+package scruff
 
-// Wire types for holt's frozen public contracts — SPEC.md §2.2 (`--json`) and
+// Wire types for scruff's frozen public contracts — SPEC.md §2.2 (`--json`) and
 // §14.3 step 2 (`watch --json`). Hand-ported from the Go source of truth
 // (internal/commands/json.go, internal/commands/watch.go) rather than
-// generated, because holt has no `go generate` step yet for this — see the
+// generated, because scruff has no `go generate` step yet for this — see the
 // SDK README for the drift risk that implies. Struct tags are the actual
 // contract; keep them byte-identical to json.go's, not just field names.
 //
@@ -13,7 +13,7 @@ package holt
 // Do not add them here until json.go does; a field that exists in the type
 // but never arrives on the wire is worse than one that's simply missing.
 
-// ExitCode is holt's exit-code contract (SPEC.md §2.4). Refused vs Usage is
+// ExitCode is scruff's exit-code contract (SPEC.md §2.4). Refused vs Usage is
 // the one that matters to a caller: "I declined to destroy something" vs
 // "you asked wrong".
 type ExitCode int
@@ -49,7 +49,7 @@ const (
 	LandedContained LandedVerdict = "contained"
 )
 
-// Landed carries how (and how confidently) holt determined a branch's
+// Landed carries how (and how confidently) scruff determined a branch's
 // landed-ness. Via is empty when Verdict didn't need one (e.g. "no").
 type Landed struct {
 	Verdict    LandedVerdict `json:"verdict"`
@@ -60,7 +60,7 @@ type Landed struct {
 // PostMergeAhead is a lane's commit count past an already-merged PR.
 type PostMergeAhead struct {
 	Commits int `json:"commits"`
-	// PR is the pull request number, or 0 when there isn't one — holt
+	// PR is the pull request number, or 0 when there isn't one — scruff
 	// doesn't null this field (internal/commands/json.go's jsonPostMerge),
 	// unlike Envelope-level `pr`. Treat 0 as "none" here, not as PR #0.
 	PR int `json:"pr"`
@@ -72,7 +72,7 @@ type PostMergeAhead struct {
 //
 // Occupied and Dirty are *bool on purpose: nil means "not determined" (no
 // lsof, no forge, cache miss), which is categorically different from
-// false. Every consumer bug in holt's bash-era statusline came from
+// false. Every consumer bug in scruff's bash-era statusline came from
 // collapsing that nil into false — do not do that here either.
 type Lane struct {
 	Name   string `json:"name"`
@@ -92,28 +92,28 @@ type Lane struct {
 	LastCommit     string         `json:"last_commit"`
 }
 
-// Envelope is the `holt --json` / `holt list --json` payload — byte-
+// Envelope is the `scruff --json` / `scruff list --json` payload — byte-
 // identical between the two spellings (SPEC.md §2.2).
 type Envelope struct {
-	Holt     string   `json:"holt"`
+	Scruff   string   `json:"scruff"`
 	Schema   int      `json:"schema"`
 	Lanes    []Lane   `json:"lanes"`
 	Warnings []string `json:"warnings"`
 }
 
 // ---------------------------------------------------------------------------
-// `holt watch --json` — SPEC.md §14.3 step 2, §14.4.
+// `scruff watch --json` — SPEC.md §14.3 step 2, §14.4.
 
 // WatchKind is the closed set of lines a watch stream can emit. Additions
 // are minor, removals major — same discipline as LaneState. An unknown
-// kind is noise to ignore, not an error to fail on; that's what lets holt
+// kind is noise to ignore, not an error to fail on; that's what lets scruff
 // add `landed` / `source: "forge"` later without breaking a Go build
 // pinned to schema 1 (SPEC.md §14.4).
 type WatchKind string
 
 const (
 	// WatchHello is the first line of every stream: a version header, not
-	// an event. Only Kind, Seq, Holt, Schema and Capabilities are set.
+	// an event. Only Kind, Seq, Scruff, Schema and Capabilities are set.
 	WatchHello WatchKind = "hello"
 	// WatchSync replays one already-live lane during the initial burst.
 	WatchSync WatchKind = "sync"
@@ -129,7 +129,7 @@ const (
 	WatchWarning WatchKind = "warning"
 )
 
-// WatchLine is one line of `holt watch --json`. It is a single flat struct
+// WatchLine is one line of `scruff watch --json`. It is a single flat struct
 // rather than a tagged union because that is exactly its wire shape — Kind
 // says which of the other fields are populated, mirroring
 // encoding/json's normal "one struct, some fields empty" idiom rather than
@@ -139,18 +139,18 @@ type WatchLine struct {
 	Kind WatchKind `json:"kind"`
 	// Seq is monotonic across the WHOLE stream, hello included — lets a
 	// consumer fanning this out over its own transport (e.g. websockets)
-	// detect a dropped line without holt knowing anything about that
+	// detect a dropped line without scruff knowing anything about that
 	// transport.
 	Seq int `json:"seq"`
 
 	// Hello-only fields.
-	Holt         string   `json:"holt,omitempty"`
+	Scruff       string   `json:"scruff,omitempty"`
 	Schema       int      `json:"schema,omitempty"`
 	Capabilities []string `json:"capabilities,omitempty"`
 
 	// Event fields (everything but hello).
 	//
-	// Ts is RFC3339 UTC: when THIS holt process observed the change, not
+	// Ts is RFC3339 UTC: when THIS scruff process observed the change, not
 	// necessarily when it happened at the source. Absent on hello.
 	Ts string `json:"ts,omitempty"`
 	// Source names which provider produced the event. v1 only ever writes
@@ -169,7 +169,7 @@ type WatchLine struct {
 func (l WatchLine) IsHello() bool { return l.Kind == WatchHello }
 
 // WatchEvent is every line of the stream EXCEPT the hello header: the
-// hello-only fields (Holt, Schema, Capabilities) are gone rather than left
+// hello-only fields (Scruff, Schema, Capabilities) are gone rather than left
 // zero, so a value of this type can't be a version header. WatchLane yields
 // these — a stream already scoped to one lane never carries a hello, and a
 // caller shouldn't have to re-prove that before reading Lane. This is the
@@ -178,7 +178,7 @@ func (l WatchLine) IsHello() bool { return l.Kind == WatchHello }
 //
 // Kind stays a WatchKind rather than a narrower "every kind but hello"
 // type: Go has no literal-union types to express that set with, and
-// reusing WatchKind keeps `ev.Kind == holt.WatchCreated` compiling
+// reusing WatchKind keeps `ev.Kind == scruff.WatchCreated` compiling
 // unchanged. WatchHello simply never appears here.
 type WatchEvent struct {
 	Kind WatchKind `json:"kind"`
@@ -187,7 +187,7 @@ type WatchEvent struct {
 	// expected on a stream this narrow. See WatchLine.Seq.
 	Seq int `json:"seq"`
 
-	// Ts is RFC3339 UTC: when THIS holt process observed the change, not
+	// Ts is RFC3339 UTC: when THIS scruff process observed the change, not
 	// necessarily when it happened at the source.
 	Ts string `json:"ts,omitempty"`
 	// Source names which provider produced the event. v1 only ever writes

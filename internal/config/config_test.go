@@ -12,10 +12,10 @@ func load(t *testing.T, body string) (*Config, []string) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
-	if err := os.MkdirAll(filepath.Join(dir, "holt"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "scruff"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "holt", "config.toml"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "scruff", "config.toml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return Load()
@@ -38,9 +38,9 @@ func TestLoadParsesKeysAndHooks(t *testing.T) {
 agent = "codex"   # trailing comment
 
 [hooks]
-resume   = "/usr/local/bin/holt-resume"
-landed   = ["/usr/local/bin/holt-landed", "--strict", "a,b"]
-preserve = '/usr/local/bin/holt-preserve'
+resume   = "/usr/local/bin/scruff-resume"
+landed   = ["/usr/local/bin/scruff-landed", "--strict", "a,b"]
+preserve = '/usr/local/bin/scruff-preserve'
 `)
 	if len(warnings) != 0 {
 		t.Fatalf("clean config produced warnings: %v", warnings)
@@ -48,10 +48,10 @@ preserve = '/usr/local/bin/holt-preserve'
 	if cfg.Agent != "codex" {
 		t.Fatalf("Agent = %q, want codex (the trailing comment must not survive)", cfg.Agent)
 	}
-	if got := cfg.Hooks["resume"]; !reflect.DeepEqual(got, []string{"/usr/local/bin/holt-resume"}) {
+	if got := cfg.Hooks["resume"]; !reflect.DeepEqual(got, []string{"/usr/local/bin/scruff-resume"}) {
 		t.Fatalf("a bare string hook must become a one-element argv, got %q", got)
 	}
-	want := []string{"/usr/local/bin/holt-landed", "--strict", "a,b"}
+	want := []string{"/usr/local/bin/scruff-landed", "--strict", "a,b"}
 	if got := cfg.Hooks["landed"]; !reflect.DeepEqual(got, want) {
 		t.Fatalf("Hooks[landed] = %q, want %q (a comma inside quotes is data)", got, want)
 	}
@@ -60,7 +60,7 @@ preserve = '/usr/local/bin/holt-preserve'
 	}
 }
 
-// A typo in the config must cost you the line, not the pane. holt runs on the
+// A typo in the config must cost you the line, not the pane. scruff runs on the
 // path of every worktree open, so a hard parse failure is a machine that won't
 // spawn.
 func TestLoadBadLineWarnsAndContinues(t *testing.T) {
@@ -155,11 +155,11 @@ func TestAskIgnoresNonJSONStdout(t *testing.T) {
 	}
 }
 
-// A hook's env must never hand a lane's lifecycle state to holt as its state
+// A hook's env must never hand a lane's lifecycle state to scruff as its state
 // DIRECTORY. It did once: `open` exported HOLT_STATE=live, the pane it spawned
-// inherited it, and every holt run in that pane wrote its machine-global state
+// inherited it, and every scruff run in that pane wrote its machine-global state
 // to the relative path "live" under the cwd — routinely a git checkout.
-func TestHookEnvRenamesStateAwayFromHoltsOwnStateDir(t *testing.T) {
+func TestHookEnvRenamesStateAwayFromScruffsOwnStateDir(t *testing.T) {
 	env := hookEnv("open", map[string]string{
 		"state": "live",
 		"agent": "claude",

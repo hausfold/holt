@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-// BuiltinNamer is the one namer id holt answers for with no adapter file.
+// BuiltinNamer is the one namer id scruff answers for with no adapter file.
 const BuiltinNamer = "claude"
 
 // BuiltinNamerTOML is that built-in, spelled as the file that would replace it.
@@ -34,10 +34,10 @@ name = ["claude", "-p", "--model", "haiku", "--strict-mcp-config", "--disable-sl
 // NamerAdapter is a `kind = "namer"` adapter (SPEC.md §5.6): one argv that
 // turns a lane's first-turn task into a name for the lane.
 //
-// The command is handed holt's whole naming REQUEST as `{{.Prompt}}` — the
+// The command is handed scruff's whole naming REQUEST as `{{.Prompt}}` — the
 // instruction, the repo, the names already taken and the task itself, composed
-// by holt — and answers on stdout with the name and nothing else. holt owns the
-// wording so that name quality is holt's problem rather than every adapter
+// by scruff — and answers on stdout with the name and nothing else. scruff owns the
+// wording so that name quality is scruff's problem rather than every adapter
 // file's; an adapter that wants its own wording wraps a script here and reshapes
 // the text it was given.
 type NamerAdapter struct {
@@ -51,7 +51,7 @@ type NamerAdapter struct {
 // backends behave and for the same reason: a namer is named explicitly in the
 // config, so a typo'd one has to say so rather than quietly leaving lanes
 // unnamed. What the CALLER does with that error is the softer half — naming is
-// cosmetic, so `holt new` reports it and falls back to a random name rather
+// cosmetic, so `scruff new` reports it and falls back to a random name rather
 // than refusing to make the lane.
 func LoadNamerAdapter(id string) (*NamerAdapter, error) {
 	dir := Dir()

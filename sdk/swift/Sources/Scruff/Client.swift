@@ -1,16 +1,16 @@
 import Foundation
 
-/// Options for constructing a `HoltClient`.
-public struct HoltClientOptions: Sendable {
-    /// Path to the holt binary, or a bare name resolved on `PATH`. Defaults
-    /// to `"holt"`.
+/// Options for constructing a `ScruffClient`.
+public struct ScruffClientOptions: Sendable {
+    /// Path to the scruff binary, or a bare name resolved on `PATH`. Defaults
+    /// to `"scruff"`.
     public var bin: String?
-    /// Working directory every command runs from — most of holt's commands
-    /// are cwd-sensitive (`new`, `park`, a bare `holt <name>`). Defaults to
+    /// Working directory every command runs from — most of scruff's commands
+    /// are cwd-sensitive (`new`, `park`, a bare `scruff <name>`). Defaults to
     /// the SDK process's own cwd.
     public var cwd: String?
     /// Extra environment variables, merged over the current process's env.
-    /// Useful for `HOLT_AGENT`, `HOLT_OCCUPANCY=lease`.
+    /// Useful for `SCRUFF_AGENT`, `SCRUFF_OCCUPANCY=lease`.
     public var env: [String: String?]?
 
     public init(bin: String? = nil, cwd: String? = nil, env: [String: String?]? = nil) {
@@ -20,7 +20,7 @@ public struct HoltClientOptions: Sendable {
     }
 }
 
-/// A thin client over the `holt` binary. Every method shells out — there
+/// A thin client over the `scruff` binary. Every method shells out — there
 /// is no daemon, no port, no socket (SPEC.md §14.1) — so this is a value
 /// type holding nothing but the options each call needs, cheap to
 /// construct as often as you like.
@@ -29,22 +29,22 @@ public struct HoltClientOptions: Sendable {
 /// process's stdio and can hand off the terminal to a coding agent; every
 /// other method captures output and returns. Mixing them up matters: see
 /// each method's doc comment.
-public struct HoltClient: Sendable {
+public struct ScruffClient: Sendable {
     let opts: RunOptions
 
-    public init(options: HoltClientOptions = HoltClientOptions()) {
+    public init(options: ScruffClientOptions = ScruffClientOptions()) {
         self.opts = RunOptions(bin: options.bin, cwd: options.cwd, env: options.env)
     }
 
-    /// `holt --json` / `holt list --json` — byte-identical (SPEC.md §2.2).
-    /// The full snapshot: every live/parked lane, across every repo holt
+    /// `scruff --json` / `scruff list --json` — byte-identical (SPEC.md §2.2).
+    /// The full snapshot: every live/parked lane, across every repo scruff
     /// knows about. Poll this for landedness and PR state; use `watch()`
     /// for everything else, since it's push rather than poll.
-    public func list() async throws -> HoltEnvelope {
+    public func list() async throws -> ScruffEnvelope {
         try await runJSON(["--json"], options: opts)
     }
 
-    /// `holt watch --json` as an `AsyncThrowingStream` of typed lines — a
+    /// `scruff watch --json` as an `AsyncThrowingStream` of typed lines — a
     /// `.hello`, then a `.sync` burst for every lane already alive,
     /// `.ready`, then live changes for as long as you keep iterating. Stop
     /// iterating (`break`, or let the `for try await` loop's task be
@@ -55,7 +55,7 @@ public struct HoltClient: Sendable {
     /// scoped to one lane's `path`.
     ///
     /// ```swift
-    /// for try await line in holt.watch() {
+    /// for try await line in scruff.watch() {
     ///     if case .event(let event) = line, event.kind == .created {
     ///         print("new lane:", event.lane?.name ?? "?")
     ///     }
@@ -79,10 +79,10 @@ public struct HoltClient: Sendable {
     /// takes its own `RunOptions`; this one carries the client's
     /// bin/cwd/env.
     public func watchLane(path: String) -> AsyncThrowingStream<WatchEvent, Error> {
-        Holt.watchLane(path: path, options: opts)
+        Scruff.watchLane(path: path, options: opts)
     }
 
-    /// `holt child <repo> [name]` — a lane on ANOTHER repo, registered as a
+    /// `scruff child <repo> [name]` — a lane on ANOTHER repo, registered as a
     /// child of `cwd`. Prints only the new checkout's path on stdout
     /// (SPEC.md §2.3's "only the path" discipline extends here too) and
     /// never execs a client, which is what makes it the right primitive
@@ -95,7 +95,7 @@ public struct HoltClient: Sendable {
         return result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// `holt spawn <repo> <name> [agent]` — a named lane for a caller with
+    /// `scruff spawn <repo> <name> [agent]` — a named lane for a caller with
     /// no pane of its own (a scheduler, a web backend). Like `child`, only
     /// ever creates the lane and prints its path; never execs.
     public func spawn(_ repoPath: String, name: String, agent: String? = nil) async throws -> String {
@@ -105,7 +105,7 @@ public struct HoltClient: Sendable {
         return result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// `holt <name>` / `holt resume <name>` with stdout captured rather
+    /// `scruff <name>` / `scruff resume <name>` with stdout captured rather
     /// than a terminal — which means the Go binary's own TTY check
     /// (`ui.IsTTY`) sees a pipe and, by design, never execs a client. It
     /// rebuilds the checkout if needed and returns the human-readable
@@ -117,7 +117,7 @@ public struct HoltClient: Sendable {
         try await run(["resume", name], options: opts).stdout
     }
 
-    /// `holt park [label]` — commits the working tree as one `wip:` commit
+    /// `scruff park [label]` — commits the working tree as one `wip:` commit
     /// on the current branch. Never touches the shared stash stack
     /// (README's "park, not git stash" section) — this is the one safe
     /// way for concurrent lanes to set work aside.
@@ -127,22 +127,22 @@ public struct HoltClient: Sendable {
         _ = try await run(args, options: opts)
     }
 
-    /// `holt unpark` — reverses the most recent `park`, putting its
-    /// changes back uncommitted. Throws `HoltError` with `.refused == true`
-    /// if that commit is already pushed (holt will not rewrite published
+    /// `scruff unpark` — reverses the most recent `park`, putting its
+    /// changes back uncommitted. Throws `ScruffError` with `.refused == true`
+    /// if that commit is already pushed (scruff will not rewrite published
     /// history) or HEAD isn't a parked commit.
     public func unpark() async throws {
         _ = try await run(["unpark"], options: opts)
     }
 
-    /// `holt reap` — sweeps every LANDED lane nobody is standing in
+    /// `scruff reap` — sweeps every LANDED lane nobody is standing in
     /// (occupied, per `heartbeat`/`lsof`, always wins). Never removes the
-    /// checkout holt is being run from, and never removes a stray.
+    /// checkout scruff is being run from, and never removes a stray.
     public func reap() async throws {
         _ = try await run(["reap"], options: opts)
     }
 
-    /// `holt reship [name]` — pushes a branch that outran its already-
+    /// `scruff reship [name]` — pushes a branch that outran its already-
     /// merged PR, and opens the follow-up. Throws with `.degraded == true`
     /// if `gh` itself is unavailable.
     public func reship(_ name: String? = nil) async throws {
@@ -151,9 +151,9 @@ public struct HoltClient: Sendable {
         _ = try await run(args, options: opts)
     }
 
-    /// `holt heartbeat [path] [--pid N]` — takes or refreshes the
+    /// `scruff heartbeat [path] [--pid N]` — takes or refreshes the
     /// occupancy lease on a checkout (SPEC.md §9.1, §14.2). This is the
-    /// seam built for exactly this SDK: a program embedding holt has no
+    /// seam built for exactly this SDK: a program embedding scruff has no
     /// pane and no shell cwd'd anywhere, so the lease is the only way
     /// `reap` learns a checkout is in use. A lease can only SAVE a lane
     /// from the sweep, never condemn one — see `lease` for a self-
@@ -181,7 +181,7 @@ public struct HoltClient: Sendable {
     /// disconnect:
     ///
     /// ```swift
-    /// let lease = try await holt.lease(path: laneDir)
+    /// let lease = try await scruff.lease(path: laneDir)
     /// // ... serve the session ...
     /// await lease.release()
     /// ```
@@ -201,8 +201,8 @@ public struct HoltClient: Sendable {
         return Lease(client: self, path: path, pid: pid, refreshInterval: refreshInterval)
     }
 
-    /// `holt new [name] --open [agent]` with stdio INHERITED from the calling
-    /// process. holt execs the configured agent client unconditionally
+    /// `scruff new [name] --open [agent]` with stdio INHERITED from the calling
+    /// process. scruff execs the configured agent client unconditionally
     /// here (unlike `resume`, `new` doesn't check for a TTY) — appropriate
     /// for a real terminal app (a TUI) that wants to hand off the screen
     /// and get control back when the agent session ends, and WRONG for a
@@ -211,14 +211,14 @@ public struct HoltClient: Sendable {
     public func newInteractive(_ name: String? = nil, agent: String? = nil) async throws {
         var args = ["new"]
         if let name { args.append(name) }
-        // --open is explicit: bare `holt new` only prints the lane's path.
+        // --open is explicit: bare `scruff new` only prints the lane's path.
         args.append("--open")
         if let agent { args.append(agent) }
         try await runInteractive(args, options: opts)
     }
 
-    /// `holt resume <name>` / `holt <name>` with stdio INHERITED, so a
-    /// real terminal's TTY check passes and holt hands off the screen to
+    /// `scruff resume <name>` / `scruff <name>` with stdio INHERITED, so a
+    /// real terminal's TTY check passes and scruff hands off the screen to
     /// the agent client. Same caveat as `newInteractive`: blocks until
     /// that session ends.
     public func resumeInteractive(_ name: String) async throws {
@@ -227,10 +227,10 @@ public struct HoltClient: Sendable {
 }
 
 /// Same shape as `run`, but with stdio inherited from the calling process
-/// instead of captured — see `HoltClient.newInteractive`/
+/// instead of captured — see `ScruffClient.newInteractive`/
 /// `resumeInteractive`.
 private func runInteractive(_ args: [String], options: RunOptions) async throws {
-    let bin = options.bin ?? "holt"
+    let bin = options.bin ?? "scruff"
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
     process.arguments = [bin] + args
@@ -255,18 +255,18 @@ private func runInteractive(_ args: [String], options: RunOptions) async throws 
         }
     }
     if code != 0 {
-        throw HoltError(code: code, stderr: "", command: [bin] + args)
+        throw ScruffError(code: code, stderr: "", command: [bin] + args)
     }
 }
 
-/// A held occupancy lease. See `HoltClient.lease`.
+/// A held occupancy lease. See `ScruffClient.lease`.
 public actor Lease {
-    private let client: HoltClient
+    private let client: ScruffClient
     private let path: String
     private var released = false
     private var refreshTask: Task<Void, Never>?
 
-    init(client: HoltClient, path: String, pid: Int32?, refreshInterval: Duration) {
+    init(client: ScruffClient, path: String, pid: Int32?, refreshInterval: Duration) {
         self.client = client
         self.path = path
         if pid == nil {

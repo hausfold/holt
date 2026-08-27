@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hausfold/holt/internal/gitx"
+	"github.com/hausfold/scruff/internal/gitx"
 )
 
 // State is what a lane's checkout is doing on disk.
@@ -14,7 +14,7 @@ type State string
 const (
 	// Live: git resolves the checkout. A pane may be sitting in it.
 	Live State = "live"
-	// Parked: nothing on disk. The BRANCH is the work, and `holt <name>`
+	// Parked: nothing on disk. The BRANCH is the work, and `scruff <name>`
 	// rebuilds the checkout from it.
 	Parked State = "parked"
 	// Stray: a directory is there but git has disowned it — a husk left by a

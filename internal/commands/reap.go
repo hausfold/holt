@@ -1,14 +1,14 @@
 package commands
 
 import (
-	"github.com/hausfold/holt/internal/ui"
+	"github.com/hausfold/scruff/internal/ui"
 )
 
 // Reap sweeps every LANDED lane now — parked ones, plus clean, landed checkouts
 // that NO pane is sitting in.
 //
 // This is the idempotent backstop for when a pane ends WITHOUT firing the remove
-// hook (a manual close, a reboot, a crash), and for `holt child` checkouts,
+// hook (a manual close, a reboot, a crash), and for `scruff child` checkouts,
 // which the hook never reaps.
 func (e *Env) Reap() error {
 	// A sweep that DELETES branches must ask the forge fresh. The listing's
@@ -40,7 +40,7 @@ func (e *Env) Reap() error {
 		ui.Say("kept %s", note)
 	}
 	for _, s := range res.Strays {
-		ui.Say("dangling checkout — git lost the link; `holt <name>` moves it aside and rebuilds: %s", s)
+		ui.Say("dangling checkout — git lost the link; `scruff <name>` moves it aside and rebuilds: %s", s)
 	}
 	if len(res.Reaped) == 0 {
 		// Only when nothing above spoke. The old unconditional line listed the

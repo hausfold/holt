@@ -1,7 +1,7 @@
-// Wire types for holt's frozen public contracts — SPEC.md §2.2 (`--json`) and
+// Wire types for scruff's frozen public contracts — SPEC.md §2.2 (`--json`) and
 // §14.3 step 2 (`watch --json`). Hand-ported from the Go source of truth
 // (internal/commands/json.go, internal/commands/watch.go) rather than
-// generated, because holt has no `go generate` step yet for this — see the
+// generated, because scruff has no `go generate` step yet for this — see the
 // SDK README for the drift risk that implies.
 //
 // schema 1 is what's actually implemented today. SPEC.md §2.2's example
@@ -10,10 +10,10 @@
 // Do not add them here until json.go does; a field that exists in the type
 // but never arrives on the wire is worse than one that's simply missing.
 
-/** holt's exit-code contract (SPEC.md §2.4). `2` vs `1` is the one that
+/** scruff's exit-code contract (SPEC.md §2.4). `2` vs `1` is the one that
  * matters to a caller: "you asked wrong" vs "I declined to destroy
  * something". */
-export enum HoltExitCode {
+export enum ScruffExitCode {
   OK = 0,
   Usage = 1,
   Refused = 2,
@@ -44,7 +44,7 @@ export interface LandedInfo {
 
 export interface PostMergeAhead {
   commits: number;
-  /** PR number, or 0 when there isn't one — holt doesn't null this field
+  /** PR number, or 0 when there isn't one — scruff doesn't null this field
    * today (internal/commands/json.go's jsonPostMerge), unlike `pr` at the
    * envelope level. Treat `0` as "none" here, not as PR #0. */
   pr: number;
@@ -57,10 +57,10 @@ export interface PostMergeAhead {
  *
  * `occupied` and `dirty` are three-state on purpose: `null` means "not
  * determined" (no lsof, no forge, cache miss), which is categorically
- * different from `false`. Every consumer bug in holt's bash-era statusline
+ * different from `false`. Every consumer bug in scruff's bash-era statusline
  * came from collapsing that `null` into `false` — do not do that here either.
  */
-export interface HoltLane {
+export interface ScruffLane {
   name: string;
   repo: string;
   main: string;
@@ -78,26 +78,26 @@ export interface HoltLane {
   last_commit: string;
 }
 
-/** The `holt --json` / `holt list --json` envelope — byte-identical between
+/** The `scruff --json` / `scruff list --json` envelope — byte-identical between
  * the two spellings (SPEC.md §2.2). */
-export interface HoltEnvelope {
-  holt: string;
+export interface ScruffEnvelope {
+  scruff: string;
   schema: number;
-  lanes: HoltLane[];
+  lanes: ScruffLane[];
   warnings: string[];
 }
 
 // ---------------------------------------------------------------------------
-// `holt watch --json` — SPEC.md §14.3 step 2, §14.4.
+// `scruff watch --json` — SPEC.md §14.3 step 2, §14.4.
 
 /** First line of every `watch` stream. A version header, not an event — see
- * `capabilities` below for why it carries more than `{holt, schema}`. */
+ * `capabilities` below for why it carries more than `{scruff, schema}`. */
 export interface WatchHello {
   kind: "hello";
   seq: number;
-  holt: string;
+  scruff: string;
   schema: number;
-  /** What families of event this holt build can ever send on this stream.
+  /** What families of event this scruff build can ever send on this stream.
    * v1 always sends exactly `["registry"]`; a future `"forge"` entry is how
    * a consumer learns a `landed`/`post_merge_ahead` event kind might show up
    * without guessing from which kinds happen to have arrived yet. */
@@ -106,7 +106,7 @@ export interface WatchHello {
 
 /** Closed set, same discipline as `LaneState` and `LandedVerdict`: additions
  * are minor, removals major. An unknown kind is noise to ignore, not an
- * error to throw on — that's what lets holt add `landed`/`source: "forge"`
+ * error to throw on — that's what lets scruff add `landed`/`source: "forge"`
  * later without breaking every SDK pinned to v1 (SPEC.md §14.4). */
 export type WatchEventKind =
   | "sync"
@@ -123,16 +123,16 @@ export interface WatchEvent {
   kind: WatchEventKind;
   /** Monotonic across the WHOLE stream, hello included — lets a consumer
    * fanning this out over its own transport (e.g. websockets) detect a
-   * dropped line without holt knowing anything about that transport. */
+   * dropped line without scruff knowing anything about that transport. */
   seq: number;
-  /** RFC3339 UTC. When THIS holt process observed the change, not
+  /** RFC3339 UTC. When THIS scruff process observed the change, not
    * necessarily when it happened at the source. Absent on `hello`. */
   ts?: string;
   /** Which provider produced the event. v1 only ever writes `"registry"`;
    * absent on `ready`, which names no lane and no provider. */
   source?: "registry" | "forge" | string;
   /** Present on every kind except `ready` and `warning`. */
-  lane?: HoltLane;
+  lane?: ScruffLane;
   /** Present only on `warning` — the same text `warnings[]` carries under
    * `--json`, pushed here because a stream reader has no envelope to poll. */
   message?: string;

@@ -18,7 +18,8 @@ safety property** — read §2 before touching anything.
 
 ## 0. Decisions to make first
 
-Five, and four have a recommendation you can accept silently.
+Six, and every one of them is settled — four were accepted silently, and #6
+surfaced while Phase 3 was being built.
 
 | # | decision | recommendation |
 |---|---|---|
@@ -27,6 +28,7 @@ Five, and four have a recommendation you can accept silently.
 | 3 | **`worktree-<name>` branch prefix?** | **Leave it.** Nothing about it says "holt" — it's descriptive. Changing it strands every live branch and breaks `sed 's/^worktree-//'` in the host file and haus's lane scripts. |
 | 4 | **Keep `holt` as a permanent alias?** | **No.** Ship it through `1.0.x` printing a deprecation to stderr, delete it at `1.1.0`. A permanent alias means the old name never leaves anyone's muscle memory or anyone's docs. |
 | 5 | **Recreate `hausfold/holt` as a tombstone repo?** | **Never.** GitHub's rename redirect (web *and* git) lives only as long as the old name stays unclaimed. Creating a stub kills every redirect permanently — the same rule `ops/PRESENCE.md` records for keeping the `nebelhaus` org alive. Same for `holt-swift`. |
+| 6 | **The `holt/<repo>/<lane>` notification key?** | **Frozen — it does not rename, ever.** It is half of a join: `internal/commands/notify.go` keys a trill fin `holt/<repo>/<lane>`, and haus's `lane-seen.sh` matches that against a zellij session named `holt.<repo>.<lane>`. Renaming either half strands every fin already up — the resolve path can only name a key that put one up — so both repos would have to change in the same rebuild, for a string no human ever reads. The comment beside it says so, in both repos. |
 
 ---
 
@@ -155,9 +157,18 @@ terminal.
 
 ---
 
-## 4. Phase 2 — haus flips
+## 4. Phase 2 — haus flips ✅ **shipped**
 
 One lane, one PR, on top of a `flake.lock` bumped to holt 0.5.0.
+
+**Done and on this machine:** haus's input is `scruff` (still pointing at the
+`hausfold/holt` URL until §5 renames the repo), every call site reads
+`SCRUFF_*` with `HOLT_*` beside it, both-spellings jq filters guard the four
+notification hook arrays, and `~/.claude/skills/scruff` is what the rebuild
+links. Two residues are deliberate and stay until 1.1.0: the `HOLT_*` fallback
+reads, and the `holt.<repo>.<lane>` session name (decision 6). The one leftover
+that is NOT deliberate lives in the host file, not haus — `Bash(holt:*)` in the
+permission list, which `| unique` can never remove. It goes in §6.
 
 **Mechanical (39 files):** `haus/modules/{terminal,launcher,ai,bar,core}`, the
 `holt` → `scruff` flake input rename, `modules/ai/holt-cache.sh` →
@@ -199,7 +210,7 @@ the bar shows it, a notification arrives **once**, `scruff park` / `scruff` /
 
 ---
 
-## 5. Phase 3 — the rename itself, `1.0.0`
+## 5. Phase 3 — the rename itself, `1.0.0` ✅ **built**
 
 Now the repo is renamed and nothing on the machine depends on the old spelling.
 
@@ -229,9 +240,34 @@ Now the repo is renamed and nothing on the machine depends on the old spelling.
    table) *before* tagging, and update that table's package column.
 7. Keep the `holt` symlink and the `HOLT_*` fallbacks from Phase 1.
 
-**Verify:** `make check`, then each SDK's own suite from its own directory —
-`bun test`, `pytest`, `cargo test`, `swift test`, `go test ./...` — because
-`make check` structurally cannot see any of them.
+**Verified, not assumed:** `make check` — 185/185 bats, all Go suites green —
+and all five SDK suites from their own directories: `bun test` 9/9, `pytest` 9/9,
+`cargo test` 13/13 + 5 doc-tests, `swift test` 9/9, `go test ./...` in `sdk/go`.
+The repo rename landed first, so `go.mod` names a path that resolves.
+
+Steps 1 (the mirror half) and 6 are the two that are **not** code and are still
+open: `hausfold/holt-swift` still has to become `hausfold/scruff-swift`, and the
+three trusted publishers have to be re-entered before the tag.
+
+### Four things this phase changed that the plan didn't say
+
+- **The schema bump travels into the fixtures.** Five `fake-scruff.sh` files and
+  five suites assert the envelope; `schema: 2` is one edit in the CLI and ten in
+  the SDKs, or the SDK suites go red on a change that is otherwise invisible to
+  them.
+- **The skill derivation INVERTS rather than flips.** `ai/SKILL.md` is now
+  `name: scruff` and is copied to `$out/scruff`; the sed-rewritten copy is
+  `$out/holt`, which is what a consumer that hasn't flipped still links. Same
+  two directories as 0.5.0, opposite direction — and the build guard still fails
+  on a half-rename.
+- **The Go path history needs THREE rows, not two.** `nebelhaus/holt` through
+  `v0.2.8`, `hausfold/holt` through `v0.5.0`, `hausfold/scruff` from `v1.0.0`.
+  Each stays resolvable at its own tags forever; a two-row telling silently
+  drops the org rename that `go.mod` already documented.
+- **`docs/releasing.md` needed the publisher trap written down**, not just the
+  package column updated: the new names are brand-new packages with no publisher
+  at all, so the *first* 1.0.0 run fails on all three regardless of the table
+  being correct.
 
 ---
 
@@ -241,11 +277,21 @@ Independent of each other; run them as parallel lanes via `holt child`.
 
 | repo | what moves |
 |---|---|
-| **workshop** | `AGENTS.md` (the family table, the lane section, the release rules), `docs/` (incl. `agent-surface.md`), `test/`, `script/`, and `bench`'s `FAMILY` entry + release path |
+| **workshop** | `AGENTS.md` (the family table, the lane section, the release rules), `docs/` (incl. `agent-surface.md`), `test/`, `script/`, and `bench`'s `FAMILY` entry + release path. **⚠️ `FAMILY` entries ARE directory names** (`local_src` → `$ROOT/$1`), so flipping the entry means renaming `~/code/workshop/holt` → `scruff` on disk — see the warning below |
 | **hausfold.co** | `content/docs/haus/rooms/ai.mdx` (59), `reference/options.mdx` (28), `internals/contributing.mdx`, `agent-rebuilds.mdx`; `src/app/page.tsx` (the family index entry + `data-accent`), `src/lib/shared.ts:37`. **⚠️ The CSS accent token `--a-holt` is defined in `public/hausfold.css` and consumed in `src/app/global.css:966` as `--nb-token-link` — rename it in both or a doc-link colour silently falls back.** No page slug contains `holt`, so **no redirects are needed** |
 | **trill** | `ARCHITECTURE.md`, `AGENTS.md`, `CLAUDE.md`, `.gitignore` comment, and two doc-comments in `Trill/Platform/SystemIntegration.swift` (one of which states the `$HOME/.cache` registry fact — keep it accurate per decision 2) |
 | **homebrew-tap / perch / pounce / nebelung** | prose only, 12 refs total |
-| **~/.config/nix** | the host file (§4's jq, plus the `holt session` palette command at line 906 and the namer-adapter paths), then `nix flake update` for the renamed input — **never hand-merge `flake.lock`** |
+| **~/.config/nix** | the host file: `Bash(holt:*)` in the permission list (added under `| unique`, so nothing ever removes it — add `Bash(scruff:*)` and a one-release `del` for the old one), the two `holt hook create|remove` commands (assignment, self-healing), the `holt session` palette command, the namer-adapter paths, and the `/handoff` prose. Then `nix flake update` for the renamed input — **never hand-merge `flake.lock`** |
+
+**⚠️ Renaming the workshop checkout is a worktree-repair operation, not a `mv`.**
+`bench`'s `FAMILY` entry is a directory name, so `bench release scruff <v>` only
+works once `~/code/workshop/holt` is `~/code/workshop/scruff` — and every lane of
+this repo holds an ABSOLUTE gitdir pointing into the old path
+(`<main>/.git/worktrees/<n>`), as does each of those worktrees' `gitdir` file
+pointing back. Moving the main checkout with lanes open strands all of them. Do
+it the same way §8.2 does the base: close the panes, `mv`, then `git worktree
+repair` from the renamed checkout — or simply reap every lane first and rename an
+empty-handed repo. It is the one Phase 4 step that can lose access to work.
 
 **⚠️ `ops` is different — do not sed it.** `ops/scoreboard/data/*.json` are dated
 snapshots and `PRESENCE.md` is a historical register; rewriting them falsifies

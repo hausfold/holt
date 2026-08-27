@@ -34,11 +34,11 @@ jobs:
 
       # Cheap, and it catches a class of failure nothing else can see: a skill
       # with broken frontmatter installs, lists and is never loaded. Same script
-      # nix/skill.nix runs — holt's CI has no Nix, so guards that lived only in
+      # nix/skill.nix runs — scruff's CI has no Nix, so guards that lived only in
       # that derivation would never fire here.
       - name: agent skills
         run: |
-          script/check-skills.sh ai holt
+          script/check-skills.sh ai scruff
 
       - name: gofmt
         run: test -z "$(gofmt -l ./cmd ./internal)" || { gofmt -l ./cmd ./internal; exit 1; }
@@ -52,11 +52,11 @@ jobs:
 
   # The five SDKs are all in this repo but none of them are in the job above:
   # `go test ./...` can't see sdk/go (its own go.mod, so consumers can `go get`
-  # it without inheriting holt's deps), and ts/python/rust need toolchains the
+  # it without inheriting scruff's deps), and ts/python/rust need toolchains the
   # Go job doesn't install. Until this job existed, the only thing keeping five
   # published clients agreeing about one wire format was somebody remembering
   # to run five suites by hand — and every one of them drives the SAME
-  # `fake-holt.sh` fixture, so a divergence is exactly what they catch.
+  # `fake-scruff.sh` fixture, so a divergence is exactly what they catch.
   #
   # Swift is its own job because it wants a macOS runner; the other four share
   # a Linux one.

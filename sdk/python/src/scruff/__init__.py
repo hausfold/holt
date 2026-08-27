@@ -1,10 +1,10 @@
-from .client import HoltClient, HoltClientOptions, Lease
-from .errors import HoltError
+from .client import ScruffClient, ScruffClientOptions, Lease
+from .errors import ScruffError
 from .exec import RunOptions, RunResult, run, run_json
 from .types import (
-    HoltEnvelope,
-    HoltExitCode,
-    HoltLane,
+    ScruffEnvelope,
+    ScruffExitCode,
+    ScruffLane,
     LandedInfo,
     LandedVerdict,
     LandedVia,
@@ -20,17 +20,17 @@ from .types import (
 from .watch import watch_all, watch_lane
 
 __all__ = [
-    "HoltClient",
-    "HoltClientOptions",
+    "ScruffClient",
+    "ScruffClientOptions",
     "Lease",
-    "HoltError",
+    "ScruffError",
     "RunOptions",
     "RunResult",
     "run",
     "run_json",
-    "HoltEnvelope",
-    "HoltExitCode",
-    "HoltLane",
+    "ScruffEnvelope",
+    "ScruffExitCode",
+    "ScruffLane",
     "LandedInfo",
     "LandedVerdict",
     "LandedVia",

@@ -6,16 +6,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hausfold/holt/internal/gitx"
-	"github.com/hausfold/holt/internal/ui"
+	"github.com/hausfold/scruff/internal/gitx"
+	"github.com/hausfold/scruff/internal/ui"
 )
 
-// This file answers the one question holt could not answer about its own most
+// This file answers the one question scruff could not answer about its own most
 // consequential act: *why did that lane go away?*
 //
 // A branch deletion destroys its own evidence. `git branch -D` takes the
 // branch's reflog with it, `git worktree remove` takes `.git/worktrees/<name>`
-// with it, and holt kept nothing — so a lane that vanished between two
+// with it, and scruff kept nothing — so a lane that vanished between two
 // listings left a repo where the only honest answer was "something deleted it,
 // and the record of what died with the thing it recorded". `watch` emits a
 // `reaped` event, but only to whoever happened to be streaming at that instant.
@@ -37,7 +37,7 @@ func (e *Env) ledgerFile() string { return filepath.Join(stateDir(), "reaped.log
 // ledgerEntry is one reaped lane, as one tab-separated line.
 //
 // TSV, and the same shape as the registry, for the same reason: a format you
-// can read with your eyes and `cut` with your hands survives holt's own
+// can read with your eyes and `cut` with your hands survives scruff's own
 // versions. Field order is append-only — readers index, and a reordered column
 // would silently re-label every historical line.
 type ledgerEntry struct {
@@ -96,7 +96,7 @@ func (e *Env) noteReaped(main, branch string, v Verdict) {
 	_, _ = f.WriteString(entry.line() + "\n")
 }
 
-// Ledger prints the reap ledger, newest last — `holt reaped`.
+// Ledger prints the reap ledger, newest last — `scruff reaped`.
 //
 // Newest LAST, against the usual instinct, because this is read in a terminal
 // right after noticing something missing: the answer you want is the one your

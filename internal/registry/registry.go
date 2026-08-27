@@ -1,11 +1,11 @@
-// Package registry is holt's source of truth.
+// Package registry is scruff's source of truth.
 //
 // Not the filesystem, and not `git worktree list` — both are derived and both
 // lie. A parked lane has no checkout on disk at all (the branch IS the work),
 // and a half-finished `git worktree remove` leaves a directory git has already
 // disowned. Only the registry knows the whole set.
 //
-// A LANE is holt's unit: one agent's branch, checkout and pane, across the whole
+// A LANE is scruff's unit: one agent's branch, checkout and pane, across the whole
 // create → live → parked → landed → reaped life. Note the word is NOT "agent" —
 // that is the CLIENT (field 6, claude | codex | opencode | pi) — and NOT "session",
 // which belongs to zellij and to the clients' own transcript stores.
@@ -50,7 +50,7 @@ type Registry struct {
 // adapter set); this is only the floor.
 var DefaultAgent = "claude"
 
-// KnownAgent reports whether an id names a client holt can drive. It is a
+// KnownAgent reports whether an id names a client scruff can drive. It is a
 // variable so the adapter layer can replace it in 0.2 without this package
 // growing a dependency on it.
 var KnownAgent = func(id string) bool {
@@ -73,7 +73,7 @@ func Open(path string) (*Registry, error) {
 func (r *Registry) Path() string { return r.path }
 
 // Load returns every row. A missing file is an empty registry, not an error —
-// the first `holt` on a machine must work.
+// the first `scruff` on a machine must work.
 func (r *Registry) Load() ([]Row, error) {
 	b, err := os.ReadFile(r.path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -108,7 +108,7 @@ func parse(s string) []Row {
 		// Claude worktree, and must not reopen in whatever the default is now.
 		//
 		// It catches a second case as well, and deliberately: a row naming a
-		// client holt USED to know (jcode, accepted through 0.2.x) reads as
+		// client scruff USED to know (jcode, accepted through 0.2.x) reads as
 		// claude rather than as an error, and the next write persists that.
 		// Retiring a client must not strand a lane whose checkout and branch
 		// are still perfectly good.

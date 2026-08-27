@@ -1,11 +1,11 @@
-// Package gitx is holt's git layer: subprocess calls to the real `git`, never
+// Package gitx is scruff's git layer: subprocess calls to the real `git`, never
 // a reimplementation of it.
 //
-// Shelling out is a deliberate choice, not laziness. holt's whole job is to
+// Shelling out is a deliberate choice, not laziness. scruff's whole job is to
 // agree with what the user's git does — their config, their hooks, their
 // credential helper, their version's merge semantics. A pure-Go git library
 // agrees with a *model* of git, and every place the model drifts is a place
-// holt reaps a branch git would have called unmerged.
+// scruff reaps a branch git would have called unmerged.
 package gitx
 
 import (
@@ -21,9 +21,9 @@ import (
 //
 // An EMPTY dir is an error, never "use the current directory". That fallback is
 // how a path-building bug turns into git operating on whatever repo the user
-// happens to be standing in — and holt's whole job is manipulating repos other
+// happens to be standing in — and scruff's whole job is manipulating repos other
 // than its own. `git -C ""` has exactly this behaviour, which is what let the
-// test suite commit into the real holt checkout (see test/holt.bats's fixture
+// test suite commit into the real scruff checkout (see test/scruff.bats's fixture
 // guards). Refusing it here means the same class of bug surfaces as a loud
 // error instead of a commit in someone's tree.
 func Run(dir string, args ...string) (string, error) {
@@ -70,7 +70,7 @@ func Lines(s string) []string {
 //
 // It must FAIL — not fall back — when dir is gone or isn't a repo. Without
 // that, the caller resolves an empty path against its own cwd, and a stale
-// registry row pointing at a deleted checkout makes holt list the current
+// registry row pointing at a deleted checkout makes scruff list the current
 // repo's branches a second time under a repo literally named ".". That was a
 // real bug in the bash version (haus#131) and the fix belongs here, once.
 func MainCheckout(dir string) (string, error) {

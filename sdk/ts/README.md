@@ -1,8 +1,8 @@
-# @hausfold/holt (TypeScript SDK)
+# @hausfold/scruff (TypeScript SDK)
 
-A thin TypeScript client over the [`holt`](../../README.md) binary — the
+A thin TypeScript client over the [`scruff`](../../README.md) binary — the
 worktree-lifecycle substrate for parallel coding agents. It shells out to
-`holt` (`exec` + `--json`, `watch --json` for a live NDJSON stream) rather
+`scruff` (`exec` + `--json`, `watch --json` for a live NDJSON stream) rather
 than talking to a daemon.
 
 Works from Bun or Node ≥18. Import just `types` for a browser bundle.
@@ -10,24 +10,24 @@ Works from Bun or Node ≥18. Import just `types` for a browser bundle.
 ## Install
 
 ```sh
-bun add @hausfold/holt
-# or: npm install @hausfold/holt
+bun add @hausfold/scruff
+# or: npm install @hausfold/scruff
 ```
 
-`holt` itself must be on `PATH`, or pass `{ bin: "/path/to/holt" }`.
+`scruff` itself must be on `PATH`, or pass `{ bin: "/path/to/scruff" }`.
 
 ## Two shapes of usage
 
-**Programmatic (a web backend, an orchestrator).** Every `HoltClient`
+**Programmatic (a web backend, an orchestrator).** Every `ScruffClient`
 method except the two ending in `Interactive` captures the child's stdout
 and returns — safe to call from a server with many concurrent sessions.
 
 ```ts
-import { HoltClient } from "@hausfold/holt";
+import { ScruffClient } from "@hausfold/scruff";
 
-const holt = new HoltClient();
+const scruff = new ScruffClient();
 
-const envelope = await holt.list();
+const envelope = await scruff.list();
 for (const lane of envelope.lanes) {
   // occupied/dirty are `boolean | null` — null means "not determined",
   // never coerce it to false.
@@ -36,31 +36,31 @@ for (const lane of envelope.lanes) {
 
 // Create a lane WITHOUT attaching an agent to it — the primitive an
 // orchestrator wants. `child`/`spawn` only ever print the new path.
-const dir = await holt.child("/path/to/some-repo", "task-42");
+const dir = await scruff.child("/path/to/some-repo", "task-42");
 // ...now launch YOUR OWN agent process against `dir`.
 ```
 
 ```ts
 // Live updates instead of polling — created/parked/resumed/reaped/changed.
-for await (const line of holt.watch()) {
+for await (const line of scruff.watch()) {
   if (line.kind === "created") notifyUI(line.lane);
 }
 
 // Or scoped to the one lane this session holds — no hello/ready framing,
 // and nothing about anybody else's lanes.
-for await (const event of holt.watchLane(dir)) {
+for await (const event of scruff.watchLane(dir)) {
   if (event.kind === "reaped") endSession();
 }
 ```
 
 **Interactive (a real terminal TUI).** `newInteractive` / `resumeInteractive`
-inherit the calling process's stdio, so holt execs the configured agent
+inherit the calling process's stdio, so scruff execs the configured agent
 client (`claude`, `codex`, `opencode`, `pi`) and takes over the real terminal —
 control returns to you when that session ends.
 
 ```ts
 // Bun/Node TUI, run in an actual terminal:
-await holt.newInteractive("task-42");
+await scruff.newInteractive("task-42");
 // ... the agent owned the screen; you're back here when it exits.
 ```
 
@@ -71,12 +71,12 @@ command as text rather than exec'ing.
 
 ## Holding a session open: leases
 
-holt's sweep (`reap`) needs to know a checkout is in use. A human's `lsof`
+scruff's sweep (`reap`) needs to know a checkout is in use. A human's `lsof`
 answers that; a server holding one session per lane has no pane or shell
 to check, so it says so itself with a lease:
 
 ```ts
-const lease = holt.lease(laneDir); // refreshes on an interval, < the 90s TTL
+const lease = scruff.lease(laneDir); // refreshes on an interval, < the 90s TTL
 // ... serve the session ...
 await lease.release();
 ```
@@ -94,7 +94,7 @@ leased it" isn't proof nobody's there.
 bundle:
 
 ```ts
-import type { HoltLane, WatchEvent } from "@hausfold/holt";
+import type { ScruffLane, WatchEvent } from "@hausfold/scruff";
 ```
 
 ## What's NOT here yet
@@ -104,7 +104,7 @@ need them.
 
 ## Testing
 
-`test/fake-holt.sh` is a fixture standing in for the real binary.
+`test/fake-scruff.sh` is a fixture standing in for the real binary.
 
 ```
 bun test

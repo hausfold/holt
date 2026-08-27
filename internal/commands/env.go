@@ -5,15 +5,15 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/hausfold/holt/internal/compat"
-	"github.com/hausfold/holt/internal/config"
-	"github.com/hausfold/holt/internal/gitx"
-	"github.com/hausfold/holt/internal/occupancy"
-	"github.com/hausfold/holt/internal/registry"
-	"github.com/hausfold/holt/internal/ui"
+	"github.com/hausfold/scruff/internal/compat"
+	"github.com/hausfold/scruff/internal/config"
+	"github.com/hausfold/scruff/internal/gitx"
+	"github.com/hausfold/scruff/internal/occupancy"
+	"github.com/hausfold/scruff/internal/registry"
+	"github.com/hausfold/scruff/internal/ui"
 )
 
-// Env is the resolved environment one holt invocation runs in.
+// Env is the resolved environment one scruff invocation runs in.
 type Env struct {
 	Base      string // where checkouts live
 	Reg       *registry.Registry
@@ -51,7 +51,7 @@ func baseDir() string {
 	return filepath.Join(home, ".cache", "claude-worktrees")
 }
 
-// stateDir is where holt keeps runtime state that is not a checkout.
+// stateDir is where scruff keeps runtime state that is not a checkout.
 //
 // Deliberately NOT the lane base. Leases are per-process ephemera and the base
 // is globbed for checkouts (see discover), so the two must not share a tree.
@@ -69,9 +69,9 @@ func stateDir() string {
 // A RELATIVE $SCRUFF_STATE — or its $HOLT_STATE predecessor — is refused rather
 // than honoured, and that refusal is load-bearing: this state is
 // machine-global, so resolving it against the
-// process cwd scatters it into whatever directory holt happened to be run
+// process cwd scatters it into whatever directory scruff happened to be run
 // from — routinely a git checkout, where it shows up as an untracked dir and
-// can be swept into a `wip:` commit by holt's own park path. An operator who
+// can be swept into a `wip:` commit by scruff's own park path. An operator who
 // wants state somewhere else can always say where absolutely; nobody has ever
 // meant "put the machine's lease and ledger under my cwd".
 func resolveStateDir() (dir, warning string) {
@@ -112,7 +112,7 @@ func defaultStateDir() string {
 // switch: it declares that every session in this deployment is one this tool
 // spawned, so a lane nobody leased is a lane
 // nobody is in. On a developer machine that is false — someone can always cd
-// into a checkout without telling holt — which is why the default is the
+// into a checkout without telling scruff — which is why the default is the
 // cautious one, and why this is opt-in by an explicit env var rather than
 // inferred from, say, the absence of lsof.
 //
@@ -134,8 +134,8 @@ func leasesAreSole() bool { return compat.Getenv("OCCUPANCY") == "lease" }
 // everyone wants and costs no process; HAUS_AGENT_DEFAULT is a cutover
 // fallback for pre-config rice builds; claude is the last word.
 //
-// A value that names a client holt has never heard of is ignored at every rung
-// rather than fatal — an unknown agent must not turn every `holt new` into a
+// A value that names a client scruff has never heard of is ignored at every rung
+// rather than fatal — an unknown agent must not turn every `scruff new` into a
 // hard failure when a working default is one rung down.
 func (e *Env) defaultAgent() string {
 	if a := compat.Getenv("AGENT"); registry.KnownAgent(a) {
@@ -210,7 +210,7 @@ func (e *Env) Occupancy() occupancy.Report {
 //
 // It prints as well as records because recording alone was the same silence with
 // extra steps: `warnings[]` is only ever rendered under --json, so a human
-// running `holt reap` never saw "no forge CLI on PATH — nothing will be reaped
+// running `scruff reap` never saw "no forge CLI on PATH — nothing will be reaped
 // on that basis", and now would never see "your landed hook wouldn't run". Both
 // go to stderr, which leaves the stdout data contract (SPEC.md §2.3) untouched.
 func (e *Env) Warn(msg string) {

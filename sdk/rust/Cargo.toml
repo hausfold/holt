@@ -1,17 +1,17 @@
 [package]
-name = "hausfold-holt"
+name = "hausfold-scruff"
 version = "0.5.0"
 edition = "2021"
 rust-version = "1.75"
-description = "Rust SDK for holt, the worktree-lifecycle substrate. Shells out to the holt binary; async (tokio) so it drops into an axum/tonic backend or an orchestrator equally."
+description = "Rust SDK for scruff, the worktree-lifecycle substrate. Shells out to the scruff binary; async (tokio) so it drops into an axum/tonic backend or an orchestrator equally."
 readme = "README.md"
 license = "Apache-2.0"
-repository = "https://github.com/hausfold/holt"
-keywords = ["holt", "worktree", "git", "agents"]
+repository = "https://github.com/hausfold/scruff"
+keywords = ["scruff", "worktree", "git", "agents"]
 categories = ["development-tools", "asynchronous"]
 
 [lib]
-name = "holt"
+name = "scruff"
 path = "src/lib.rs"
 
 [dependencies]

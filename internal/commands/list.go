@@ -8,16 +8,16 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hausfold/holt/internal/gitx"
-	"github.com/hausfold/holt/internal/ui"
+	"github.com/hausfold/scruff/internal/gitx"
+	"github.com/hausfold/scruff/internal/ui"
 )
 
-// List renders every live/parked lane across every repo holt can reach, and
+// List renders every live/parked lane across every repo scruff can reach, and
 // self-heals on the way in.
 func (e *Env) List(asJSON bool) error {
 	// Self-heal: reap parked branches whose PR has since merged. PARKED ONLY —
 	// it must never disturb a live checkout that may still have an open pane.
-	// The riskier live sweep is opt-in via `holt reap`. Best-effort: a network
+	// The riskier live sweep is opt-in via `scruff reap`. Best-effort: a network
 	// hiccup must not break the listing.
 	sweep := e.reapSweep(sweepParked)
 	if !asJSON {
@@ -28,7 +28,7 @@ func (e *Env) List(asJSON bool) error {
 		// surface — otherwise a half-removed checkout is a `stray` row with no
 		// hint of what to do about it.
 		if n := len(sweep.Strays); n > 0 {
-			ui.Say("%d dangling checkout(s) — git lost the link; `holt <name>` moves each aside and rebuilds:", n)
+			ui.Say("%d dangling checkout(s) — git lost the link; `scruff <name>` moves each aside and rebuilds:", n)
 			for _, s := range sweep.Strays {
 				ui.Say("  %s", s)
 			}
@@ -40,7 +40,7 @@ func (e *Env) List(asJSON bool) error {
 		return e.listJSON(rows)
 	}
 
-	ui.Say("lanes you can resume (holt <name>, or <repo>/<name>)")
+	ui.Say("lanes you can resume (scruff <name>, or <repo>/<name>)")
 	if len(rows) == 0 {
 		ui.Say("none parked — every lane's branch is merged & cleaned up. The fog is even.")
 		return nil
@@ -85,7 +85,7 @@ func (e *Env) rows() []listRow {
 		switch {
 		case n > 0 && diverged:
 			// Distinct glyph on purpose: a "+N" reader reasonably assumes
-			// `holt reship` is the fix, and here it is the wrong one.
+			// `scruff reship` is the fix, and here it is the wrong one.
 			row.State = state + "~" + strconv.Itoa(n)
 			row.Ahead, row.AheadPR, row.Diverged = n, pr, true
 		case n > 0:
@@ -103,7 +103,7 @@ func (e *Env) rows() []listRow {
 		// byte-identically (SPEC.md §2.2) and `watch` diffs verbatim to
 		// decide whether a lane actually changed (watch.go's `changed`
 		// kind). A relative date drifts every second on its own, which
-		// broke both: two `holt --json` calls a heartbeat apart could
+		// broke both: two `scruff --json` calls a heartbeat apart could
 		// legitimately disagree, and a `watch` consumer would see a
 		// `changed` event on every rescan tick even when nothing about the
 		// lane had moved.
@@ -178,7 +178,7 @@ func (e *Env) postMergeAhead(main, branch string) (ahead, pr int, diverged bool)
 	// An OPEN PR standing at this exact tip already covers everything since the
 	// merge, so the lane is simply in flight — neither behind a reship nor
 	// sideways. Without this the marker never comes down: the map it reads
-	// lists MERGED PRs only, so the follow-up PR `holt reship` just opened is
+	// lists MERGED PRs only, so the follow-up PR `scruff reship` just opened is
 	// invisible to it and the lane goes on being told to reship, forever.
 	// Compared by OID rather than by mere existence, because a commit made
 	// after that push is genuinely uncovered until it is pushed too — and that
@@ -366,7 +366,7 @@ func renderTable(rows []listRow) {
 	// Cap `name` — the widest-varying column — as a function of the PANE, not a
 	// constant. A flat cap clipped a 29-char name in a 130-column pane with 40
 	// columns still unspent, and the truncated name is exactly the argument you
-	// then have to type at `holt <name>`.
+	// then have to type at `scruff <name>`.
 	nwCap := cols - (2 + rw + 1 + 1 + sw + 1 + cw + 1) - 24
 	nwCap = max(nwCap, 28)
 	nw = min(nw, nwCap)
@@ -408,7 +408,7 @@ func renderTable(rows []listRow) {
 	// Only ever printed when a row earned it, so the listing stays a table on a
 	// normal day — and the day it isn't normal, the fix is one command away.
 	if relanded {
-		ui.Say("+N = commits landed AFTER that branch's PR merged — no PR covers them: holt reship <name>")
+		ui.Say("+N = commits landed AFTER that branch's PR merged — no PR covers them: scruff reship <name>")
 	}
 	if diverged {
 		ui.Say("~N = the tip does not build on that branch's merged PR — a stale or sideways checkout, not new work. Its content already landed; remove the checkout instead of reshipping it.")

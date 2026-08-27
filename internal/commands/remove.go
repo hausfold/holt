@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hausfold/holt/internal/config"
-	"github.com/hausfold/holt/internal/exitcode"
-	"github.com/hausfold/holt/internal/gitx"
-	"github.com/hausfold/holt/internal/ui"
+	"github.com/hausfold/scruff/internal/config"
+	"github.com/hausfold/scruff/internal/exitcode"
+	"github.com/hausfold/scruff/internal/gitx"
+	"github.com/hausfold/scruff/internal/ui"
 )
 
 // HookRemove implements the WorktreeRemove hook: retire a lane WITHOUT losing
@@ -17,7 +17,7 @@ import (
 //
 // A plain `git worktree remove --force` silently discards uncommitted edits.
 // Committed work always survives on the branch; the dirty remainder is parked
-// there too, as the same wip commit `holt park` makes by hand — so closing a
+// there too, as the same wip commit `scruff park` makes by hand — so closing a
 // pane can never cost you work.
 func (e *Env) HookRemove(stdin io.Reader) error {
 	payload, err := readHookPayload(stdin)
@@ -58,18 +58,18 @@ func (e *Env) HookRemove(stdin io.Reader) error {
 	//
 	// If the wip commit FAILED, that residue is the only copy of those edits —
 	// leave it and say so. A husk that lingers is a nuisance; a husk deleted with
-	// the work still in it is the thing holt exists to never do.
+	// the work still in it is the thing scruff exists to never do.
 	if _, err := os.Stat(dir); err == nil {
 		switch checkoutState(dir) {
 		case Stray:
 			if preserved {
 				// Best-effort: whatever defeated git's delete can defeat ours
-				// too. Never fatal — a husk holt names and heals is a nuisance,
+				// too. Never fatal — a husk scruff names and heals is a nuisance,
 				// while a hook that dies here leaves the branch unreaped and the
 				// registry stale.
 				_ = os.RemoveAll(dir)
 				if _, err := os.Stat(dir); err == nil {
-					ui.Say("git left a partly-removed checkout at %s and we couldn't finish it either — `holt` lists it as stray", dir)
+					ui.Say("git left a partly-removed checkout at %s and we couldn't finish it either — `scruff` lists it as stray", dir)
 				}
 			} else {
 				ui.Say("couldn't save this worktree's edits AND git couldn't remove it — left at %s", dir)
@@ -78,7 +78,7 @@ func (e *Env) HookRemove(stdin io.Reader) error {
 			// Even --force refused, and git never got as far as unregistering.
 			// The branch is still checked out here, so don't reap it out from
 			// under the checkout.
-			ui.Say("git wouldn't remove %s — the lane is still registered; try: holt reap", dir)
+			ui.Say("git wouldn't remove %s — the lane is still registered; try: scruff reap", dir)
 			return nil
 		}
 	}
@@ -97,7 +97,7 @@ func (e *Env) HookRemove(stdin io.Reader) error {
 // to want: "always wip-commit, I'll sort it out later" and "never, my lanes are
 // disposable" are both one line, and both are wrong for the other person.
 //
-// holt's own rule has one exception, and it matters: a branch whose PR has
+// scruff's own rule has one exception, and it matters: a branch whose PR has
 // ALREADY merged, whose only remaining changes are UNTRACKED files, is holding
 // build scratch (a target/, a .venv/) — not history. Wip-committing it moves the
 // tip one commit past the merged PR's SHA, so the branch no longer matches its

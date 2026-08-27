@@ -8,12 +8,12 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/hausfold/holt/internal/compat"
-	"github.com/hausfold/holt/internal/exitcode"
-	"github.com/hausfold/holt/internal/ui"
+	"github.com/hausfold/scruff/internal/compat"
+	"github.com/hausfold/scruff/internal/exitcode"
+	"github.com/hausfold/scruff/internal/ui"
 )
 
-// The built-in `tart` backend — the one runtime adapter holt ships rather than
+// The built-in `tart` backend — the one runtime adapter scruff ships rather than
 // reads from a file.
 //
 // Every other backend is a `~/.config/holt/adapters/runtime/<id>.toml` the
@@ -26,21 +26,21 @@ import (
 // "give this lane its own macOS" was: read SPEC.md §5.5, discover the argv
 // slots can't hold a multi-step dance, write a shell script, write a TOML
 // pointing at it, THEN run the verb. Every one of them would write the same
-// script. holt already knows how it goes.
+// script. scruff already knows how it goes.
 //
 // So `--backend tart` works with no config on any machine that has `tart`
 // installed, and a TOML with that id still wins if one exists — which is how a
 // packager (haus writes exactly this dance as a script + TOML) or anyone who
-// wants a different image, user or share keeps overriding it. `holt runtime
+// wants a different image, user or share keeps overriding it. `scruff runtime
 // eject tart` prints the equivalent TOML to start from.
 //
 // Deliberately still explicit: nothing here runs from create or reap. A lane
 // gets a VM when somebody asks for one, the same as before.
 
-// tartVM is the guest name for a lane. `holt-` prefixed so `tart list` says
+// tartVM is the guest name for a lane. `scruff-` prefixed so `tart list` says
 // which VMs are lanes and which are the user's own, and so teardown can never
-// delete something holt didn't create.
-func tartVM(name string) string { return "holt-" + name }
+// delete something scruff didn't create.
+func tartVM(name string) string { return "scruff-" + name }
 
 // tartUser is the guest account `enter` sshes in as. cirruslabs' macOS base
 // images all ship `admin`; anything else is a custom image, hence the override.
@@ -51,7 +51,7 @@ func tartUser() string {
 	return "admin"
 }
 
-// tartBase is the image a lane's VM is cloned from, and the one thing holt
+// tartBase is the image a lane's VM is cloned from, and the one thing scruff
 // refuses to guess. The images are tens of GB and which one you want is a real
 // choice — a bare macOS base boots and tests nothing, an image with your own
 // stack baked in is the point — so an unset variable gets the two commands
@@ -69,7 +69,7 @@ func tartBase() (string, error) {
 
 // tartAvailable is the same degrade every file-backed adapter gets from
 // runtimeCommandError when its binary is missing (SPEC.md §2.4's exit 3):
-// holt did its half, the tool to do the rest isn't here, install it and the
+// scruff did its half, the tool to do the rest isn't here, install it and the
 // same command works.
 func tartAvailable() error {
 	if _, err := exec.LookPath("tart"); err != nil {
@@ -89,7 +89,7 @@ func tartAvailable() error {
 // over ssh returns real pixels from it.
 //
 // `--dir` shares the worktree over virtiofs rather than copying it, matching
-// holt's reflink-not-copy bias (SPEC.md §6.3) for the same reason: a lane's
+// scruff's reflink-not-copy bias (SPEC.md §6.3) for the same reason: a lane's
 // tree is the thing being worked on, and a copy is a second truth.
 func (e *Env) tartSetup(name, path string) error {
 	if err := tartAvailable(); err != nil {
@@ -103,15 +103,15 @@ func (e *Env) tartSetup(name, path string) error {
 	// clone happens, `--dir` points at nothing, and the caller finds out sixty
 	// seconds later as "never got an address".
 	if path == "" {
-		return exitcode.Usagef("%s has no checkout to share in — `holt %s` to rebuild it first", name, name)
+		return exitcode.Usagef("%s has no checkout to share in — `scruff %s` to rebuild it first", name, name)
 	}
 	if info, err := os.Stat(path); err != nil || !info.IsDir() {
-		return exitcode.Usagef("%s is parked — its checkout %s isn't there. `holt %s` rebuilds it, then try again", name, path, name)
+		return exitcode.Usagef("%s is parked — its checkout %s isn't there. `scruff %s` rebuilds it, then try again", name, path, name)
 	}
 
 	vm := tartVM(name)
 	if present, _ := tartExists(vm); present {
-		return exitcode.Usagef("tart VM %s already exists — `holt runtime down %s --backend tart` to reset it", vm, name)
+		return exitcode.Usagef("tart VM %s already exists — `scruff runtime down %s --backend tart` to reset it", vm, name)
 	}
 
 	ui.Say("cloning %s → %s …", base, vm)
@@ -147,13 +147,13 @@ func (e *Env) tartSetup(name, path string) error {
 		return tartOrphan(name, exitcode.Usagef("%s booted but never got an address — %s says what happened", vm, tartLogPath(vm)))
 	}
 	ui.Say("%s is up at %s — the lane is at /Volumes/My Shared Files/work inside it", vm, ip)
-	ui.Out("holt runtime enter %s --backend tart\n", name)
+	ui.Out("scruff runtime enter %s --backend tart\n", name)
 	return nil
 }
 
-// tartEnter sshes into an already-running guest, exec-replacing holt the same
+// tartEnter sshes into an already-running guest, exec-replacing scruff the same
 // way a file-backed adapter's `enter` argv does: an interactive session should
-// own the terminal, and holt has nothing left to do afterwards.
+// own the terminal, and scruff has nothing left to do afterwards.
 func (e *Env) tartEnter(name string) error {
 	if err := tartAvailable(); err != nil {
 		return err
@@ -161,7 +161,7 @@ func (e *Env) tartEnter(name string) error {
 	vm := tartVM(name)
 	ip, err := tartIP(vm, "10")
 	if err != nil {
-		return exitcode.Usagef("%s has no address — is it running? `holt runtime up %s --backend tart` first", vm, name)
+		return exitcode.Usagef("%s has no address — is it running? `scruff runtime up %s --backend tart` first", vm, name)
 	}
 	return execClient([]string{"ssh", tartUser() + "@" + ip})
 }
@@ -176,7 +176,7 @@ func (e *Env) tartTeardown(name string) error {
 	}
 	vm := tartVM(name)
 	// Only "definitely not there" is a no-op. A `tart list` that failed means
-	// holt could not tell, and the honest move is to try the delete and let
+	// scruff could not tell, and the honest move is to try the delete and let
 	// tart answer, not to report success over a clone still on disk.
 	if present, known := tartExists(vm); known && !present {
 		ui.Say("no tart VM %s — nothing to tear down", vm)
@@ -194,7 +194,7 @@ func (e *Env) tartTeardown(name string) error {
 }
 
 // tartExists asks `tart list` rather than parsing `tart get`, and matches the
-// name exactly — a substring match would see `holt-api` in `holt-api-two`.
+// name exactly — a substring match would see `scruff-api` in `scruff-api-two`.
 //
 // It returns whether it could TELL, separately from the answer, because the
 // two callers want opposite things from a `tart list` that failed. Collapsing
@@ -226,7 +226,7 @@ func tartIP(vm, wait string) (string, error) {
 	return ip, nil
 }
 
-// tartLogPath is where a guest's console output lands: holt's STATE dir, not
+// tartLogPath is where a guest's console output lands: scruff's STATE dir, not
 // $TMPDIR (because "why did my VM never come up" is asked hours later) and not
 // the config dir (because config is a packager's to own — haus ships
 // ~/.config/holt as read-only symlinks into the nix store, and a log that
@@ -245,7 +245,7 @@ func tartLogPath(vm string) string {
 // message names the one command that cleans it up. A tens-of-GB clone nobody
 // mentioned is how a disk fills up quietly.
 func tartOrphan(name string, err error) error {
-	return exitcode.Usagef("%v\nthe clone is still on disk — `holt runtime down %s --backend tart` removes it", err, name)
+	return exitcode.Usagef("%v\nthe clone is still on disk — `scruff runtime down %s --backend tart` removes it", err, name)
 }
 
 func tartLog(vm string) (*os.File, error) {
@@ -260,7 +260,7 @@ func tartLog(vm string) (*os.File, error) {
 	return f, nil
 }
 
-// tartAdapterTOML is what `holt runtime eject tart` prints: the built-in,
+// tartAdapterTOML is what `scruff runtime eject tart` prints: the built-in,
 // written out as the file that would replace it. Not the same shape as the
 // code above — it CAN'T be, the argv slots hold one command each — so it hands
 // over a script skeleton to fill in rather than pretending three lines cover
@@ -269,16 +269,16 @@ func tartLog(vm string) (*os.File, error) {
 // complete and silently drops the wait-for-an-address step.
 func tartAdapterTOML() string {
 	return `# Save as ~/.config/holt/adapters/runtime/tart.toml — a file with this id
-# takes precedence over holt's built-in tart backend.
+# takes precedence over scruff's built-in tart backend.
 #
 # The setup step is a multi-command dance (clone, boot headless with the lane
 # shared in, wait for an address) and an argv slot holds ONE command, so point
-# it at a script of your own. holt's built-in is the reference for what that
+# it at a script of your own. scruff's built-in is the reference for what that
 # script has to do:
 #
-#   tart clone "$HOLT_TART_BASE" "holt-$1"
-#   tart run "holt-$1" --no-graphics --dir="work:$2" &   # backgrounded!
-#   tart ip "holt-$1" --wait 60
+#   tart clone "$HOLT_TART_BASE" "scruff-$1"
+#   tart run "scruff-$1" --no-graphics --dir="work:$2" &   # backgrounded!
+#   tart ip "scruff-$1" --wait 60
 #
 # --no-graphics is load-bearing: without it the guest's window opens on the
 # display you are sitting at.

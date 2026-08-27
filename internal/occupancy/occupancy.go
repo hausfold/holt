@@ -6,7 +6,7 @@
 // Until now the answer was one `lsof -d cwd` dump. That is macOS/BSD-shaped, it
 // is absent from most containers, and it presumes the thing standing in a
 // lane is a process with its cwd in its checkout — true of a zellij pane and
-// false of nearly everything else. An embedder driving holt as a substrate
+// false of nearly everything else. An embedder driving scruff as a substrate
 // (SPEC.md §14) has no panes at all: its sessions are connections, and only it
 // can say which of them are live.
 //
@@ -35,7 +35,7 @@
 // the same claim — a Next.js telemetry daemon orphaned to pid 1 five days ago
 // pins a lane exactly as hard as a live agent, and reads identically once the
 // pid is thrown away. A user told "a pane is open in it" goes looking for a
-// window that does not exist, finds nothing, and concludes holt is lying;
+// window that does not exist, finds nothing, and concludes scruff is lying;
 // told "pid 46864 node", they kill it in one line. Same verdict, same
 // invariant — the only thing that changed is that the evidence survives.
 package occupancy
@@ -244,10 +244,10 @@ type leaseProvider struct {
 // Leases reads the heartbeat directory: one file per checkout an opted-in
 // client claims to be working in.
 //
-// sole declares that holt-spawned clients are the ONLY way a checkout gets used
+// sole declares that scruff-spawned clients are the ONLY way a checkout gets used
 // in this deployment — true for an orchestrator that owns every session it
 // serves, and false on a developer machine, where a human can always just cd in
-// behind holt's back. It is the one switch that lets leases answer for absence,
+// behind scruff's back. It is the one switch that lets leases answer for absence,
 // and it must stay opt-in: defaulting it to true would silently convert "nobody
 // heartbeated" into "nobody is there".
 func Leases(dir string, sole bool) Provider { return leaseProvider{dir: dir, sole: sole} }
@@ -293,8 +293,8 @@ func LeaseFile(dir, path string) string {
 
 // Acquire writes or refreshes the lease on path, held on behalf of pid.
 //
-// pid is the process whose death releases the lease. A caller that exec's holt
-// wants its OWN pid here, not holt's — holt exits immediately, and a lease
+// pid is the process whose death releases the lease. A caller that exec's scruff
+// wants its OWN pid here, not scruff's — scruff exits immediately, and a lease
 // watching an exited process is a lease that was never taken. Pass 0 when there
 // is no local process to watch (a client on the far side of a container or a
 // socket); the lease then lives on its heartbeat alone and expires after TTL.
@@ -317,7 +317,7 @@ func Acquire(dir, path string, pid int) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	// CreateTemp makes 0600 files. A lease is meant to be READ by any holt on
+	// CreateTemp makes 0600 files. A lease is meant to be READ by any scruff on
 	// the machine — the sweep that honours it may well be a different
 	// invocation than the client that took it — so widen it deliberately rather
 	// than leaving a lease that reads as garbage to everyone but its author.

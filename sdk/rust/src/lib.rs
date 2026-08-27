@@ -1,5 +1,5 @@
-//! A thin Rust client over the `holt` binary — the worktree-lifecycle
-//! substrate for parallel coding agents. holt stays a binary; this crate
+//! A thin Rust client over the `scruff` binary — the worktree-lifecycle
+//! substrate for parallel coding agents. scruff stays a binary; this crate
 //! shells out to it (`tokio::process` + `--json`, `watch --json` for a live
 //! NDJSON stream) rather than talking to a daemon, because there isn't one
 //! (SPEC.md §14.1).
@@ -8,8 +8,8 @@
 //! use futures_util::StreamExt;
 //!
 //! #[tokio::main]
-//! async fn main() -> Result<(), holt::HoltError> {
-//!     let client = holt::HoltClient::default();
+//! async fn main() -> Result<(), scruff::ScruffError> {
+//!     let client = scruff::ScruffClient::default();
 //!
 //!     let envelope = client.list().await?;
 //!     for lane in &envelope.lanes {
@@ -22,7 +22,7 @@
 //!     let mut lines = Box::pin(client.watch());
 //!     while let Some(line) = lines.next().await {
 //!         if let Ok(line) = line {
-//!             if line.kind == holt::watch_kind::CREATED {
+//!             if line.kind == scruff::watch_kind::CREATED {
 //!                 println!("new lane: {:?}", line.lane.map(|l| l.name));
 //!             }
 //!         }
@@ -38,8 +38,8 @@ mod lease;
 mod types;
 mod watch;
 
-pub use client::HoltClient;
-pub use errors::HoltError;
+pub use client::ScruffClient;
+pub use errors::ScruffError;
 pub use lease::{Lease, LeaseOptions};
 pub use types::{
     exit_code, landed_verdict, landed_via, lane_state, watch_kind, Envelope, Landed, Lane,

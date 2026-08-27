@@ -1,20 +1,20 @@
-// Package config is holt's machine-wide configuration and, through it, holt's
+// Package config is scruff's machine-wide configuration and, through it, scruff's
 // policy seams.
 //
-// A *seam* is a place where holt makes a decision that looks universal but
+// A *seam* is a place where scruff makes a decision that looks universal but
 // isn't: what "landed" means, what makes a lane reapable, whether a dirty
 // tree is worth a wip commit, what "reopen this session" means on a machine
-// that runs its agents inside a multiplexer. holt ships an opinion for each —
+// that runs its agents inside a multiplexer. scruff ships an opinion for each —
 // the one the haus rice grew up with — and every one of them is wrong for
 // somebody.
 //
 // So each is a named hook with a built-in default. A consumer that supplies
-// one replaces holt's opinion at that point and nothing else; a consumer that
-// supplies none gets exactly the behaviour holt had before this package
-// existed. That is the whole design: holt is the substrate, the hooks are where
+// one replaces scruff's opinion at that point and nothing else; a consumer that
+// supplies none gets exactly the behaviour scruff had before this package
+// existed. That is the whole design: scruff is the substrate, the hooks are where
 // somebody else's house style goes, and neither has to know about the other.
 //
-// The protocol is a program, not an expression language. holt execs the hook's
+// The protocol is a program, not an expression language. scruff execs the hook's
 // argv, hands it the situation twice over (JSON on stdin for programs, HOLT_*
 // environment variables for shell one-liners), and reads the answer off the
 // exit code. Nothing is interpreted, nothing is templated into a shell, and a
@@ -30,7 +30,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hausfold/holt/internal/compat"
+	"github.com/hausfold/scruff/internal/compat"
 )
 
 // Config is the resolved contents of ~/.config/holt/config.toml.
@@ -46,9 +46,9 @@ type Config struct {
 	// unnamed lane keeps taking a random word pair. See SPEC.md §5.6.
 	Namer string
 
-	// Hooks maps a seam name to the argv holt runs for it. Absent means "use
+	// Hooks maps a seam name to the argv scruff runs for it. Absent means "use
 	// the built-in", which is what an empty config gets and therefore what
-	// every holt install had before hooks existed.
+	// every scruff install had before hooks existed.
 	Hooks map[string][]string
 
 	// Path is where this came from, or "" when no config file was found. Only
@@ -77,10 +77,10 @@ const (
 	// untracked files on an already-landed branch (build scratch).
 	HookPreserve = "preserve"
 
-	// HookResume is the action seam behind `holt <name>`: the checkout has been
+	// HookResume is the action seam behind `scruff <name>`: the checkout has been
 	// rebuilt and the session needs reopening. A machine that runs its agents
 	// in a multiplexer wants a new pane cd'd into the lane here, not an
-	// agent exec'd into holt's own process. Built-in: chdir + exec the client's
+	// agent exec'd into scruff's own process. Built-in: chdir + exec the client's
 	// resume command.
 	HookResume = "resume"
 
@@ -88,11 +88,11 @@ const (
 	// created and has no session yet. Built-in: chdir + exec the client.
 	HookOpen = "open"
 
-	// HookFocus is the action seam behind `holt focus <name>`: the lane is
+	// HookFocus is the action seam behind `scruff focus <name>`: the lane is
 	// already running somewhere and the user wants to be looking at it. A
 	// machine that opens a window per lane raises the one it already has here
-	// — the join from a lane to a window is its own, and holt has no business
-	// knowing it. Defer means "no window of mine holds that lane", and holt
+	// — the join from a lane to a window is its own, and scruff has no business
+	// knowing it. Defer means "no window of mine holds that lane", and scruff
 	// falls back to resume, which opens one. Built-in: resume.
 	HookFocus = "focus"
 )
@@ -101,7 +101,7 @@ const (
 type Answer int
 
 const (
-	// Defer means the hook had no opinion, or there was no hook. holt runs its
+	// Defer means the hook had no opinion, or there was no hook. scruff runs its
 	// built-in. Every failure mode resolves here, so a broken hook costs you
 	// the override and never the operation.
 	Defer Answer = iota
@@ -112,7 +112,7 @@ const (
 	No
 )
 
-// Exit codes a hook may return. 0/1/2 mean what they mean in holt's own
+// Exit codes a hook may return. 0/1/2 mean what they mean in scruff's own
 // exit-code table (SPEC.md §2.4), so a hook and a wrapper script speak the same
 // language; 3 is the one addition, and it is deliberately NOT 0, 1 or 2 so that
 // the ways a script dies by accident — 1 from `set -e`, 126 from a lost +x bit,
@@ -120,7 +120,7 @@ const (
 const (
 	exitYes     = 0 // yes / handled
 	exitNo      = 1 // no / refused or failed
-	exitRefused = 2 // no, declined for safety — same meaning as holt's own 2
+	exitRefused = 2 // no, declined for safety — same meaning as scruff's own 2
 	exitDefer   = 3 // no opinion: run the built-in
 )
 
@@ -135,7 +135,7 @@ type Result struct {
 	// which rule fired, so the answer stays attributable in `--json`.
 	Data map[string]any
 	// Warning is set when the hook misbehaved: it could not be exec'd, or it
-	// exited with a code that means nothing. holt defers in both cases and
+	// exited with a code that means nothing. scruff defers in both cases and
 	// surfaces this as a warnings[] entry, because a policy override that
 	// silently stopped applying is how you end up trusting the wrong answer.
 	Warning string
@@ -160,16 +160,16 @@ func (c *Config) Ask(hook string, payload map[string]string) Result {
 }
 
 // Do runs an ACTION hook: it inherits the terminal, because it is replacing
-// something holt would have exec'd and may well be interactive.
+// something scruff would have exec'd and may well be interactive.
 //
 // Its stdout is redirected to STDERR rather than inherited. Both are the same
-// terminal for an interactive hook, so a TUI still draws; but holt's stdout
-// carries data under a contract other programs parse (`cd "$(holt child …)"`,
+// terminal for an interactive hook, so a TUI still draws; but scruff's stdout
+// carries data under a contract other programs parse (`cd "$(scruff child …)"`,
 // Claude Code's create hook), and a hook must not be able to break that.
 //
-// The hook runs as a child rather than replacing holt via exec, because holt
+// The hook runs as a child rather than replacing scruff via exec, because scruff
 // has to see the exit code to know whether the hook handled the work or
-// deferred. holt exits as soon as the child does, so a pane whose lifetime is
+// deferred. scruff exits as soon as the child does, so a pane whose lifetime is
 // the session's still ends when the session does — with one cheap extra process
 // in the middle for its duration.
 func (c *Config) Do(hook string, payload map[string]string) Result {
@@ -204,7 +204,7 @@ func (c *Config) run(hook string, payload map[string]string, action bool) Result
 			// generated config, a lost +x bit, a hook pointing at a store path
 			// from a rebuild ago. The operation continues on the built-in.
 			return Result{Answer: Defer, Warning: fmt.Sprintf(
-				"the %s hook (%s) wouldn't run (%v) — holt used its own %s rule instead",
+				"the %s hook (%s) wouldn't run (%v) — scruff used its own %s rule instead",
 				hook, argv[0], err, hook)}
 		}
 		switch ee.ExitCode() {
@@ -216,7 +216,7 @@ func (c *Config) run(hook string, payload map[string]string, action bool) Result
 			return Result{Answer: Defer}
 		default:
 			return Result{Answer: Defer, Warning: fmt.Sprintf(
-				"the %s hook (%s) exited %d, which means nothing to holt — holt used its own %s rule instead (0 yes, 1 no, 2 refused, 3 no opinion)",
+				"the %s hook (%s) exited %d, which means nothing to scruff — scruff used its own %s rule instead (0 yes, 1 no, 2 refused, 3 no opinion)",
 				hook, argv[0], ee.ExitCode(), hook)}
 		}
 	}
@@ -250,8 +250,8 @@ func decode(s string) map[string]any {
 // lines of shell instead of a program with a JSON parser. Same data as stdin,
 // same names as the adapter template variables (SPEC.md §5.2).
 //
-// Three collisions to know about, all the same shape: holt's own environment
-// got to the name first, so a field named after it would hand holt back its own
+// Three collisions to know about, all the same shape: scruff's own environment
+// got to the name first, so a field named after it would hand scruff back its own
 // input. HOLT_BASE is the lane base DIRECTORY, so the repo's default branch is
 // HOLT_BASE_BRANCH. HOLT_STATE is the state DIRECTORY and HOLT_AGENT is the
 // one-invocation default-client override (both env.go), so the lane's fields
@@ -262,7 +262,7 @@ func decode(s string) map[string]any {
 // so before the rename, `holt` run in an agent pane resolved its
 // machine-global state to the relative path "live" under the cwd (a git
 // checkout, routinely), and read the lane's own client as an override sitting
-// ABOVE the operator's config key. A hook that wants the client holt was about
+// ABOVE the operator's config key. A hook that wants the client scruff was about
 // to run has HOLT_COMMAND, which is the resolved invocation rather than an id.
 //
 // Renaming any of the three would break something that already exists.
@@ -328,7 +328,7 @@ func Dir() string {
 //
 // The parser is a deliberate subset of TOML rather than a dependency: top-level
 // `key = "string"`, a `[hooks]` table, and values that are either a string or
-// an array of strings. holt stays dependency-free through 0.1 (go.mod says so),
+// an array of strings. scruff stays dependency-free through 0.1 (go.mod says so),
 // and this file has no syntax worth a parser beyond that. A line it cannot
 // understand is SKIPPED with a warning rather than fatal: a config typo must
 // not be able to stop a pane from opening.

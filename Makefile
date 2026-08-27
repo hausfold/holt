@@ -1,5 +1,5 @@
 VERSION := $(shell cat VERSION)
-LDFLAGS := -X github.com/hausfold/holt/internal/commands.Version=$(VERSION)
+LDFLAGS := -X github.com/hausfold/scruff/internal/commands.Version=$(VERSION)
 
 # One binary, two names. `holt` is a symlink onto `scruff` for the length of the
 # rename (docs/rename.md §3) — the program tells them apart by argv[0], so there
@@ -21,13 +21,13 @@ build:
 # rewrite untouched.
 test: build
 	go test ./...
-	bats test/holt.bats
+	bats test/scruff.bats
 
 # What fraction of the 0.1 contract holds today. Every remaining failure should
 # be an unimplemented command, never a wrong behaviour in an implemented one.
 score: build
-	@bats test/holt.bats 2>&1 | grep -c '^ok ' | tr -d ' ' | xargs -I{} echo "{} / $$(grep -c '^@test' test/holt.bats) passing"
-	@bats test/holt.bats 2>&1 | grep '^not ok' | sed 's/^not ok [0-9]* //;s/:.*//' | sort | uniq -c | sort -rn
+	@bats test/scruff.bats 2>&1 | grep -c '^ok ' | tr -d ' ' | xargs -I{} echo "{} / $$(grep -c '^@test' test/scruff.bats) passing"
+	@bats test/scruff.bats 2>&1 | grep '^not ok' | sed 's/^not ok [0-9]* //;s/:.*//' | sort | uniq -c | sort -rn
 
 fmt:
 	gofmt -w ./cmd ./internal

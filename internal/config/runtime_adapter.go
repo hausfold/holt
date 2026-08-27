@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 )
 
-// BuiltinRuntime is the one backend id holt answers for with no config file.
+// BuiltinRuntime is the one backend id scruff answers for with no config file.
 const BuiltinRuntime = "tart"
 
 // RuntimeAdapter is a `kind = "runtime"` adapter (SPEC.md §5.5): the argv
@@ -19,7 +19,7 @@ type RuntimeAdapter struct {
 	Setup    []string // argv, unrendered — RenderArgv fills in the template
 	Enter    []string
 	Teardown []string
-	// Builtin names a backend holt implements itself rather than reading argv
+	// Builtin names a backend scruff implements itself rather than reading argv
 	// for. Empty for every adapter that came from a file, which is all of them
 	// except `tart` — see internal/commands/runtime_tart.go for why that one
 	// is different and why the file still wins when it exists.
@@ -29,12 +29,12 @@ type RuntimeAdapter struct {
 // LoadRuntimeAdapter reads ~/.config/holt/adapters/runtime/<id>.toml.
 //
 // A missing file is an error for every id but one, rather than a silent Defer
-// the way the policy-seam hooks in config.go behave: `holt runtime
+// the way the policy-seam hooks in config.go behave: `scruff runtime
 // up/enter/down` are explicit verbs a caller only reaches after naming a
 // --backend, so a typo'd or unwritten one deserves a straight error naming the
 // path it looked for, not a quiet no-op.
 //
-// The exception is `tart`, which holt implements itself — the setup step is a
+// The exception is `tart`, which scruff implements itself — the setup step is a
 // multi-command dance the three argv slots cannot hold, so leaving it to the
 // file meant every standalone user writing the same script before they could
 // use the verb at all. A tart.toml on disk still wins: the built-in is a

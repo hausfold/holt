@@ -1,22 +1,22 @@
 name: release
 
-# Tag v<semver> (e.g. v0.2.0) -> a GitHub release, plus all six artifacts holt
+# Tag v<semver> (e.g. v0.2.0) -> a GitHub release, plus all six artifacts scruff
 # ships, published from one number:
 #
 #   CLI          the GitHub release + source tarball (Nix consumers take the
 #                flake input; there is no binary to attach)
-#   sdk/ts       npm            @hausfold/holt
-#   sdk/python   PyPI           hausfold-holt
-#   sdk/rust     crates.io      hausfold-holt
+#   sdk/ts       npm            @hausfold/scruff
+#   sdk/python   PyPI           hausfold-scruff
+#   sdk/rust     crates.io      hausfold-scruff
 #   sdk/go       a `sdk/go/v<version>` tag — Go's proxy needs nothing else
-#   sdk/swift    a tag on the hausfold/holt-swift mirror — SwiftPM likewise
+#   sdk/swift    a tag on the hausfold/scruff-swift mirror — SwiftPM likewise
 #
-# Cut tags with `bench release holt <version>` from the workshop; it stamps the
+# Cut tags with `bench release scruff <version>` from the workshop; it stamps the
 # version everywhere (script/stamp-version.sh), commits, pushes, tags, and then
 # watches this run. Never push a v* tag by hand — the stamp commit has to land
 # first or the `version stamp` job below rejects the tag.
 #
-# holt is semver, not the family's CalVer. See script/stamp-version.sh for why
+# scruff is semver, not the family's CalVer. See script/stamp-version.sh for why
 # (short version: four of these registries already hold semver 0.1.0, and a
 # published version can never be taken back).
 #
@@ -25,16 +25,16 @@ name: release
 # prompt, and npm/PyPI get build provenance for free. Each registry has to be
 # told to trust this repo + workflow ONCE, in a browser:
 #
-#   npm       npmjs.com -> @hausfold/holt -> Settings -> Trusted Publisher
-#             GitHub Actions, org `hausfold`, repo `holt`, workflow `release.yml`
-#   PyPI      pypi.org -> hausfold-holt -> Publishing -> Add a trusted publisher
-#             owner `hausfold`, repo `holt`, workflow `release.yml`
-#   crates.io crates.io -> hausfold-holt -> Settings -> Trusted Publishing
-#             repo `hausfold/holt`, workflow `release.yml`
+#   npm       npmjs.com -> @hausfold/scruff -> Settings -> Trusted Publisher
+#             GitHub Actions, org `hausfold`, repo `scruff`, workflow `release.yml`
+#   PyPI      pypi.org -> hausfold-scruff -> Publishing -> Add a trusted publisher
+#             owner `hausfold`, repo `scruff`, workflow `release.yml`
+#   crates.io crates.io -> hausfold-scruff -> Settings -> Trusted Publishing
+#             repo `hausfold/scruff`, workflow `release.yml`
 #
 # The Swift mirror is the one that can't use OIDC — pushing to ANOTHER repo is
 # outside what this workflow's GITHUB_TOKEN can ever be scoped to. It needs a
-# fine-grained PAT with Contents: read+write on hausfold/holt-swift, stored as
+# fine-grained PAT with Contents: read+write on hausfold/scruff-swift, stored as
 # the repo secret MIRROR_TOKEN.
 #
 # Until a registry is wired, its job fails and the others still publish — the
@@ -72,7 +72,7 @@ jobs:
 
   # The full PR gate, reused verbatim (see check.yml's `workflow_call`): the Go
   # acceptance suite on both OSes, all five SDK suites against the shared
-  # fake-holt fixture, and the Swift suite on macOS.
+  # fake-scruff fixture, and the Swift suite on macOS.
   check:
     uses: ./.github/workflows/check.yml
 
@@ -119,8 +119,8 @@ jobs:
         working-directory: sdk/ts
         run: |
           V="${{ needs.stamp.outputs.version }}"
-          if npm view "@hausfold/holt@$V" version >/dev/null 2>&1; then
-            echo "@hausfold/holt@$V is already on npm — nothing to do"
+          if npm view "@hausfold/scruff@$V" version >/dev/null 2>&1; then
+            echo "@hausfold/scruff@$V is already on npm — nothing to do"
             exit 0
           fi
           npm publish --access public
@@ -161,9 +161,9 @@ jobs:
         id: pub
         run: |
           V="${{ needs.stamp.outputs.version }}"
-          if curl -sf -H 'User-Agent: hausfold-holt-release' \
-               "https://crates.io/api/v1/crates/hausfold-holt/$V" >/dev/null; then
-            echo "hausfold-holt $V is already on crates.io — nothing to do"
+          if curl -sf -H 'User-Agent: hausfold-scruff-release' \
+               "https://crates.io/api/v1/crates/hausfold-scruff/$V" >/dev/null; then
+            echo "hausfold-scruff $V is already on crates.io — nothing to do"
             echo "skip=1" >> "$GITHUB_OUTPUT"
           fi
       - uses: rust-lang/crates-io-auth-action@v1
@@ -190,7 +190,7 @@ jobs:
       # There is no registry to publish to: a Go module IS its tag. sdk/go has
       # its own go.mod, so the tag carries the subdirectory as a prefix —
       # `sdk/go/v0.2.0`, not `v0.2.0` — which is what makes
-      # `go get github.com/hausfold/holt/sdk/go@v0.2.0` resolve.
+      # `go get github.com/hausfold/scruff/sdk/go@v0.2.0` resolve.
       - name: tag the module
         run: |
           # An annotated tag needs a tagger; actions/checkout doesn't set one.
@@ -212,13 +212,13 @@ jobs:
           cd "$(mktemp -d)" && go mod init probe
           for _ in 1 2 3 4 5; do
             GOPROXY=https://proxy.golang.org GOFLAGS=-mod=mod \
-              go get "github.com/hausfold/holt/sdk/go@v$V" && exit 0
+              go get "github.com/hausfold/scruff/sdk/go@v$V" && exit 0
             echo "proxy hasn't seen v$V yet — retrying in 20s"; sleep 20
           done
           exit 1
 
   swift:
-    name: SwiftPM (holt-swift mirror)
+    name: SwiftPM (scruff-swift mirror)
     needs: [stamp, check]
     runs-on: ubuntu-latest
     steps:
@@ -236,5 +236,5 @@ jobs:
           fi
           git config user.name  haus-release
           git config user.email haus-release@users.noreply.github.com
-          MIRROR_URL="https://x-access-token:$MIRROR_TOKEN@github.com/hausfold/holt-swift.git" \
+          MIRROR_URL="https://x-access-token:$MIRROR_TOKEN@github.com/hausfold/scruff-swift.git" \
             sdk/swift/sync-mirror.sh --tag "${{ needs.stamp.outputs.version }}"

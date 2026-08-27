@@ -12,7 +12,7 @@ func writeRuntimeAdapter(t *testing.T, id, body string) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
-	adapters := filepath.Join(dir, "holt", "adapters", "runtime")
+	adapters := filepath.Join(dir, "scruff", "adapters", "runtime")
 	if err := os.MkdirAll(adapters, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -76,9 +76,9 @@ func TestLoadRuntimeAdapterValidThreeKeyFile(t *testing.T) {
 	writeRuntimeAdapter(t, "tart", `
 kind = "runtime"
 id   = "tart"
-setup = ["tart", "clone", "base", "holt-{{.Name}}"]
-enter = ["ssh", "admin@holt-{{.Name}}"]
-teardown = ["tart", "delete", "holt-{{.Name}}", "--force"]
+setup = ["tart", "clone", "base", "scruff-{{.Name}}"]
+enter = ["ssh", "admin@scruff-{{.Name}}"]
+teardown = ["tart", "delete", "scruff-{{.Name}}", "--force"]
 `)
 	adapter, err := LoadRuntimeAdapter("tart")
 	if err != nil {
@@ -87,13 +87,13 @@ teardown = ["tart", "delete", "holt-{{.Name}}", "--force"]
 	if adapter.ID != "tart" {
 		t.Fatalf("ID = %q, want tart", adapter.ID)
 	}
-	if want := []string{"tart", "clone", "base", "holt-{{.Name}}"}; !reflect.DeepEqual(adapter.Setup, want) {
+	if want := []string{"tart", "clone", "base", "scruff-{{.Name}}"}; !reflect.DeepEqual(adapter.Setup, want) {
 		t.Fatalf("Setup = %q, want %q", adapter.Setup, want)
 	}
-	if want := []string{"ssh", "admin@holt-{{.Name}}"}; !reflect.DeepEqual(adapter.Enter, want) {
+	if want := []string{"ssh", "admin@scruff-{{.Name}}"}; !reflect.DeepEqual(adapter.Enter, want) {
 		t.Fatalf("Enter = %q, want %q", adapter.Enter, want)
 	}
-	if want := []string{"tart", "delete", "holt-{{.Name}}", "--force"}; !reflect.DeepEqual(adapter.Teardown, want) {
+	if want := []string{"tart", "delete", "scruff-{{.Name}}", "--force"}; !reflect.DeepEqual(adapter.Teardown, want) {
 		t.Fatalf("Teardown = %q, want %q", adapter.Teardown, want)
 	}
 }
@@ -116,12 +116,12 @@ setup = ["echo", "up"]
 }
 
 func TestRenderArgvSubstitutesVariables(t *testing.T) {
-	vars := TemplateVars{Name: "sparkle", Path: "/lane/sparkle", Repo: "hausfold/holt"}
-	got, err := RenderArgv([]string{"tart", "clone", "base", "holt-{{.Name}}", "--path", "{{.Path}}"}, vars)
+	vars := TemplateVars{Name: "sparkle", Path: "/lane/sparkle", Repo: "hausfold/scruff"}
+	got, err := RenderArgv([]string{"tart", "clone", "base", "scruff-{{.Name}}", "--path", "{{.Path}}"}, vars)
 	if err != nil {
 		t.Fatalf("RenderArgv failed: %v", err)
 	}
-	want := []string{"tart", "clone", "base", "holt-sparkle", "--path", "/lane/sparkle"}
+	want := []string{"tart", "clone", "base", "scruff-sparkle", "--path", "/lane/sparkle"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("RenderArgv = %q, want %q", got, want)
 	}

@@ -1,14 +1,20 @@
-// ⚠️ This path MOVED on 2026-08-16, and a Go module path is the one kind of
-// name that cannot be moved cleanly: `sdk/go` is published on Go's immutable
-// proxy, so every version up to v0.2.8 stays resolvable under the old owner
-// forever and nothing published from here on is reachable there. An existing
-// importer edits its import line or stays on v0.2.8. The root module is a
-// binary, so its own path is nobody's API.
-module github.com/hausfold/holt
+// ⚠️ This path has MOVED TWICE, and a Go module path is the one kind of name
+// that cannot be moved cleanly: `sdk/go` is published on Go's immutable proxy,
+// so each old path stays resolvable at the versions published under it forever
+// and nothing published after a move is reachable there.
+//
+//	≤ v0.2.8         github.com/nebelhaus/holt   (the org rename, 2026-08-16)
+//	v0.2.9 … v0.5.0  github.com/hausfold/holt    (the scruff rename, 1.0.0)
+//	≥ v1.0.0         github.com/hausfold/scruff
+//
+// An importer on either old path edits its import line or pins the last tag
+// published under it. The root module is a binary, so its own path is nobody's
+// API.
+module github.com/hausfold/scruff
 
 go 1.26
 
-// The dependency-free run ended here, deliberately: `holt watch --json`
+// The dependency-free run ended here, deliberately: `scruff watch --json`
 // (SPEC.md §14.3 step 2) needs a real filesystem-event API, and every
 // alternative to a well-worn cross-platform library is reinventing kqueue and
 // inotify by hand for a lifecycle stream that other people's SDKs depend on.
@@ -38,7 +44,7 @@ require github.com/fsnotify/fsnotify v1.7.0
 //   - It reaches NOTHING a downstream inherits. `sdk/go` is its own module with
 //     its own go.mod, so the five published SDKs' dependency graphs are
 //     untouched; this binds the binary alone. That is what made it affordable.
-//   - It holds the same stdout-is-data-only contract holt already documents in
+//   - It holds the same stdout-is-data-only contract scruff already documents in
 //     SPEC.md §2.3, from its own side: Say/Warn/Fail write to stderr and Data is
 //     the only thing that reaches stdout.
 //

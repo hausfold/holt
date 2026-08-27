@@ -1,4 +1,4 @@
-package holt
+package scruff
 
 import (
 	"context"
@@ -7,11 +7,11 @@ import (
 	"testing"
 )
 
-// In-package (not holt_test) because it drives the fixture's dedicated
+// In-package (not scruff_test) because it drives the fixture's dedicated
 // "reap-refused" verb directly through run() — no exported method has an
 // argv shape that lands on that first arg.
 func TestErrorMapping_NonZeroExitCarriesTheRealCode(t *testing.T) {
-	c := &Client{Bin: "./testdata/fake-holt.sh"}
+	c := &Client{Bin: "./testdata/fake-scruff.sh"}
 	_, _, err := c.run(context.Background(), "reap-refused")
 	if err == nil {
 		t.Fatal("run(reap-refused): want error, got nil")

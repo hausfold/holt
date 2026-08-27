@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// trustWorktree edits a file holt does not own — Claude Code's ~/.claude.json,
+// trustWorktree edits a file scruff does not own — Claude Code's ~/.claude.json,
 // ~180KB of that client's own state — so the thing under test is as much what it
 // LEAVES ALONE as what it writes. The re-encode is the sharp edge: decoding JSON
 // into map[string]any turns every number into a float64 unless you ask for
@@ -310,7 +310,7 @@ func TestTrustWorktreePiHonoursANearerRefusal(t *testing.T) {
 	}
 }
 
-// holt never grants trust the user never gave.
+// scruff never grants trust the user never gave.
 func TestTrustWorktreePiRefusesUnknownParent(t *testing.T) {
 	path := withPiTrust(t, `{"/home/code": true}`)
 	trustWorktree("pi", "/elsewhere/repo", "/cache/worktrees/repo/lane")
@@ -345,9 +345,9 @@ func TestTrustWorktreePiPreservesEverythingElse(t *testing.T) {
 	}
 }
 
-// The file is pi's, and holt must hand it back the way it found it — an
+// The file is pi's, and scruff must hand it back the way it found it — an
 // os.CreateTemp default of 0600 carried through the rename would tighten a
-// file holt does not own.
+// file scruff does not own.
 func TestTrustWorktreePiKeepsPisFileMode(t *testing.T) {
 	path := withPiTrust(t, `{"/home/code": true}`)
 	if err := os.Chmod(path, 0o644); err != nil {

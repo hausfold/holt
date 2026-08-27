@@ -8,7 +8,7 @@ import (
 // The gate. Everything sanitizeName lets through becomes a branch name and a
 // path segment, so the interesting cases are all the ones that must NOT.
 func TestSanitizeName(t *testing.T) {
-	own := []string{"holt", "hausfold"}
+	own := []string{"scruff", "hausfold"}
 	cases := []struct {
 		in, want, why string
 	}{
@@ -18,8 +18,8 @@ func TestSanitizeName(t *testing.T) {
 		{"\"reap-ledger-race\"", "reap-ledger-race", "and quote them"},
 		{"fix mobile nav", "fix-mobile-nav", "spaces instead of hyphens"},
 		{"Mobile-Nav-Jitter", "mobile-nav-jitter", "case is not the model's to choose"},
-		{"holt-reap-ledger", "reap-ledger", "the repo names itself"},
-		{"hausfold-holt-parking", "parking", "…in either half of the slug"},
+		{"scruff-reap-ledger", "reap-ledger", "the repo names itself"},
+		{"hausfold-scruff-parking", "parking", "…in either half of the slug"},
 		{"one-two-three-four-five", "one-two-three", "more than three words"},
 		{"absolutely-magnificent-recalibration", "absolutely-magnificent", "the word that would break the length cap is dropped"},
 
@@ -35,8 +35,8 @@ func TestSanitizeName(t *testing.T) {
 		{"/tmp/evil", "", "an absolute path"},
 		{"a;rm -rf ~", "", "shell metacharacters"},
 		{"worktree-thing$(whoami)", "", "a substitution"},
-		{"holt", "", "the repo and nothing else"},
-		{"lane_name", "", "an underscore is not holt's separator"},
+		{"scruff", "", "the repo and nothing else"},
+		{"lane_name", "", "an underscore is not scruff's separator"},
 		{"名前", "", "no non-ascii reaches a branch name"},
 		{"42", "", "a bare number"},
 		{"12-34", "", "…or several"},
@@ -53,7 +53,7 @@ func TestSanitizeName(t *testing.T) {
 // paragraph about it. The first line that IS a name wins; a preamble can never
 // become one, because it is rejected whole rather than sanitized into a word.
 func TestSlugFromReadsPastChatter(t *testing.T) {
-	own := []string{"holt"}
+	own := []string{"scruff"}
 	cases := []struct{ out, want string }{
 		{"mobile-nav-jitter\n", "mobile-nav-jitter"},
 		{"Here is the name:\n\nmobile-nav-jitter\n", "mobile-nav-jitter"},
@@ -70,14 +70,14 @@ func TestSlugFromReadsPastChatter(t *testing.T) {
 	}
 }
 
-// The taken names are in the request because holt's own collision handling is a
+// The taken names are in the request because scruff's own collision handling is a
 // numeric suffix: two lanes named from similar tasks become `fix-mobile` and
 // `fix-mobile-2`, which is correct and unreadable. A namer that can see the
 // neighbours picks a different word instead.
 func TestNamingRequestCarriesRepoTaskAndNeighbours(t *testing.T) {
-	req := namingRequest("hausfold/holt", "the bar shows a draft PR in the merged colour", []string{"tart-backend", "reap-ledger"})
+	req := namingRequest("hausfold/scruff", "the bar shows a draft PR in the merged colour", []string{"tart-backend", "reap-ledger"})
 	for _, want := range []string{
-		"hausfold/holt",
+		"hausfold/scruff",
 		"the bar shows a draft PR in the merged colour",
 		"tart-backend, reap-ledger",
 		"2 or 3 lowercase words",

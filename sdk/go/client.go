@@ -1,9 +1,9 @@
-// Package holt is a thin Go client over the holt binary — the worktree-
-// lifecycle substrate for parallel coding agents. holt stays a binary;
+// Package scruff is a thin Go client over the scruff binary — the worktree-
+// lifecycle substrate for parallel coding agents. scruff stays a binary;
 // this package shells out to it (exec + --json, watch --json for a live
 // NDJSON stream) rather than talking to a daemon, because there isn't one
 // (SPEC.md §14.1).
-package holt
+package scruff
 
 import (
 	"bytes"
@@ -15,11 +15,11 @@ import (
 	"strings"
 )
 
-// Client is a thin client over the holt binary. Every method shells out —
+// Client is a thin client over the scruff binary. Every method shells out —
 // there is no daemon, no port, no socket (SPEC.md §14.1) — so the zero
 // value is a complete, usable client:
 //
-//	c := &holt.Client{}
+//	c := &scruff.Client{}
 //	envelope, err := c.List(ctx)
 //
 // Two methods (NewInteractive, ResumeInteractive) inherit the calling
@@ -29,16 +29,16 @@ import (
 // so it's cheap to copy or construct as often as you like; it is safe for
 // concurrent use because every call is a fresh subprocess.
 type Client struct {
-	// Bin is the path to the holt binary, or a bare name resolved on
-	// PATH. Empty means "holt".
+	// Bin is the path to the scruff binary, or a bare name resolved on
+	// PATH. Empty means "scruff".
 	Bin string
 	// Dir is the working directory every command runs from — most of
-	// holt's commands are cwd-sensitive (new, park, a bare `holt
+	// scruff's commands are cwd-sensitive (new, park, a bare `scruff
 	// <name>`). Empty means this process's own cwd.
 	Dir string
 	// Env is extra environment variables, merged over (and overriding)
-	// the current process's environment — useful for HOLT_AGENT,
-	// HOLT_OCCUPANCY=lease. Unlike the TS/Python SDKs, there is no
+	// the current process's environment — useful for SCRUFF_AGENT,
+	// SCRUFF_OCCUPANCY=lease. Unlike the TS/Python SDKs, there is no
 	// "unset a var" sentinel here: os/exec has none either, so an entry
 	// simply adds or overrides, never removes, a parent env var.
 	Env map[string]string
@@ -46,7 +46,7 @@ type Client struct {
 
 func (c *Client) bin() string {
 	if c.Bin == "" {
-		return "holt"
+		return "scruff"
 	}
 	return c.Bin
 }
@@ -69,13 +69,13 @@ func (c *Client) command(ctx context.Context, args ...string) *exec.Cmd {
 	return cmd
 }
 
-// run executes one holt invocation to completion and collects its output.
-// Every non---json holt command writes human text to stdout on success —
+// run executes one scruff invocation to completion and collects its output.
+// Every non---json scruff command writes human text to stdout on success —
 // this is the primitive List/Watch build their typed parsing on top of,
 // and the one lifecycle methods (Park, Reap, ...) use directly, surfacing
 // stdout as a plain string.
 //
-// Returns *Error on a non-zero exit, carrying holt's exit code (SPEC.md
+// Returns *Error on a non-zero exit, carrying scruff's exit code (SPEC.md
 // §2.4) rather than collapsing every failure into one shape.
 func (c *Client) run(ctx context.Context, args ...string) (stdout, stderr string, err error) {
 	cmd := c.command(ctx, args...)
@@ -114,9 +114,9 @@ func (c *Client) runJSON(ctx context.Context, v any, args ...string) error {
 	return json.Unmarshal([]byte(stdout), v)
 }
 
-// List runs `holt --json` / `holt list --json` — byte-identical (SPEC.md
+// List runs `scruff --json` / `scruff list --json` — byte-identical (SPEC.md
 // §2.2). The full snapshot: every live/parked lane, across every repo
-// holt knows about. Poll this for landedness and PR state; use Watch for
+// scruff knows about. Poll this for landedness and PR state; use Watch for
 // everything else, since it's push rather than poll.
 func (c *Client) List(ctx context.Context) (*Envelope, error) {
 	var env Envelope
@@ -126,7 +126,7 @@ func (c *Client) List(ctx context.Context) (*Envelope, error) {
 	return &env, nil
 }
 
-// Child runs `holt child <repo> [name]` — a lane on ANOTHER repo,
+// Child runs `scruff child <repo> [name]` — a lane on ANOTHER repo,
 // registered as a child of Dir. Prints only the new checkout's path on
 // stdout (SPEC.md §2.3's "only the path" discipline extends here too) and
 // never execs a client, which is what makes it the right primitive for an
@@ -144,7 +144,7 @@ func (c *Client) Child(ctx context.Context, repoPath, name string) (string, erro
 	return strings.TrimSpace(stdout), nil
 }
 
-// Spawn runs `holt spawn <repo> <name> [agent]` — a named lane for a
+// Spawn runs `scruff spawn <repo> <name> [agent]` — a named lane for a
 // caller with no pane of its own (a scheduler, a web backend). Like
 // Child, only ever creates the lane and prints its path; never execs.
 // agent == "" omits the argument.
@@ -160,7 +160,7 @@ func (c *Client) Spawn(ctx context.Context, repoPath, name, agent string) (strin
 	return strings.TrimSpace(stdout), nil
 }
 
-// Resume runs `holt <name>` / `holt resume <name>` with stdout captured
+// Resume runs `scruff <name>` / `scruff resume <name>` with stdout captured
 // rather than a terminal — which means the Go binary's own TTY check
 // (ui.IsTTY) sees a pipe and, by design, never execs a client. It
 // rebuilds the checkout if needed and returns the human-readable result:
@@ -173,7 +173,7 @@ func (c *Client) Resume(ctx context.Context, name string) (string, error) {
 	return stdout, err
 }
 
-// Park runs `holt park [label]` — commits the working tree as one
+// Park runs `scruff park [label]` — commits the working tree as one
 // `wip:` commit on the current branch. Never touches the shared stash
 // stack (README's "park, not git stash" section) — this is the one safe
 // way for concurrent lanes to set work aside. label == "" omits the
@@ -187,24 +187,24 @@ func (c *Client) Park(ctx context.Context, label string) error {
 	return err
 }
 
-// Unpark runs `holt unpark` — reverses the most recent Park, putting its
+// Unpark runs `scruff unpark` — reverses the most recent Park, putting its
 // changes back uncommitted. Returns an *Error with Refused() true if that
-// commit is already pushed (holt will not rewrite published history) or
+// commit is already pushed (scruff will not rewrite published history) or
 // HEAD isn't a parked commit.
 func (c *Client) Unpark(ctx context.Context) error {
 	_, _, err := c.run(ctx, "unpark")
 	return err
 }
 
-// Reap runs `holt reap` — sweeps every LANDED lane nobody is standing in
+// Reap runs `scruff reap` — sweeps every LANDED lane nobody is standing in
 // (occupied, per Heartbeat/lsof, always wins). Never removes the checkout
-// holt is being run from, and never removes a stray.
+// scruff is being run from, and never removes a stray.
 func (c *Client) Reap(ctx context.Context) error {
 	_, _, err := c.run(ctx, "reap")
 	return err
 }
 
-// Reship runs `holt reship [name]` — pushes a branch that outran its
+// Reship runs `scruff reship [name]` — pushes a branch that outran its
 // already-merged PR, and opens the follow-up. Returns an *Error with
 // Degraded() true if `gh` itself is unavailable. name == "" omits the
 // argument.
@@ -217,9 +217,9 @@ func (c *Client) Reship(ctx context.Context, name string) error {
 	return err
 }
 
-// Heartbeat runs `holt heartbeat [path] [--pid N]` — takes or refreshes
+// Heartbeat runs `scruff heartbeat [path] [--pid N]` — takes or refreshes
 // the occupancy lease on a checkout (SPEC.md §9.1, §14.2). This is the
-// seam built for exactly this SDK: a program embedding holt has no pane
+// seam built for exactly this SDK: a program embedding scruff has no pane
 // and no shell cwd'd anywhere, so the lease is the only way Reap learns a
 // checkout is in use. A lease can only SAVE a lane from the sweep, never
 // condemn one — see Lease for a self-refreshing wrapper instead of
@@ -248,8 +248,8 @@ func (c *Client) ReleaseHeartbeat(ctx context.Context, path string) error {
 	return err
 }
 
-// NewInteractive runs `holt new [name] --open [agent]` with stdio INHERITED from
-// the calling process. holt execs the configured agent client
+// NewInteractive runs `scruff new [name] --open [agent]` with stdio INHERITED from
+// the calling process. scruff execs the configured agent client
 // unconditionally here (unlike Resume, `new` doesn't check for a TTY) —
 // appropriate for a real terminal app (a TUI) that wants to hand off the
 // screen and get control back when the agent session ends, and WRONG for
@@ -261,7 +261,7 @@ func (c *Client) NewInteractive(ctx context.Context, name, agent string) error {
 	if name != "" {
 		args = append(args, name)
 	}
-	// --open is explicit: bare `holt new` only prints the lane's path, and
+	// --open is explicit: bare `scruff new` only prints the lane's path, and
 	// this method's whole contract is "become the agent session".
 	args = append(args, "--open")
 	if agent != "" {
@@ -270,8 +270,8 @@ func (c *Client) NewInteractive(ctx context.Context, name, agent string) error {
 	return c.runInteractive(ctx, args...)
 }
 
-// ResumeInteractive runs `holt resume <name>` / `holt <name>` with stdio
-// INHERITED, so a real terminal's TTY check passes and holt hands off
+// ResumeInteractive runs `scruff resume <name>` / `scruff <name>` with stdio
+// INHERITED, so a real terminal's TTY check passes and scruff hands off
 // the screen to the agent client. Same caveat as NewInteractive: blocks
 // until that session ends.
 func (c *Client) ResumeInteractive(ctx context.Context, name string) error {

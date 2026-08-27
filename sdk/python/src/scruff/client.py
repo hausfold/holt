@@ -4,28 +4,28 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Optional
 
-from .errors import HoltError
+from .errors import ScruffError
 from .exec import RunOptions, merged_env, run, run_json
-from .types import HoltEnvelope, WatchEvent, WatchLine
+from .types import ScruffEnvelope, WatchEvent, WatchLine
 from .watch import watch_all, watch_lane
 
 
 @dataclass
-class HoltClientOptions:
-    # Path to the holt binary, or a bare name resolved on PATH. Defaults to
-    # "holt".
+class ScruffClientOptions:
+    # Path to the scruff binary, or a bare name resolved on PATH. Defaults to
+    # "scruff".
     bin: Optional[str] = None
-    # Working directory every command runs from — most of holt's commands
-    # are cwd-sensitive (`new`, `park`, a bare `holt <name>`). Defaults to
+    # Working directory every command runs from — most of scruff's commands
+    # are cwd-sensitive (`new`, `park`, a bare `scruff <name>`). Defaults to
     # this process's own cwd.
     cwd: Optional[str] = None
     # Extra environment variables, merged over the current process's env.
-    # Useful for HOLT_AGENT, HOLT_OCCUPANCY=lease.
+    # Useful for SCRUFF_AGENT, SCRUFF_OCCUPANCY=lease.
     env: Optional[dict[str, Optional[str]]] = None
 
 
-class HoltClient:
-    """A thin client over the `holt` binary. Every method shells out —
+class ScruffClient:
+    """A thin client over the `scruff` binary. Every method shells out —
     there is no daemon, no port, no socket (SPEC.md §14.1) — so this class
     holds nothing but the options each call needs, and is cheap to
     construct as often as you like.
@@ -36,20 +36,20 @@ class HoltClient:
     matters: see each method's docstring.
     """
 
-    def __init__(self, options: Optional[HoltClientOptions] = None) -> None:
-        options = options or HoltClientOptions()
+    def __init__(self, options: Optional[ScruffClientOptions] = None) -> None:
+        options = options or ScruffClientOptions()
         self._opts = RunOptions(bin=options.bin, cwd=options.cwd, env=options.env)
 
-    async def list(self) -> HoltEnvelope:
-        """`holt --json` / `holt list --json` — byte-identical (SPEC.md
+    async def list(self) -> ScruffEnvelope:
+        """`scruff --json` / `scruff list --json` — byte-identical (SPEC.md
         §2.2). The full snapshot: every live/parked lane, across every repo
-        holt knows about. Poll this for landedness and PR state; use
+        scruff knows about. Poll this for landedness and PR state; use
         {watch} for everything else, since it's push rather than poll."""
         data = await run_json(["--json"], self._opts)
-        return HoltEnvelope._from_json(data)
+        return ScruffEnvelope._from_json(data)
 
     def watch(self) -> AsyncGenerator[WatchLine, None]:
-        """`holt watch --json` as an async iterator of typed lines — a
+        """`scruff watch --json` as an async iterator of typed lines — a
         `hello`, then a `sync` burst for every lane already alive, `ready`,
         then live changes for as long as you keep iterating. Stop
         iterating (`break`, or `.aclose()`) to kill the underlying
@@ -60,7 +60,7 @@ class HoltClient:
         to one lane's `path`.
 
         ```python
-        async for line in holt.watch():
+        async for line in scruff.watch():
             if line.kind == "created":
                 print("new lane:", line.lane.name if line.lane else None)
         ```
@@ -79,13 +79,13 @@ class HoltClient:
         but a checkout path is the registry's own primary key (SPEC.md
         §2.1).
 
-        The module-level `holt.watch_lane` does the same thing but takes
+        The module-level `scruff.watch_lane` does the same thing but takes
         its own `RunOptions`; this one carries the client's bin/cwd/env.
         """
         return watch_lane(path, self._opts)
 
     async def child(self, repo_path: str, name: Optional[str] = None) -> str:
-        """`holt child <repo> [name]` — a lane on ANOTHER repo, registered
+        """`scruff child <repo> [name]` — a lane on ANOTHER repo, registered
         as a child of cwd. Prints only the new checkout's path on stdout
         (SPEC.md §2.3's "only the path" discipline extends here too) and
         never execs a client, which is what makes it the right primitive
@@ -96,7 +96,7 @@ class HoltClient:
         return result.stdout.strip()
 
     async def spawn(self, repo_path: str, name: str, agent: Optional[str] = None) -> str:
-        """`holt spawn <repo> <name> [agent]` — a named lane for a caller
+        """`scruff spawn <repo> <name> [agent]` — a named lane for a caller
         with no pane of its own (a scheduler, a web backend). Like
         {child}, only ever creates the lane and prints its path; never
         execs."""
@@ -105,7 +105,7 @@ class HoltClient:
         return result.stdout.strip()
 
     async def resume(self, name: str) -> str:
-        """`holt <name>` / `holt resume <name>` with stdout captured
+        """`scruff <name>` / `scruff resume <name>` with stdout captured
         rather than a terminal — which means the Go binary's own TTY check
         (`ui.IsTTY`) sees a pipe and, by design, never execs a client. It
         rebuilds the checkout if needed and returns the human-readable
@@ -117,36 +117,36 @@ class HoltClient:
         return result.stdout
 
     async def park(self, label: Optional[str] = None) -> None:
-        """`holt park [label]` — commits the working tree as one `wip:`
+        """`scruff park [label]` — commits the working tree as one `wip:`
         commit on the current branch. Never touches the shared stash stack
         (README's "park, not git stash" section) — this is the one safe
         way for concurrent lanes to set work aside."""
         await run(["park", *([label] if label else [])], self._opts)
 
     async def unpark(self) -> None:
-        """`holt unpark` — reverses the most recent `park`, putting its
-        changes back uncommitted. Raises {HoltError} with `.refused ==
-        True` if that commit is already pushed (holt will not rewrite
+        """`scruff unpark` — reverses the most recent `park`, putting its
+        changes back uncommitted. Raises {ScruffError} with `.refused ==
+        True` if that commit is already pushed (scruff will not rewrite
         published history) or HEAD isn't a parked commit."""
         await run(["unpark"], self._opts)
 
     async def reap(self) -> None:
-        """`holt reap` — sweeps every LANDED lane nobody is standing in
+        """`scruff reap` — sweeps every LANDED lane nobody is standing in
         (occupied, per {heartbeat}/`lsof`, always wins). Never removes the
-        checkout holt is being run from, and never removes a stray."""
+        checkout scruff is being run from, and never removes a stray."""
         await run(["reap"], self._opts)
 
     async def reship(self, name: Optional[str] = None) -> None:
-        """`holt reship [name]` — pushes a branch that outran its already-
+        """`scruff reship [name]` — pushes a branch that outran its already-
         merged PR, and opens the follow-up. Raises with `.degraded ==
         True` if `gh` itself is unavailable."""
         await run(["reship", *([name] if name else [])], self._opts)
 
     async def heartbeat(self, path: Optional[str] = None, *, pid: Optional[int] = None) -> None:
-        """`holt heartbeat [path] [--pid N | --release]` — takes or
+        """`scruff heartbeat [path] [--pid N | --release]` — takes or
         refreshes the occupancy lease on a checkout (SPEC.md §9.1, §14.2).
         This is the seam built for exactly this SDK: a program embedding
-        holt has no pane and no shell cwd'd anywhere, so the lease is the
+        scruff has no pane and no shell cwd'd anywhere, so the lease is the
         only way `reap` learns a checkout is in use. A lease can only SAVE
         a lane from the sweep, never condemn one — see {lease} for a
         self-refreshing wrapper instead of calling this on a timer
@@ -175,7 +175,7 @@ class HoltClient:
         from connect to disconnect:
 
         ```python
-        lease = await holt.lease(lane_dir)
+        lease = await scruff.lease(lane_dir)
         # ... serve the session ...
         await lease.release()
         ```
@@ -195,27 +195,27 @@ class HoltClient:
         return Lease(self, path, pid=pid, refresh_seconds=refresh_seconds)
 
     async def new_interactive(self, name: Optional[str] = None, agent: Optional[str] = None) -> None:
-        """`holt new [name] --open [agent]` with stdio INHERITED from the calling
-        process. holt execs the configured agent client unconditionally
+        """`scruff new [name] --open [agent]` with stdio INHERITED from the calling
+        process. scruff execs the configured agent client unconditionally
         here (unlike `resume`, `new` doesn't check for a TTY) —
         appropriate for a real terminal app (a TUI) that wants to hand off
         the screen and get control back when the agent session ends, and
         WRONG for a server: it will block until the agent process exits,
         with your stdio attached to whatever the agent expects."""
-        # --open is explicit: bare `holt new` only prints the lane's path.
+        # --open is explicit: bare `scruff new` only prints the lane's path.
         args = ["new", *([name] if name else []), "--open", *([agent] if agent else [])]
         await _run_interactive(args, self._opts)
 
     async def resume_interactive(self, name: str) -> None:
-        """`holt resume <name>` / `holt <name>` with stdio INHERITED, so a
-        real terminal's TTY check passes and holt hands off the screen to
+        """`scruff resume <name>` / `scruff <name>` with stdio INHERITED, so a
+        real terminal's TTY check passes and scruff hands off the screen to
         the agent client. Same caveat as {new_interactive}: blocks until
         that session ends."""
         await _run_interactive(["resume", name], self._opts)
 
 
 async def _run_interactive(args: list[str], opts: RunOptions) -> None:
-    bin_ = opts.bin or "holt"
+    bin_ = opts.bin or "scruff"
     proc = await asyncio.create_subprocess_exec(
         bin_,
         *args,
@@ -226,15 +226,15 @@ async def _run_interactive(args: list[str], opts: RunOptions) -> None:
     )
     code = await proc.wait()
     if code != 0:
-        raise HoltError(code, "", [bin_, *args])
+        raise ScruffError(code, "", [bin_, *args])
 
 
 class Lease:
-    """A held occupancy lease. See {HoltClient.lease}."""
+    """A held occupancy lease. See {ScruffClient.lease}."""
 
     def __init__(
         self,
-        client: HoltClient,
+        client: ScruffClient,
         path: str,
         *,
         pid: Optional[int],
@@ -253,7 +253,7 @@ class Lease:
                 await asyncio.sleep(refresh_seconds)
                 try:
                     await self._client.heartbeat(self._path)
-                except HoltError:
+                except ScruffError:
                     pass  # best-effort refresh; a miss self-heals on the next tick
         except asyncio.CancelledError:
             pass

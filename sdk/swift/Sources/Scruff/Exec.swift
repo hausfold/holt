@@ -2,20 +2,20 @@ import Foundation
 
 /// Options threaded through to every subprocess call.
 public struct RunOptions: Sendable {
-    /// Path to the holt binary, or a bare name resolved on `PATH`. Defaults
-    /// to `"holt"`.
+    /// Path to the scruff binary, or a bare name resolved on `PATH`. Defaults
+    /// to `"scruff"`.
     public var bin: String?
-    /// Working directory every command runs from — most of holt's commands
-    /// are cwd-sensitive (`new`, `park`, a bare `holt <name>`). Defaults to
+    /// Working directory every command runs from — most of scruff's commands
+    /// are cwd-sensitive (`new`, `park`, a bare `scruff <name>`). Defaults to
     /// this process's own cwd.
     public var cwd: String?
     /// Extra environment variables, merged over the current process's env.
-    /// Useful for `HOLT_AGENT`, `HOLT_OCCUPANCY=lease`. A value of `nil`
+    /// Useful for `SCRUFF_AGENT`, `SCRUFF_OCCUPANCY=lease`. A value of `nil`
     /// unsets the key rather than passing the literal string "nil" to the
     /// child.
     public var env: [String: String?]?
     /// Piped to the child's stdin, then the stream is closed. Used by
-    /// `holt hook create`/`remove`, which read JSON off stdin (SPEC.md
+    /// `scruff hook create`/`remove`, which read JSON off stdin (SPEC.md
     /// §2.3).
     public var stdin: String?
 
@@ -48,16 +48,16 @@ func mergedEnvironment(_ overrides: [String: String?]?) -> [String: String]? {
     return merged
 }
 
-/// Runs one holt invocation to completion and collects its output. Every
-/// non-`--json` holt command writes human text to stdout on success — this
+/// Runs one scruff invocation to completion and collects its output. Every
+/// non-`--json` scruff command writes human text to stdout on success — this
 /// is the primitive `list()`/`watch()` build their typed parsing on top of,
 /// and the one lifecycle commands (`new`, `park`, `reap`, ...) use
 /// directly, surfacing stdout as a plain string.
 ///
-/// Throws `HoltError` on a non-zero exit, carrying holt's exit code
+/// Throws `ScruffError` on a non-zero exit, carrying scruff's exit code
 /// (SPEC.md §2.4) rather than collapsing every failure into one shape.
 public func run(_ args: [String], options: RunOptions = RunOptions()) async throws -> RunResult {
-    let bin = options.bin ?? "holt"
+    let bin = options.bin ?? "scruff"
 
     let process = Process()
     // Launched through `/usr/bin/env` rather than resolving `bin` against
@@ -108,13 +108,13 @@ public func run(_ args: [String], options: RunOptions = RunOptions()) async thro
     let stderr = String(data: await stderrData, encoding: .utf8) ?? ""
 
     if code != 0 {
-        throw HoltError(code: code, stderr: stderr, command: [bin] + args)
+        throw ScruffError(code: code, stderr: stderr, command: [bin] + args)
     }
     return RunResult(stdout: stdout, stderr: stderr, code: code)
 }
 
 /// Same as `run`, but decodes stdout as JSON — for `--json` commands only.
-/// holt's own contract (README, `internal/ui`) is "stdout carries the
+/// scruff's own contract (README, `internal/ui`) is "stdout carries the
 /// payload, every diagnostic goes to stderr", so this never has to guess
 /// which lines are data.
 public func runJSON<T: Decodable>(_ args: [String], options: RunOptions = RunOptions()) async throws -> T {
