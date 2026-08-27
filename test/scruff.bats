@@ -2462,6 +2462,14 @@ lane_name() { # lane_name <path> — the basename scruff chose
   basename "$1"
 }
 
+# A fallback name is a random adjective-noun pair — and, when that pair is
+# already taken in the repo, the numeric suffix `freeName` appends to it
+# (`spry-swift-2`, new.go). Asserting the bare pair makes any test that spawns
+# SEVERAL fallback lanes into one repo a coin flip: rare per spawn, certain over
+# enough CI runs. It failed exactly that way on main (`'a; rm -rf ~' became
+# spunky-kestrel-2`), so the suffix belongs in the pattern, not in a re-run.
+is_random_name() { [[ "$1" =~ ^[a-z]+-[a-z]+(-[0-9]+)?$ ]]; }
+
 @test "namer: with no namer configured nothing runs, and an unnamed lane is still a random pair" {
   local b; b="$(mkrepo beta)"
   mknamer 'touch "'"$TMP"'/ran"; echo mobile-nav-jitter'   # armed, but not named in the config
@@ -2469,7 +2477,7 @@ lane_name() { # lane_name <path> — the basename scruff chose
   [ "$status" -eq 3 ]                      # no open hook — the lane exists, nothing opened it
   [ ! -e "$TMP/ran" ] || fail "the namer ran with no namer key in the config"
   [ -d "$output" ] || fail "no lane at $output"
-  [[ "$(lane_name "$output")" =~ ^[a-z]+-[a-z]+$ ]] || fail "not a random pair: $(lane_name "$output")"
+  is_random_name "$(lane_name "$output")" || fail "not a random pair: $(lane_name "$output")"
 }
 
 @test "namer: a configured namer names the lane, and is told the task, the repo and the neighbours" {
@@ -2514,7 +2522,7 @@ lane_name() { # lane_name <path> — the basename scruff chose
   run bash -c "'$WT' spawn '$b' --prompt 'fix the notch' 2>'$TMP/err'"
   [ "$status" -eq 3 ]
   [ -d "$output" ] || fail "a bad name cost the lane"
-  [[ "$(lane_name "$output")" =~ ^[a-z]+-[a-z]+$ ]] || fail "prose became a name: $(lane_name "$output")"
+  is_random_name "$(lane_name "$output")" || fail "prose became a name: $(lane_name "$output")"
   grep -q "isn't a name" "$TMP/err" || fail "silent fallback: $(cat "$TMP/err")"
 }
 
@@ -2548,7 +2556,7 @@ lane_name() { # lane_name <path> — the basename scruff chose
     run bash -c "'$WT' spawn '$b' --prompt 'fix the notch' 2>/dev/null"
     [ "$status" -eq 3 ] || fail "spawn failed on answer '$answer': $output"
     [[ "$(dirname "$output")" = "$CLAUDE_WT_BASE/beta" ]] || fail "'$answer' escaped to $output"
-    [[ "$(lane_name "$output")" =~ ^[a-z]+-[a-z]+$ ]] || fail "'$answer' became $(lane_name "$output")"
+    is_random_name "$(lane_name "$output")" || fail "'$answer' became $(lane_name "$output")"
   done
   [ ! -e "/tmp/scruff-namer-escape" ]
   # …and the repo naming itself is dropped rather than spending a word on what
