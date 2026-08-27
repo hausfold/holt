@@ -515,6 +515,59 @@ focus = \"$hook\""
   [[ "$output" == *"claude --continue"* ]]
 }
 
+@test "focus: a live lane is answered from the registry, at a cost that doesn't grow with the machine" {
+  local a b hook; a="$(mkrepo alpha)"; b="$(mkrepo beta)"
+  mkwt "$a" glance >/dev/null; mkwt "$b" elsewhere >/dev/null
+  hook="$(mkhook focus 'exit 0')"
+  setcfg "[hooks]
+focus = \"$hook\""
+
+  # Count git subprocesses, because that is where this path spent its second:
+  # matchLane's discover globs every checkout under the base and asks every main
+  # checkout it reached for its worktree-* branches, so ONE click cost more on a
+  # busier machine — over a hundred forks with a few dozen lanes open, MEASURED.
+  # A banner click is the one caller that cannot afford it (trill's focus_lane
+  # runs this), so a live, unambiguous lane is answered from the registry, which
+  # invariant 3 already calls the source of truth.
+  local realgit; realgit="$(command -v git)"
+  cat >"$BIN/git" <<EOF
+#!/usr/bin/env bash
+echo . >>"$TMP/gitcalls"
+exec "$realgit" "\$@"
+EOF
+  chmod +x "$BIN/git"
+
+  : >"$TMP/gitcalls"
+  wt_run focus glance
+  [ "$status" -eq 0 ]
+  local few; few="$(wc -l <"$TMP/gitcalls" | tr -d ' ')"
+  [ "$few" -gt 0 ] || fail "the git shim never ran — this test is measuring nothing"
+
+  # Six more lanes, the same click. The number is the contract, not the ceiling:
+  # constant means the registry answered, and anything that grows here has put
+  # the whole-machine walk back on the click path.
+  local n; for n in one two three four five six; do mkwt "$a" "$n" >/dev/null; done
+  : >"$TMP/gitcalls"
+  wt_run focus glance
+  [ "$status" -eq 0 ]
+  local many; many="$(wc -l <"$TMP/gitcalls" | tr -d ' ')"
+  [ "$many" -eq "$few" ] || fail "focus got dearer as lanes were added: $few git calls → $many"
+}
+
+@test "focus: a registry row the disk has outgrown is answered the thorough way" {
+  local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" glance)"
+  # The registry records where a checkout WAS. Moving it makes that row a lie of
+  # exactly the kind discover exists to correct — so the fast path above has to
+  # verify before it believes, or a click lands on a path that isn't there.
+  git -C "$main" worktree move "$dir" "$TMP/moved"
+  hook="$(mkhook focus 'printf "%s %s\n" "$SCRUFF_NAME" "$SCRUFF_PATH" >"'"$TMP"'/focused"; exit 0')"
+  setcfg "[hooks]
+focus = \"$hook\""
+  wt_run focus glance
+  [ "$status" -eq 0 ]
+  [ "$(cat "$TMP/focused")" = "glance $TMP/moved" ]
+}
+
 @test "focus: an ambiguous or unknown name is refused, never guessed at" {
   local a b; a="$(mkrepo alpha)"; b="$(mkrepo beta)"
   mkwt "$a" twin >/dev/null; mkwt "$b" twin >/dev/null
