@@ -99,6 +99,15 @@ of those names would hand every later `holt` in that pane its own input back. A 
 rather than build its own, or it lands on a session picker `holt <name>` had
 already resolved.
 
+A seam also inherits the **caller's whole environment**, on top of those
+fields — `cmd.Env` is `os.Environ()` plus them. That is the seam by which a
+caller asks for something only this machine's hook can decide: how loudly to
+open a window, which display to land on, whether to take the screen at all.
+holt neither sets nor reads any of it, and a hook that doesn't know a spelling
+ignores it, so such a request costs nothing where it isn't understood. Keep
+those names out of holt: a variable holt would have to know is a flag, and a
+flag that only one consumer can honour belongs in that consumer.
+
 A broken or missing hook always falls back to the built-in. Two things no
 seam can override: the checkout holt is run **from** is never swept, and a
 **stray** directory is only ever reported.
