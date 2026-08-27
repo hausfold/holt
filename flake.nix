@@ -18,7 +18,7 @@
     {
       packages = forAll (pkgs: {
         default = pkgs.buildGoModule {
-          pname = "holt";
+          pname = "scruff";
           inherit version;
           src = ./.;
           # holt picked up its first dependency (fsnotify, for `holt watch`) —
@@ -36,7 +36,15 @@
           #   github.com/hausfold/holt/sdk/go
           # internal/* still gets compiled — as dependencies of the CLI, which
           # is the only thing this derivation installs.
-          subPackages = [ "cmd/holt" ];
+          subPackages = [ "cmd/scruff" ];
+
+          # One binary, two names, for the length of the rename
+          # (docs/rename.md §3). A symlink and not a second `subPackages` entry:
+          # the program tells the two apart by argv[0], so there is no second
+          # main to keep in step. `holt` is deleted at 1.1.0 (§8.1).
+          postInstall = ''
+            ln -s scruff "$out/bin/holt"
+          '';
 
           # The suite is black-box: it drives the built binary with shim gh/lsof
           # on PATH. That is what makes it portable across implementations, and
@@ -47,7 +55,8 @@
           ];
           checkPhase = ''
             runHook preCheck
-            go build -o holt ./cmd/holt
+            go build -o scruff ./cmd/scruff
+            ln -sf scruff holt
             bats test/holt.bats
             runHook postCheck
           '';
@@ -55,7 +64,7 @@
           meta = {
             description = "Worktree lifecycle for parallel coding agents: park, resume, PR-verified reap";
             license = pkgs.lib.licenses.asl20;
-            mainProgram = "holt";
+            mainProgram = "scruff";
           };
         };
 
@@ -64,6 +73,9 @@
         # isolate the binary's hash: `src = ./.` is unfiltered, so `ai/` is in
         # the Go derivation's closure and a prose edit rebuilds it regardless.)
         # See nix/skill.nix.
+        scruff-skill = pkgs.callPackage ./nix/skill.nix { };
+        # The old attribute name, alive until 1.1.0 — haus asks for
+        # `holt-skill` today and flips to `scruff-skill` on its own schedule.
         holt-skill = pkgs.callPackage ./nix/skill.nix { };
       });
 
@@ -73,9 +85,17 @@
       # `final.system` is a deprecated nixpkgs alias — reading it makes every
       # downstream eval print "'system' has been renamed to/replaced by
       # 'stdenv.hostPlatform.system'". Use the real attribute.
+      #
+      # Both spellings point at ONE derivation for the length of the rename
+      # (docs/rename.md §3). This is what lets haus flip on its own schedule:
+      # if the old attribute stopped existing before haus stopped asking for it,
+      # haus would stop EVALUATING, and the rebuild that fixes that is the thing
+      # that broke. Removing `holt`/`holt-skill` is 1.1.0 (§8.1).
       overlays.default = final: _prev: {
+        scruff = self.packages.${final.stdenv.hostPlatform.system}.default;
+        scruff-skill = self.packages.${final.stdenv.hostPlatform.system}.scruff-skill;
         holt = self.packages.${final.stdenv.hostPlatform.system}.default;
-        holt-skill = self.packages.${final.stdenv.hostPlatform.system}.holt-skill;
+        holt-skill = self.packages.${final.stdenv.hostPlatform.system}.scruff-skill;
       };
 
       devShells = forAll (pkgs: {

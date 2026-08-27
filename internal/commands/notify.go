@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/hausfold/holt/internal/compat"
 )
 
 // HookNotify implements the client-side notification hooks: the session's
@@ -194,7 +196,7 @@ func (e *Env) laneFor(payload map[string]any) (name, lane string) {
 // including set to something missing, which is how a machine (or a test) says
 // "no banners" — and an empty answer means exactly that, silently.
 func trillBinary() string {
-	if p := os.Getenv("HOLT_TRILL"); p != "" {
+	if p := compat.Getenv("TRILL"); p != "" {
 		if isExecutable(p) {
 			return p
 		}

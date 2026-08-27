@@ -1,10 +1,15 @@
 VERSION := $(shell cat VERSION)
 LDFLAGS := -X github.com/hausfold/holt/internal/commands.Version=$(VERSION)
 
+# One binary, two names. `holt` is a symlink onto `scruff` for the length of the
+# rename (docs/rename.md §3) — the program tells them apart by argv[0], so there
+# is no second main to keep in step and no second build to get wrong.
+
 .PHONY: build test fmt vet check clean score
 
 build:
-	go build -ldflags "$(LDFLAGS)" -o holt ./cmd/holt
+	go build -ldflags "$(LDFLAGS)" -o scruff ./cmd/scruff
+	ln -sf scruff holt
 
 # The acceptance suite. It is black-box — it drives the built binary with shim
 # gh/lsof on PATH — so it is the same suite the bash `wt` runs against, and
@@ -33,4 +38,4 @@ vet:
 check: fmt vet test
 
 clean:
-	rm -rf holt .gocache dist
+	rm -rf scruff holt .gocache dist

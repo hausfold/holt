@@ -82,31 +82,76 @@ only phase that moves a byte of anyone's work on disk.
 
 ---
 
-## 3. Phase 1 — `holt 0.5.0`, the bilingual release
+## 3. Phase 1 — `holt 0.5.0`, the bilingual release ✅ **built**
 
 Ships from the repo **still named `holt`**. Purely additive; a machine that takes
-this release notices nothing.
+this release notices nothing until it chooses to.
 
-1. **Binary under both names.** `cmd/scruff/` becomes the real `main`; `cmd/holt/`
-   becomes a three-line shim that prints one deprecation line to stderr and
-   `exec`s the same root command. The Nix package installs both, and
-   `overlays.default` exports **`scruff` and `holt` as the same derivation**.
-2. **Env vars: `SCRUFF_*` first, `HOLT_*` as a fallback rung.** All 14, in
-   `internal/commands/env.go` and `runtime_tart.go`. Mirror the existing
-   `CLAUDE_WT_BASE` → `HOLT_BASE` ladder exactly — it is the precedent and it
-   already works. When holt *spawns* a lane it must **export both spellings**, or
-   a new binary under an old haus blanks the bar.
-3. **Config and state: `~/.config/scruff` and `~/.local/state/scruff` first**,
-   old paths as fallback, no migration and no move.
-4. **Registry stays at `$BASE/registry.tsv`.** Untouched. See decision 2.
-5. **Adapters** resolve from the new config dir first, old second.
+1. **Binary under both names.** ✅ `cmd/scruff/` is the real `main`, and `holt` is
+   a **symlink onto the same binary** — not a second `main`. The program tells
+   the two apart by `argv[0]` (`compat.InvokedByOldName`), so there is no second
+   entry point to keep in step and no second build to get wrong. `flake.nix`
+   installs the symlink in `postInstall`; the Makefile does the same for `make
+   build`, and `overlays.default` exports `scruff`/`holt` **and**
+   `scruff-skill`/`holt-skill` as the same derivations.
+2. **Env vars: `SCRUFF_*` first, `HOLT_*` as a fallback rung.** ✅ All of them,
+   through one helper (`internal/compat`) rather than a ladder per call site.
+   `CLAUDE_WT_BASE` **keeps its priority above both** — it predates both
+   spellings and answers to neither, which is SPEC §10's rung untouched.
+3. **Both spellings are EXPORTED into every hook.** ✅ `config.hookEnv` emits the
+   pair. This is the half an *old* consumer depends on: haus's lane hooks read
+   `HOLT_NAME`, `HOLT_REPO`, `HOLT_PATH`, `HOLT_MAIN`, `HOLT_CHAT` and
+   `HOLT_COMMAND` by those names, so a new binary emitting only the new spelling
+   would blank the bar on an un-flipped machine.
+4. **Config and state: `~/.config/scruff` and `~/.local/state/scruff` first.** ✅
+   A **stat, never a move** — the old directory is used only when it is the one
+   actually holding this machine's files. `~/.config/holt` is routinely a
+   read-only symlink into a Nix store, so "just move it" was never available
+   anyway. Adapters ride `config.Dir()` and come along for free.
+5. **Registry stays at `$BASE/registry.tsv`.** ✅ Untouched. See decision 2.
+6. **The skill derivation ships BOTH directories.** ✅ `$out/holt/SKILL.md` and
+   `$out/scruff/SKILL.md`, with `name:` rewritten to match. This one was missing
+   from the plan and is load-bearing — see the correction below.
 
-**Verify:** `make check`, then `HOLT_BASE=/tmp/x holt list` and
-`SCRUFF_BASE=/tmp/x scruff list` must agree, and a lane spawned by the new binary
-must show up in the bar on the *unmodified* haus.
+**Verified, not assumed:** `make check` — 185/185 bats, all Go suites green;
+`nix build .#default` produces `bin/scruff` + the `bin/holt` symlink;
+`nix build .#scruff-skill` produces `handoff/`, `holt/` and `scruff/`;
+`HOLT_BASE=… ./holt list --json` and `SCRUFF_BASE=… ./scruff list --json` agree
+byte for byte; an existing `~/.config/holt` is still found and a fresh machine
+writes `scruff`. Four new tests cover the ladder, the `CLAUDE_WT_BASE`
+precedence, the dir fallback and the exported pair; two bats tests cover the two
+binary names from outside the process.
 
-**Ship it** as a normal `bench release holt 0.5.0`. This release is the whole
-safety net; everything after it is recoverable.
+**Ship it** as a normal `bench release holt 0.5.0` — the user's call, as always.
+This release is the whole safety net; everything after it is recoverable.
+
+### Three corrections this phase forced
+
+Found by building it. The plan was wrong in three places:
+
+- **The skill directory could not have flipped in Phase 2.** haus's
+  `modules/ai/tool-skills.nix` names the directories it links (`names = [ "holt"
+  "handoff" ]`) out of `$drv/<name>`, so flipping that list against a derivation
+  that only ships `$out/holt` fails the build. Emitting **both** directories is
+  therefore a Phase 1 job, not a Phase 2 one, and it is now done. Only ever one
+  of the two is linked, so no agent sees the skill twice.
+- **`cmd/holt/` is not renamed at Phase 3** — it was renamed here, and what
+  Phase 3's move list should say is *delete the `holt` symlink at 1.1.0*.
+- **The `--json` envelope key `"holt"` renames at Phase 3, not here**, and it
+  should take `schema: 1` → `2` with it. Renaming a required envelope field is
+  precisely the break `schema` exists to announce (SPEC §2.2). Deliberately
+  *not* made bilingual: nothing in haus reads that key (checked — the bar and
+  `lanes.sh` read `.lanes`), its only consumers are the five SDKs, and those are
+  pinned packages that upgrade on purpose. A second envelope key would be two
+  more fields across five SDKs to add now and remove later, for no safety.
+
+**The deprecation notice is TTY-gated**, and that is a correctness property
+rather than politeness: every non-interactive caller of this binary is one a
+stray stderr line would hurt — Claude Code's `WorktreeCreate`/`Remove` and
+`Notification` hooks, the bar plugins polling several times a minute, the
+acceptance suite asserting on stderr, and anything parsing `--json`. The person
+typing the old name is the only audience, and they are the only one at a
+terminal.
 
 ---
 
@@ -170,14 +215,19 @@ Now the repo is renamed and nothing on the machine depends on the old spelling.
    crate `name` plus `[lib] name = "scruff"`), Swift target `Holt` → `Scruff`,
    `sdk/swift/Sources/Scruff/`, `Tests/ScruffTests/`. All four are free
    (checked 2026-08-27).
-4. **File and dir moves** (`git mv`, so history follows): `cmd/holt/` →
-   `cmd/scruff/`, `test/holt.bats` → `test/scruff.bats`, `sdk/python/src/holt/` →
-   `sdk/python/src/scruff/`, and five `fake-holt.sh` → `fake-scruff.sh`.
-5. **⚠️ OIDC trusted publishers will break and CI will fail on the first release
+4. **File and dir moves** (`git mv`, so history follows): `test/holt.bats` →
+   `test/scruff.bats`, `sdk/python/src/holt/` → `sdk/python/src/scruff/`, and
+   five `fake-holt.sh` → `fake-scruff.sh`. (`cmd/holt/` already moved in Phase 1.)
+5. **The `--json` envelope key** `"holt"` → `"scruff"`, **and `schema: 1` → `2`
+   with it** — renaming a required envelope field is exactly the break `schema`
+   exists to announce (SPEC §2.2). Both structs in the CLI (`json.go`,
+   `watch.go`) and both in each of the five SDKs. Nothing in haus reads it
+   (checked); the SDKs are the consumers, and 1.0.0 is the signal.
+6. **⚠️ OIDC trusted publishers will break and CI will fail on the first release
    attempt.** npm, PyPI and crates.io all match on **repo name and package name**,
    both of which just changed. Re-enter all three (`docs/releasing.md` has the
    table) *before* tagging, and update that table's package column.
-6. Keep the `holt` shim binary and the `HOLT_*` fallbacks from Phase 1.
+7. Keep the `holt` symlink and the `HOLT_*` fallbacks from Phase 1.
 
 **Verify:** `make check`, then each SDK's own suite from its own directory —
 `bun test`, `pytest`, `cargo test`, `swift test`, `go test ./...` — because
@@ -229,8 +279,12 @@ Two things land together because they share a disruption boundary.
 
 ### 8.1 Delete the compat
 
-Drop `cmd/holt/`, the `HOLT_*` fallback rungs, the old config/state path
-fallbacks, and the both-spellings jq filters in haus and the host file.
+Delete `internal/compat` and everything that imports it: the `holt` symlink and
+its TTY-gated notice, the `HOLT_*` fallback rungs, the `HOLT_*` half of every
+hook's environment, the old config/state path fallbacks, `$out/holt` from the
+skill derivation, the `holt`/`holt-skill` overlay attributes, and the
+both-spellings jq filters in haus and the host file. The grep that proves it is
+`HOLT_`; the compile that proves it is `internal/compat` no longer existing.
 
 ### 8.2 `~/.cache/claude-worktrees` → `~/.cache/scruff`
 
