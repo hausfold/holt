@@ -110,6 +110,19 @@ this release notices nothing until it chooses to.
    actually holding this machine's files. `~/.config/holt` is routinely a
    read-only symlink into a Nix store, so "just move it" was never available
    anyway. Adapters ride `config.Dir()` and come along for free.
+
+   ⚠️ **"Comes along for free" ends the moment BOTH directories exist**, and on
+   a haus machine that is the normal outcome, not an edge case: haus writes
+   `config.toml` and the tart runtime adapter into `~/.config/scruff` at the
+   rebuild that flips (§4), so `compat.Dir` stats the new path, finds it, and
+   never looks at the old one. Anything HAND-WRITTEN under `~/.config/holt` —
+   this machine's `adapters/namer/api.toml` and the `namer-api.sh` it points at
+   — goes quiet at that rebuild. Nothing fails: `scruff` warns nothing, because
+   from its side there is simply no namer configured, and lanes go back to
+   random word pairs. haus's `ai.namer` description already prescribes the fix
+   (`mv ~/.config/holt/adapters ~/.config/scruff/adapters`, and re-point any
+   absolute path inside the TOML); the thing to know is that it is **not
+   optional on a machine that had one**, and that the symptom is silence.
 5. **Registry stays at `$BASE/registry.tsv`.** ✅ Untouched. See decision 2.
 6. **The skill derivation ships BOTH directories.** ✅ `$out/holt/SKILL.md` and
    `$out/scruff/SKILL.md`, with `name:` rewritten to match. This one was missing
@@ -410,7 +423,7 @@ whoever picks it up.
 | 4 | **OIDC trusted publishers re-entered** on npm, PyPI, crates | **the user** | ⏳ **blocks the tag** — new package names have no entry to edit (`docs/releasing.md`) |
 | 5 | the family and the web (§6) | — | ✅ all merged 2026-08-27 — workshop#475 + #477 (incl. the checkout `mv`), hausfold.co#171, trill#47, ops#12, .github#25, perch#117, pounce#110, nebelung#51, homebrew-tap#20. snug was not in §6's table and took its own: snug#5. **Two follow-ups open:** hausfold.co#172 (the generated options page was three haus renders behind, so #171 couldn't reach the `scruff` prose inside it) and ops#13 (a comment saying the scoreboard series changes key at the rename) |
 | 6 | haus's `flake.nix` input URL → `github:hausfold/scruff` | — | ✅ merged, haus#551 — no longer leaning on GitHub's redirect |
-| 7 | the host file (`~/.config/nix/hosts/mbp/default.nix`) | **the user** | ⏳ **the last live `holt` on this machine.** Verified 2026-08-27: `~/.claude/settings.json` holds exactly one `holt` string — the `Bash(holt:*)` permission — and all six hooks are `scruff`, firing once each. `Bash(holt:*)` needs a `del` (added under `\| unique`, so nothing removes it), plus the two `holt hook create\|remove` commands, the `holt session` palette entry and the namer-adapter paths — then `haus rebuild` |
+| 7 | the host file (`~/.config/nix/hosts/mbp/default.nix`) | **the user** | ⏳ edited 2026-08-27, **awaiting one `haus rebuild`** — and the hand-written namer adapter has been moved to `~/.config/scruff` (it had gone quiet; see §3.4's warning), so this is the last live `holt` on this machine. Verified 2026-08-27: `~/.claude/settings.json` holds exactly one `holt` string — the `Bash(holt:*)` permission — and all six hooks are `scruff`, firing once each. `Bash(holt:*)` needs a `del` (added under `\| unique`, so nothing removes it), plus the two `holt hook create\|remove` commands, the `holt session` palette entry and the namer-adapter paths — then `haus rebuild` |
 | 8 | `bench release scruff 1.0.0` | **the user** | ⏳ **gated on 4 alone now** — 5 is done, and the DIRECTORY name it resolves by is `~/code/workshop/scruff` as of workshop#477 |
 | 9 | deprecate the old packages in place (§7) | **the user** | ⏳ after the 1.0.0 publish. Never yank |
 | 10 | `scruff 1.1.0` — the base move and the end of compat (§8) | an agent lane | ⏳ not before a week of green rebuilds |
