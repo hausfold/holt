@@ -23,7 +23,7 @@
           src = ./.;
           # holt picked up its first dependency (fsnotify, for `holt watch`) —
           # see go.mod.
-          vendorHash = "sha256-SAZpfeTKHC/OEgMUWScXYwx7RY6LrSHkHXLg4vArX+g=";
+          vendorHash = "sha256-ZNp7J/bRqjZiCFxUYNovAFZ9+mvm2o4eCsa3zDhDXYU=";
           ldflags = [ "-X github.com/hausfold/holt/internal/commands.Version=${version}" ];
 
           # Build ONLY the CLI. Left unset, buildGoModule walks every directory
