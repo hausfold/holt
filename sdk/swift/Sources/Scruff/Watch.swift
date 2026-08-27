@@ -1,6 +1,6 @@
 import Foundation
 
-/// `holt watch --json` as an `AsyncThrowingStream` of typed lines. One
+/// `scruff watch --json` as an `AsyncThrowingStream` of typed lines. One
 /// object per NDJSON line on stdout, in order: `.hello`, a `.event(.sync)`
 /// burst for every lane already alive, `.event(.ready)`, then live changes
 /// for as long as the stream is consumed (SPEC.md §14.3 step 2).
@@ -13,7 +13,7 @@ public func watchAll(options: RunOptions = RunOptions()) -> AsyncThrowingStream<
     AsyncThrowingStream { continuation in
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = [options.bin ?? "holt", "watch", "--json"]
+        process.arguments = [options.bin ?? "scruff", "watch", "--json"]
         if let cwd = options.cwd {
             process.currentDirectoryURL = URL(fileURLWithPath: cwd)
         }

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# The guards on holt's agent skills — one copy, run from two places.
+# The guards on scruff's agent skills — one copy, run from two places.
 #
 # Every failure here is INVISIBLE at runtime. A skill whose frontmatter is
 # missing, unterminated, or whose `name:` disagrees with its directory installs
 # fine, lists fine, and is never loaded — indistinguishable, from the user's
-# side, from the agent not knowing holt exists. So it has to be a build failure,
+# side, from the agent not knowing scruff exists. So it has to be a build failure,
 # and it has to fire in CI.
 #
-# Which is why this is a script and not a `runCommand` body: holt's CI installs
+# Which is why this is a script and not a `runCommand` body: scruff's CI installs
 # Go and bats and no Nix at all, so guards living only in nix/skill.nix would
 # run on a developer's machine and nowhere else. nix/skill.nix calls this, and
 # `check.yml` calls it directly.

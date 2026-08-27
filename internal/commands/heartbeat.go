@@ -5,16 +5,16 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/hausfold/holt/internal/exitcode"
-	"github.com/hausfold/holt/internal/gitx"
-	"github.com/hausfold/holt/internal/occupancy"
-	"github.com/hausfold/holt/internal/ui"
+	"github.com/hausfold/scruff/internal/exitcode"
+	"github.com/hausfold/scruff/internal/gitx"
+	"github.com/hausfold/scruff/internal/occupancy"
+	"github.com/hausfold/scruff/internal/ui"
 )
 
 // Heartbeat takes, refreshes, or drops the occupancy lease on a checkout.
 //
 // This is the seam `lsof` cannot cover, and the reason it exists is SPEC.md
-// §14: a program embedding holt has no panes and no shell cwd'd anywhere, so
+// §14: a program embedding scruff has no panes and no shell cwd'd anywhere, so
 // the only thing that knows its sessions are live is the program itself. It
 // says so here, and `reap` believes it.
 //
@@ -23,9 +23,9 @@ import (
 // whole safety model, and HOLT_OCCUPANCY=lease for the deployment that is
 // entitled to drop it.
 //
-//	holt heartbeat [path]              take or refresh, held by the CALLING process
-//	holt heartbeat [path] --pid N      held by pid N instead (0 = TTL-only)
-//	holt heartbeat [path] --release    drop it
+//	scruff heartbeat [path]              take or refresh, held by the CALLING process
+//	scruff heartbeat [path] --pid N      held by pid N instead (0 = TTL-only)
+//	scruff heartbeat [path] --release    drop it
 func (e *Env) Heartbeat(args []string) error {
 	var (
 		target  string
@@ -39,11 +39,11 @@ func (e *Env) Heartbeat(args []string) error {
 		case "--pid":
 			i++
 			if i >= len(args) {
-				return exitcode.Usagef("holt heartbeat --pid needs a number")
+				return exitcode.Usagef("scruff heartbeat --pid needs a number")
 			}
 			n, err := strconv.Atoi(args[i])
 			if err != nil || n < 0 {
-				return exitcode.Usagef("holt heartbeat --pid %q is not a pid", args[i])
+				return exitcode.Usagef("scruff heartbeat --pid %q is not a pid", args[i])
 			}
 			pid = n
 		default:
@@ -51,10 +51,10 @@ func (e *Env) Heartbeat(args []string) error {
 				continue
 			}
 			if a[0] == '-' {
-				return exitcode.Usagef("unknown flag %q — try `holt --help`", a)
+				return exitcode.Usagef("unknown flag %q — try `scruff --help`", a)
 			}
 			if target != "" {
-				return exitcode.Usagef("holt heartbeat takes at most one path")
+				return exitcode.Usagef("scruff heartbeat takes at most one path")
 			}
 			target = a
 		}
@@ -88,7 +88,7 @@ func (e *Env) Heartbeat(args []string) error {
 // The sweep compares against CHECKOUT roots, so a lease named by some
 // subdirectory has to normalise to the same string or it protects nothing. The
 // git toplevel is that normalisation; a path outside any repo is taken at face
-// value, because a caller naming a directory holt has never heard of is more
+// value, because a caller naming a directory scruff has never heard of is more
 // likely to know something we don't than to have made a mistake.
 func leaseTarget(cwd, arg string) (string, error) {
 	if arg == "" {

@@ -1,21 +1,21 @@
-# holt's agent skills, as a derivation.
+# scruff's agent skills, as a derivation.
 #
 # TWO skills, one derivation, one directory each:
 #
-#   ai/SKILL.md          → $out/holt/SKILL.md      driving the lifecycle
-#                        → $out/scruff/SKILL.md    the same, under the new name
+#   ai/SKILL.md          → $out/scruff/SKILL.md    driving the lifecycle
+#                        → $out/holt/SKILL.md      the same, under the old name
 #   ai/handoff/SKILL.md  → $out/handoff/SKILL.md   filling a lane's first turn
 #
-# The second one is not a second copy of the first. `holt` teaches an agent the
+# The second one is not a second copy of the first. `scruff` teaches an agent the
 # verbs, the exit codes and the `--json` payload — what to run when the user
 # says "what's open?". `handoff` teaches it the one thing that has no verb: how
 # to write the brief a cold session can act on, whether that brief ends up on
-# the clipboard or in `holt spawn --prompt-file`. holt is still substrate, not
+# the clipboard or in `scruff spawn --prompt-file`. scruff is still substrate, not
 # orchestrator — the skill describes handing work OVER, and stops there.
 #
 # What this split does NOT buy is hash isolation. `buildGoModule` has
 # `src = ./.` with no filter, so `ai/` is inside the Go derivation's source
-# closure and editing one line of prose moves holt's drvPath either way
+# closure and editing one line of prose moves scruff's drvPath either way
 # (measured). What it does buy is real and is the reason it's separate: a
 # consumer installs the skills without pulling the Go toolchain, and this
 # derivation depends on those files rather than on the whole repo.
@@ -33,11 +33,11 @@
   bash,
 }:
 
-runCommand "holt-skill"
+runCommand "scruff-skill"
   {
     nativeBuildInputs = [ bash ];
     meta = {
-      description = "Agent skills teaching a coding agent to drive holt and to hand work to a fresh lane";
+      description = "Agent skills teaching a coding agent to drive scruff and to hand work to a fresh lane";
       license = lib.licenses.asl20;
       platforms = lib.platforms.all;
     };
@@ -51,15 +51,14 @@ runCommand "holt-skill"
     # is never loaded.
     ai=${../ai}
 
-    mkdir -p "$out/holt"
-    cp "$ai/SKILL.md" "$out/holt/SKILL.md"
+    mkdir -p "$out/scruff"
+    cp "$ai/SKILL.md" "$out/scruff/SKILL.md"
 
-    # The same skill under the new name, for the length of the rename
-    # (docs/rename.md §3). It is here rather than in haus because the INSTALLER
-    # links `$out/<name>`: haus's tool-skills.nix names the directories it
-    # wants, so it cannot flip `holt` → `scruff` unless this derivation already
-    # offers both. Shipping both is what keeps the two repos free to move in
-    # either order — the whole point of the bilingual release.
+    # The same skill under the OLD name, for the length of the rename
+    # (docs/rename.md §3, deleted at §8.1). It is here rather than in the
+    # consumer because the INSTALLER links `$out/<name>`: haus's
+    # tool-skills.nix names the directories it wants, so a consumer that has
+    # not flipped yet asks for `holt` and must still find a directory.
     #
     # `name:` has to be rewritten with the directory, or the guard below fails
     # on the copy: a skill whose frontmatter name disagrees with its directory
@@ -68,10 +67,10 @@ runCommand "holt-skill"
     #
     # Both this block and $out/holt go at 1.1.0 (§8.1), leaving one directory
     # named scruff.
-    mkdir -p "$out/scruff"
-    sed '0,/^name: holt$/s//name: scruff/' "$ai/SKILL.md" > "$out/scruff/SKILL.md"
-    grep -q '^name: scruff$' "$out/scruff/SKILL.md" || {
-      echo "skill.nix: ai/SKILL.md has no 'name: holt' line to rewrite" >&2
+    mkdir -p "$out/holt"
+    sed '0,/^name: scruff$/s//name: holt/' "$ai/SKILL.md" > "$out/holt/SKILL.md"
+    grep -q '^name: holt$' "$out/holt/SKILL.md" || {
+      echo "skill.nix: ai/SKILL.md has no 'name: scruff' line to rewrite" >&2
       exit 1
     }
     for dir in "$ai"/*/; do
@@ -82,8 +81,8 @@ runCommand "holt-skill"
     done
 
     # The guards live in script/check-skills.sh, not here, and that is the whole
-    # point: holt's CI installs Go and bats and no Nix, so a guard written into
+    # point: scruff's CI installs Go and bats and no Nix, so a guard written into
     # this derivation would run on a developer's machine and nowhere else. Both
     # callers run the same copy, over the same discovered set.
-    bash ${../script/check-skills.sh} "$ai" holt
+    bash ${../script/check-skills.sh} "$ai" scruff
   ''

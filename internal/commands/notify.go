@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hausfold/holt/internal/compat"
+	"github.com/hausfold/scruff/internal/compat"
 )
 
 // HookNotify implements the client-side notification hooks: the session's
@@ -154,9 +154,9 @@ func (e *Env) trillSendArgs(payload map[string]any) ([]string, bool) {
 	// A banner that names a lane and can't take you to it is the whole
 	// friction this hook was supposed to remove: you still had to find the
 	// window yourself. `lane:` is trill's focus_lane action — it runs
-	// `holt focus <name>` and nothing else — and it is qualified by repo
+	// `scruff focus <name>` and nothing else — and it is qualified by repo
 	// because two repos may hold the same lane name, which is exactly the
-	// ambiguity `holt focus` refuses to guess at.
+	// ambiguity `scruff focus` refuses to guess at.
 	//
 	// Only when a registry row matched: a pane outside every lane still gets
 	// a banner (named after its directory), and there is nothing to focus.
@@ -172,7 +172,7 @@ func (e *Env) trillSendArgs(payload map[string]any) ([]string, bool) {
 // is the honest answer and still not conversation content.
 //
 // Two names come back. The first is what the banner says, short enough to read
-// at a glance. The second is what `holt focus` is given — `<repo>/<name>`, the
+// at a glance. The second is what `scruff focus` is given — `<repo>/<name>`, the
 // same qualified spelling matchLane accepts — and it is empty for anything
 // that isn't a lane, which is how the caller knows not to offer a click.
 func (e *Env) laneFor(payload map[string]any) (name, lane string) {
@@ -190,8 +190,8 @@ func (e *Env) laneFor(payload map[string]any) (name, lane string) {
 	return filepath.Base(cwd), ""
 }
 
-// laneID is how every fin, banner action and `holt focus` argument spells one
-// lane: qualified by the main checkout's basename, because `holt child` puts
+// laneID is how every fin, banner action and `scruff focus` argument spells one
+// lane: qualified by the main checkout's basename, because `scruff child` puts
 // one lane name in two repos. One function, because the reap path builds it
 // from a registry row and the hook path from a payload's cwd, and the two must
 // agree byte for byte or a fin outlives the lane it named.
@@ -253,6 +253,14 @@ func (e *Env) askKeyFor(payload map[string]any) (key, lane string) {
 // that a *previous* session put up. A pane outside every lane has no such
 // identity, so it falls back to the client's session id: a pane's directory
 // can change under it mid-session, and its basename is not unique anyway.
+//
+// ⚠️ The `holt/` prefix survives the rename ON PURPOSE, and is frozen. It is
+// half of a join: haus's lane-seen.sh matches a zellij session named
+// `holt.<repo>.<lane>` against this key with the slashes flattened, and trill
+// holds fins already keyed this way from before 1.0.0. Renaming it would strand
+// every outstanding fin — nothing would resolve them, because the resolve path
+// can only name a key that was used to put one up. Change it in both repos at
+// once, or not at all; "enforcing" the rename here breaks the bar quietly.
 func askKey(lane string, payload map[string]any) string {
 	if lane != "" {
 		return "holt/" + lane
@@ -265,14 +273,14 @@ func askKey(lane string, payload map[string]any) string {
 
 // ── the outstanding-ask marker ───────────────────────────────────────────────
 //
-// One empty file per fin this hook put up, under holt's state dir. It exists
+// One empty file per fin this hook put up, under scruff's state dir. It exists
 // for exactly one reason: PostToolUse fires on every tool call in every pane,
 // and without a gate each of those would read the registry and launch
 // Trill.app's binary to resolve a fin that is usually not there. With it, the
 // ordinary tool call reads one directory and stops.
 //
 // It is a CACHE, not a record. Anything can take a fin down without telling
-// holt — the ✕, a pill, an eviction, a relaunch, a desktop that clears a lane's
+// scruff — the ✕, a pill, an eviction, a relaunch, a desktop that clears a lane's
 // fin when you go and look at it — so a marker may outlive its fin. The cost of
 // a stale one is a single no-op `trill resolve` (idempotent by design) the next
 // time that lane runs a tool, after which the marker is gone. Nothing here may

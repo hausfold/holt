@@ -4,9 +4,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hausfold/holt/internal/exitcode"
-	"github.com/hausfold/holt/internal/gitx"
-	"github.com/hausfold/holt/internal/ui"
+	"github.com/hausfold/scruff/internal/exitcode"
+	"github.com/hausfold/scruff/internal/gitx"
+	"github.com/hausfold/scruff/internal/ui"
 )
 
 // Park sets the working tree aside as one wip: commit on the current branch.
@@ -16,7 +16,7 @@ import (
 // checkout — push and pop ONE stack. Two parallel agents stashing means either
 // can pop the other's entry, and the loser's edits land in a tree that never
 // asked for them. A wip commit has no such stack: it sits on the branch only
-// this pane has checked out, survives a pane close, and `holt unpark` puts it
+// this pane has checked out, survives a pane close, and `scruff unpark` puts it
 // back.
 func (e *Env) Park(label string) error {
 	top, err := gitx.Toplevel(e.Cwd)
@@ -48,7 +48,7 @@ func (e *Env) Park(label string) error {
 	if !strings.HasPrefix(branch, "worktree-") {
 		ui.Say("note: '%s' isn't an agent branch — don't push this wip commit.", branch)
 	}
-	ui.Say("bring them back with: holt unpark")
+	ui.Say("bring them back with: scruff unpark")
 	return nil
 }
 

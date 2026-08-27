@@ -1,21 +1,21 @@
-# Releasing holt
+# Releasing scruff
 
-holt ships **six artifacts out of one repository** — the CLI plus five SDKs — and
+scruff ships **six artifacts out of one repository** — the CLI plus five SDKs — and
 they all carry the same version number. One tag publishes all of them.
 
 | artifact | published as | how |
 |---|---|---|
 | CLI | the GitHub release + source tarball | Nix consumers take the flake input; there is no binary to attach |
-| `sdk/ts` | npm `@hausfold/holt` | `npm publish` over OIDC |
-| `sdk/python` | PyPI `hausfold-holt` | `gh-action-pypi-publish` over OIDC |
-| `sdk/rust` | crates.io `hausfold-holt` | `cargo publish` over OIDC |
-| `sdk/go` | `github.com/hausfold/holt/sdk/go` | a `sdk/go/v<version>` tag — Go's proxy needs nothing else |
-| `sdk/swift` | `github.com/hausfold/holt-swift` | a `<version>` tag on the mirror — SwiftPM likewise |
+| `sdk/ts` | npm `@hausfold/scruff` | `npm publish` over OIDC |
+| `sdk/python` | PyPI `hausfold-scruff` | `gh-action-pypi-publish` over OIDC |
+| `sdk/rust` | crates.io `hausfold-scruff` | `cargo publish` over OIDC |
+| `sdk/go` | `github.com/hausfold/scruff/sdk/go` | a `sdk/go/v<version>` tag — Go's proxy needs nothing else |
+| `sdk/swift` | `github.com/hausfold/scruff-swift` | a `<version>` tag on the mirror — SwiftPM likewise |
 
 ## Cutting one
 
 ```sh
-bench release holt 0.2.0
+bench release scruff 0.2.0
 ```
 
 That is the whole flow. It stamps the version into every manifest, commits it,
@@ -60,7 +60,7 @@ Two rules override the taxonomy:
   alone bumps all five. Five clients agreeing about one wire format is the
   invariant the `sdks` CI job exists to protect — five drifting version lines
   would hide a divergence instead of surfacing it.
-- **Pre-1.0, a break is still at least a minor.** holt is `0.x`. If it would have
+- **Pre-1.0, a break is still at least a minor.** scruff is `0.x`. If it would have
   been major at 1.0, cut `0.1.0` → `0.2.0` and say so in the notes. Never
   smuggle a break into a patch: that is the number people pin against.
 
@@ -90,13 +90,22 @@ has to be told to trust this repo and workflow **once**, in a browser:
 
 | registry | where | what to enter |
 |---|---|---|
-| npm | npmjs.com → `@hausfold/holt` → Settings → Trusted Publisher | GitHub Actions, org `hausfold`, repo `holt`, workflow `release.yml` |
-| PyPI | pypi.org → `hausfold-holt` → Publishing → Add a trusted publisher | owner `hausfold`, repo `holt`, workflow `release.yml` |
-| crates.io | crates.io → `hausfold-holt` → Settings → Trusted Publishing | repo `hausfold/holt`, workflow `release.yml` |
+| npm | npmjs.com → `@hausfold/scruff` → Settings → Trusted Publisher | GitHub Actions, org `hausfold`, repo `scruff`, workflow `release.yml` |
+| PyPI | pypi.org → `hausfold-scruff` → Publishing → Add a trusted publisher | owner `hausfold`, repo `scruff`, workflow `release.yml` |
+| crates.io | crates.io → `hausfold-scruff` → Settings → Trusted Publishing | repo `hausfold/scruff`, workflow `release.yml` |
+
+⚠️ **1.0.0 renamed all three packages** (`@hausfold/holt` → `@hausfold/scruff`,
+`hausfold-holt` → `hausfold-scruff`, and the repo with them). A trusted publisher
+matches on repo *and* package name, so none of the old entries carries over and
+the first 1.0.0 run fails on all three until they are re-entered. PyPI calls the
+pre-creation form a *pending* publisher; where a registry insists the package
+exist first, publish `1.0.0` by hand once and let CI take every release after it.
+The old names stay published forever — deprecate them in place, never yank
+(docs/rename.md §7).
 
 The Swift mirror is the one that can't use OIDC — pushing to *another* repository
 is outside what this workflow's `GITHUB_TOKEN` can ever be scoped to. Mint a
-fine-grained PAT with `Contents: read and write` on `hausfold/holt-swift` and
+fine-grained PAT with `Contents: read and write` on `hausfold/scruff-swift` and
 store it as the repo secret `MIRROR_TOKEN`.
 
 ## When a publish fails
@@ -106,7 +115,7 @@ rate-limits, or one whose trusted publisher wasn't wired yet, fails alone — th
 other five still land. Fix the cause and:
 
 ```sh
-gh run rerun --failed --repo hausfold/holt <run-id>
+gh run rerun --failed --repo hausfold/scruff <run-id>
 ```
 
 Each job re-checks whether its version is already out there and no-ops if so, so
@@ -116,9 +125,9 @@ permanently on the registries that did succeed.
 
 ## Afterwards
 
-The version stamp is a commit, so holt's HEAD moved and the rice's `flake.lock`
+The version stamp is a commit, so scruff's HEAD moved and the rice's `flake.lock`
 pin of it is now stale:
 
 ```sh
-bench ship                          # or: bench release holt 0.2.0 --ship
+bench ship                          # or: bench release scruff 0.2.0 --ship
 ```

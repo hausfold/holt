@@ -27,15 +27,15 @@ setup() {
   # WT_UNDER_TEST lets you point the whole suite at another copy of the script —
   # an older revision, a candidate rewrite — to see exactly which contracts it
   # breaks. That is how the fixes below were shown to fix something.
-  WT="${WT_UNDER_TEST:-$BATS_TEST_DIRNAME/../holt}"
+  WT="${WT_UNDER_TEST:-$BATS_TEST_DIRNAME/../scruff}"
   # Fail LOUDLY when there is no binary to test, instead of letting every
   # invocation exit 127 and every fixture capture an empty path. That is not a
   # theoretical tidiness: with $WT missing, `dir="$(hook_create …)"` yields "",
   # `commit_in` then runs `git -C "" commit`, and `git -C ""` means THE CURRENT
-  # DIRECTORY — so the suite committed twice into the real holt checkout it was
+  # DIRECTORY — so the suite committed twice into the real scruff checkout it was
   # being run from. `make test` builds first; running bats directly does not.
   [ -x "$WT" ] || {
-    printf 'no holt binary at %s — run `make test`, or set WT_UNDER_TEST\n' "$WT" >&2
+    printf 'no scruff binary at %s — run `make test`, or set WT_UNDER_TEST\n' "$WT" >&2
     return 1
   }
   # macOS puts BATS_TEST_TMPDIR under /var/folders, a symlink to /private/var.
@@ -51,14 +51,16 @@ setup() {
   export GIT_COMMITTER_NAME=Test GIT_COMMITTER_EMAIL=t@example.com
 
   export HOME="$TMP/home"                 # wt_projdir + the WT_BASE default live here
-  export XDG_CONFIG_HOME="$TMP/config"    # Holt's persisted default lives here
+  export XDG_CONFIG_HOME="$TMP/config"    # Scruff's persisted default lives here
   # Occupancy leases live under here. NOT $TMP/state — the hook tests use that
   # path as a scratch FILE to record that they ran, and a directory of the same
   # name makes their `cat` fail in a way that reads as a hook bug.
   export XDG_STATE_HOME="$TMP/xdg-state"
-  unset HOLT_AGENT HAUS_AGENT_DEFAULT # machine choices must not leak into the fixture
-  unset HOLT_STATE HOLT_OCCUPANCY          # ditto — the lease dir and its sole-provider switch
-  unset HOLT_TRILL                         # ditto — the notify tests shim trill on PATH
+  # Both spellings: a lane hook is handed the SCRUFF_*/HOLT_* pair until 1.1.0,
+  # so scrubbing only one still lets a machine choice reach the fixture.
+  unset SCRUFF_AGENT HOLT_AGENT HAUS_AGENT_DEFAULT # machine choices must not leak in
+  unset SCRUFF_STATE HOLT_STATE SCRUFF_OCCUPANCY HOLT_OCCUPANCY # the lease dir and its sole-provider switch
+  unset SCRUFF_TRILL HOLT_TRILL                # ditto — the notify tests shim trill on PATH
   export CLAUDE_WT_BASE="$TMP/wtbase"
   REG="$CLAUDE_WT_BASE/registry.tsv"
   mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_STATE_HOME"
@@ -114,7 +116,7 @@ EOF
   # EMPTY dump is wt's "lsof told me nothing, degrade to parked-only" signal,
   # which FAKE_LSOF_BROKEN=1 exercises deliberately.
   #
-  # Real `-F pcn` FIELD SETS, not bare `n` lines: holt now carries the pid and
+  # Real `-F pcn` FIELD SETS, not bare `n` lines: scruff now carries the pid and
   # command name into every refusal it prints, so a shim that emitted only
   # paths would let the parse regress without a single test noticing. Pids
   # start at 4001 and count up per cwd; FAKE_LSOF_CMD names them all.
@@ -162,7 +164,7 @@ commit_in() { # commit_in <checkout> <file> <msg> — give a branch real history
   # Guard the path. `git -C ""` is not an error to git — it means the current
   # directory — so an empty $1 here silently retargets every command below at
   # whatever repo the suite is being RUN from. That is not hypothetical: it
-  # happened, and it left two commits in the real holt repo.
+  # happened, and it left two commits in the real scruff repo.
   [ -n "$1" ] && [ -d "$1" ] || { printf 'commit_in: refusing an empty/missing checkout path\n' >&2; return 1; }
   echo "$RANDOM" >"$1/$2"
   git -C "$1" add -A
@@ -439,7 +441,7 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
   wt_run resume solo
   [ "$status" -eq 0 ]
   # One checkout, one lane, one newest conversation: asking which is a question
-  # with a single answer, and holt is the one holding it.
+  # with a single answer, and scruff is the one holding it.
   [[ "$output" == *"claude --continue"* ]]
   [[ "$output" != *"--resume"* ]] || fail "the picker came back: $output"
 }
@@ -482,7 +484,7 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
 
 @test "focus: the hook is handed the lane, and its yes ends it" {
   local main hook; main="$(mkrepo alpha)"; mkwt "$main" glance >/dev/null
-  hook="$(mkhook focus 'printf "%s %s\n" "$HOLT_NAME" "$HOLT_MAIN" >"'"$TMP"'/focused"; exit 0')"
+  hook="$(mkhook focus 'printf "%s %s\n" "$SCRUFF_NAME" "$SCRUFF_MAIN" >"'"$TMP"'/focused"; exit 0')"
   setcfg "[hooks]
 focus = \"$hook\""
   wt_run focus glance
@@ -505,7 +507,7 @@ focus = \"$hook\""
   [[ "$output" == *"claude --continue"* ]]
 }
 
-@test "focus: with no hook at all it is resume — holt's own answer to go-to-this-lane" {
+@test "focus: with no hook at all it is resume — scruff's own answer to go-to-this-lane" {
   local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" plain)"
   git -C "$main" worktree remove --force "$dir"
   wt_run focus plain
@@ -639,7 +641,7 @@ hook_notify() { # hook_notify <json> — drive the notify hook
 
 @test "notify: no trill binary anywhere is a silent no-op, exit 0" {
   local main dir; main="$(mkrepo alpha)"; dir="$(hook_create "$main" sparkle)"
-  export HOLT_TRILL="$TMP/no-such-binary"   # authoritative when set: no fall-through
+  export SCRUFF_TRILL="$TMP/no-such-binary"   # authoritative when set: no fall-through
   run hook_notify "{\"hook_event_name\":\"Stop\",\"cwd\":\"$dir\"}"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
@@ -739,7 +741,7 @@ hook_notify() { # hook_notify <json> — drive the notify hook
 }
 
 # ── the ask markers a reap is the only answer to ─────────────────────────────
-# `holt hook notify` keeps its resolve path cheap with one marker file per fin
+# `scruff hook notify` keeps its resolve path cheap with one marker file per fin
 # it put up, and clears that marker when the SESSION moves. Two shapes never
 # move again: a lane blocked on you when its pane closed (it is answered by
 # being reaped) and a pane outside every lane, keyed by session id. Left alone
@@ -751,14 +753,14 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" sweepme)"
   git -C "$main" merge -q --no-edit worktree-sweepme
   mktrill
-  local asks="$XDG_STATE_HOME/holt/asks"
+  local asks="$XDG_STATE_HOME/scruff/asks"
   mkdir -p "$asks"; : >"$asks/holt.alpha.sweepme"
 
   cd "$TMP"; wt_run reap
   [ "$status" -eq 0 ]
   [[ "$output" == *"reaped sweepme (alpha)"* ]]
   # The marker is gone, and so is the fin: its `Go to lane` action would run
-  # `holt focus` against a lane that no longer exists.
+  # `scruff focus` against a lane that no longer exists.
   [ ! -e "$asks/holt.alpha.sweepme" ]
   grep -q -- 'resolve holt/alpha/sweepme' "$FAKE_TRILL_LOG"
   # And never the directory itself — something else on the machine watches it.
@@ -778,7 +780,7 @@ hook_notify() { # hook_notify <json> — drive the notify hook
 }
 
 @test "list: a marker older than a day is dropped, whatever it named" {
-  local asks="$XDG_STATE_HOME/holt/asks"
+  local asks="$XDG_STATE_HOME/scruff/asks"
   mkdir -p "$asks"
   : >"$asks/holt.session.7f3c"        # a pane outside every lane; its session ended
   : >"$asks/holt.alpha.fresh"
@@ -908,7 +910,7 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   # The lane that prompted this was landed, unoccupied, and held back by a
   # single untracked directory a tool had dropped in it. Reap said nothing
   # about it at all and closed with the generic three-reason line, so the
-  # lane read as one holt had simply forgotten about.
+  # lane read as one scruff had simply forgotten about.
   local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" fossil)"
   git -C "$main" merge -q --no-edit worktree-fossil
   mkdir -p "$dir/live"; echo junk >"$dir/live/reaped.log"
@@ -990,7 +992,7 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   [ "$status" -eq 0 ]
   [[ "$output" == *"kept outran (alpha) — merged PR #12, 1 commit(s) since"* ]] \
     || fail "reap kept the branch but never said why: $output"
-  [[ "$output" == *"holt reship outran"* ]] || fail "reap named no way out of it"
+  [[ "$output" == *"scruff reship outran"* ]] || fail "reap named no way out of it"
 }
 
 # A second checkout of the same branch name pushed a merge before this one ever
@@ -1007,7 +1009,7 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   [ "$status" -eq 0 ]
   [[ "$output" == *"kept diverged (alpha) — merged PR #12, but the tip isn't built on what merged"* ]] \
     || fail "reap kept the branch but blamed the wrong cause: $output"
-  [[ "$output" != *"holt reship diverged"* ]] \
+  [[ "$output" != *"scruff reship diverged"* ]] \
     || fail "reap pointed a diverged (stale) branch at reship, which would push it: $output"
   git -C "$main" show-ref -q --verify refs/heads/worktree-diverged \
     || fail "the branch was deleted despite Landed() correctly saying no"
@@ -1039,7 +1041,7 @@ hook_notify() { # hook_notify <json> — drive the notify hook
 }
 
 # The +N marker promises "commits no PR covers". It read merged PRs only, so
-# the follow-up PR `holt reship` had just opened was invisible to it and the
+# the follow-up PR `scruff reship` had just opened was invisible to it and the
 # lane went on demanding a reship that had already happened.
 @test "list: an open PR at the tip clears the +N marker" {
   local main dir tip; main="$(mkrepo alpha)"; dir="$(mkwt "$main" shipped)"
@@ -1081,7 +1083,7 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   cd "$TMP"; wt_run
   [ "$status" -eq 0 ]
   [[ "$output" == *"live+2"* ]] || fail "the state column hid the un-shipped commits: $output"
-  [[ "$output" == *"holt reship"* ]] || fail "the +N marker was printed with no legend"
+  [[ "$output" == *"scruff reship"* ]] || fail "the +N marker was printed with no legend"
 }
 
 @test "list: a branch diverged from its merged PR is marked ~N, not +N" {
@@ -1170,7 +1172,7 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   [ "$status" -eq 0 ]
   [[ "$output" == *"PR #43 was closed unmerged"* ]] \
     || fail "a lane nothing will ever land said nothing about it: $output"
-  [[ "$output" == *"holt drop rejected"* ]] || fail "reap named no way out of it: $output"
+  [[ "$output" == *"scruff drop rejected"* ]] || fail "reap named no way out of it: $output"
   # The commits were REJECTED, not landed. An automatic sweep must never take them.
   git -C "$main" show-ref -q --verify refs/heads/worktree-rejected \
     || fail "reap deleted unlanded work because a PR was closed"
@@ -1192,7 +1194,7 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   export FAKE_GH_BRANCH=worktree-both FAKE_GH_CLOSED_PR=43
   commit_in "$dir" post.txt "after the merge"
   cd "$TMP"; wt_run reap
-  [[ "$output" == *"holt reship both"* ]] || fail "the merged PR lost to the closed one: $output"
+  [[ "$output" == *"scruff reship both"* ]] || fail "the merged PR lost to the closed one: $output"
   [[ "$output" != *"closed unmerged"* ]] || fail "a branch that DID land was called a dead end: $output"
 }
 
@@ -1235,13 +1237,13 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   mkrepo alpha >/dev/null
   cd "$TMP"; wt_run drop nosuchlane
   [ "$status" -eq 1 ]
-  [[ "$output" == *"holt"* ]] || fail "the refusal named no way to find the real names"
+  [[ "$output" == *"scruff"* ]] || fail "the refusal named no way to find the real names"
 }
 
 @test "reaped: every reap leaves a line saying what died and how to get it back" {
   # The bug this exists for: a lane vanished mid-session and NOTHING could say
   # why — `git branch -D` takes the branch's reflog with it, `git worktree
-  # remove` takes the admin dir, and holt kept no record of its own most
+  # remove` takes the admin dir, and scruff kept no record of its own most
   # destructive act.
   local main; main="$(mkrepo alpha)"; mkwt "$main" gone >/dev/null
   local sha; sha="$(git -C "$main" rev-parse worktree-gone)"
@@ -1411,7 +1413,7 @@ mkremote() { # mkremote <main> — give a repo a bare origin it can actually pus
   [ "$status" -eq 0 ]
   [[ "$output" == *"spawned from a pane in $dir"* ]]
   # The parent is a SHARED checkout with many conversations in it, so "the
-  # newest one" isn't an answer holt is entitled to give — this is the one case
+  # newest one" isn't an answer scruff is entitled to give — this is the one case
   # the picker is right.
   [[ "$output" == *"claude --resume"* ]] || fail "a shared parent needs the picker: $output"
 }
@@ -1570,7 +1572,7 @@ EOF
   [ "$status" -eq 0 ]
   dir="$CLAUDE_WT_BASE/beta/quiet-one"
   [ -e "$dir/.git" ]
-  # Only the path on stdout, so `cd "$(holt new)"` works — and NO client ran:
+  # Only the path on stdout, so `cd "$(scruff new)"` works — and NO client ran:
   # a lane is a checkout, and what you open in it is your business.
   [ "$(printf '%s\n' "$output" | tail -1)" = "$dir" ]
   [[ "$output" != *"ran claude"* ]]
@@ -1625,7 +1627,7 @@ EOF
   # "codex is not installed" has to be SIMULATED, and simulating it takes both
   # halves below, because either one alone is defeated by the other mechanism:
   #
-  #   HOLT_PATH_RESCUE=0  — holt appends a bare-PATH rescue for the hook case
+  #   SCRUFF_PATH_RESCUE=0  — scruff appends a bare-PATH rescue for the hook case
   #                         (see internal/commands/path.go), and that rescue
   #                         re-adds the profile bindir a real codex lives in.
   #   PATH=$BIN:onlygit   — and the caller's PATH has to lose codex too, via a
@@ -1638,7 +1640,7 @@ EOF
   # haus's copy, for as long as it existed.
   mkdir -p "$TMP/onlygit"
   ln -sf "$(command -v git)" "$TMP/onlygit/git"
-  run env HOLT_PATH_RESCUE=0 PATH="$BIN:$TMP/onlygit" "$WT" new stranded codex
+  run env SCRUFF_PATH_RESCUE=0 PATH="$BIN:$TMP/onlygit" "$WT" new stranded codex
   [ "$status" -ne 0 ]
   [[ "$output" == *"codex is unavailable"* ]]
   [ -e "$CLAUDE_WT_BASE/beta/stranded/.git" ]
@@ -1655,7 +1657,7 @@ EOF
   [[ "$output" == *"isn't inside a git repo"* ]]
   run "$WT" spawn "$b"
   [ "$status" -ne 0 ]
-  [[ "$output" == *"usage: holt spawn"* ]]
+  [[ "$output" == *"usage: scruff spawn"* ]]
 }
 
 # ── dangling checkouts (husks) ───────────────────────────────────────────────
@@ -1796,7 +1798,7 @@ EOF
   # One repo EACH, deliberately. The contention under test is eight processes
   # writing one registry.tsv — but eight `git worktree add` in a single repo also
   # race each other, inside git (`failed to read .git/worktrees/<n>/commondir`),
-  # and a checkout git dropped is indistinguishable here from a row holt lost.
+  # and a checkout git dropped is indistinguishable here from a row scruff lost.
   # That made this test flaky on Linux and, worse, able to mask the regression it
   # exists to catch. Separate repos remove git from the picture; the registry is
   # still the one shared file all eight are fighting over.
@@ -1813,7 +1815,7 @@ EOF
 
 # ── bare PATH (the hook environment) ─────────────────────────────────────────
 #
-# Claude Code fires WorktreeCreate/WorktreeRemove with no PATH at all, and holt
+# Claude Code fires WorktreeCreate/WorktreeRemove with no PATH at all, and scruff
 # shells out to git for everything. This is the case that breaks at pane-open
 # time — the worst moment to find it — so it gets its own tests rather than
 # riding along inside another one.
@@ -1846,11 +1848,11 @@ EOF
 # that knows its own sessions says so directly. The asymmetry below is the whole
 # point and is worth stating twice: a lease may SAVE a checkout from the sweep,
 # never condemn one, because "nobody leased it" is not evidence that nobody is
-# there. HOLT_OCCUPANCY=lease is the one deployment entitled to say otherwise.
+# there. SCRUFF_OCCUPANCY=lease is the one deployment entitled to say otherwise.
 #
 # Every test here passes `--pid $$` explicitly. The default — the CALLING
-# process — is right for the embedder that exec's holt and stays alive, and
-# wrong under bats, where `run` forks a subshell that exits the moment holt
+# process — is right for the embedder that exec's scruff and stays alive, and
+# wrong under bats, where `run` forks a subshell that exits the moment scruff
 # does. Naming the test shell keeps the lease alive across the later `reap`,
 # which is the situation being tested.
 
@@ -1909,7 +1911,7 @@ EOF
   git -C "$main" merge -q --no-edit worktree-cautious
   # A populated lease directory that says nothing about THIS worktree. The
   # temptation is to read that as "so it's free"; taking it would reap the
-  # checkout of anyone who simply cd'd in without telling holt.
+  # checkout of anyone who simply cd'd in without telling scruff.
   local other; other="$(mkwt "$(mkrepo beta)" elsewhere)"
   wt_run heartbeat "$other" --pid $$
   export FAKE_LSOF_BROKEN=1
@@ -1919,7 +1921,7 @@ EOF
   [ -e "$dir/.git" ]
 }
 
-@test "heartbeat: HOLT_OCCUPANCY=lease lets an embedder answer for absence" {
+@test "heartbeat: SCRUFF_OCCUPANCY=lease lets an embedder answer for absence" {
   # Two repos, not two worktrees of one: mkwt commits the same work.txt in each,
   # so landing both branches into a single main is an add/add conflict rather
   # than the fixture this test wants.
@@ -1931,7 +1933,7 @@ EOF
   wt_run heartbeat "$held" --pid $$
   # No lsof at all — the deployment this models has no processes to scan. The
   # embedder owns every session, so its leases are the whole truth.
-  export FAKE_LSOF_BROKEN=1 HOLT_OCCUPANCY=lease
+  export FAKE_LSOF_BROKEN=1 SCRUFF_OCCUPANCY=lease
   cd "$TMP"; wt_run reap
   [ "$status" -eq 0 ]
   [[ "$output" != *"no lsof"* ]] || fail "leases should have answered: $output"
@@ -1960,8 +1962,8 @@ EOF
 @test "dispatch: --help prints the header block, including park/unpark" {
   wt_run --help
   [ "$status" -eq 0 ]
-  [[ "$output" == *"holt park [label]"* ]]
-  [[ "$output" == *"holt unpark"* ]]
+  [[ "$output" == *"scruff park [label]"* ]]
+  [[ "$output" == *"scruff unpark"* ]]
   [[ "$output" != *"#!/usr/bin/env"* ]]
 }
 
@@ -1971,7 +1973,7 @@ EOF
   [[ "$output" == *"no lane named 'gibberish'"* ]]
 }
 
-# Bare `holt` IS the listing, so `holt --json` must be the machine-readable
+# Bare `scruff` IS the listing, so `scruff --json` must be the machine-readable
 # listing — not "unknown flag", which is what every consumer that reached for
 # the obvious spelling used to get. It has to be the SAME envelope as the
 # explicit form, or the two spellings drift and consumers pick the wrong one.
@@ -1994,11 +1996,11 @@ EOF
 # ── policy seams ─────────────────────────────────────────────────────────────
 #
 # Every one of these asserts the same two halves of the same contract, on a
-# different decision: with no hook configured, holt behaves EXACTLY as it did
+# different decision: with no hook configured, scruff behaves EXACTLY as it did
 # before hooks existed (the whole rest of this suite is that half); with a hook
 # configured, the hook's answer is the answer, including when it contradicts
-# holt's own. The second half is the product — a machine has to be able to be
-# right about its own lanes when holt is wrong.
+# scruff's own. The second half is the product — a machine has to be able to be
+# right about its own lanes when scruff is wrong.
 
 mkhook() { # mkhook <name> <body> — an executable hook, echo its path
   local path="$TMP/hooks/$1"
@@ -2009,19 +2011,19 @@ mkhook() { # mkhook <name> <body> — an executable hook, echo its path
 }
 
 setcfg() { # setcfg <toml body> — plant the machine config
-  mkdir -p "$XDG_CONFIG_HOME/holt"
-  printf '%s\n' "$1" >"$XDG_CONFIG_HOME/holt/config.toml"
+  mkdir -p "$XDG_CONFIG_HOME/scruff"
+  printf '%s\n' "$1" >"$XDG_CONFIG_HOME/scruff/config.toml"
 }
 
-@test "hooks: no config means every decision is holt's own" {
+@test "hooks: no config means every decision is scruff's own" {
   local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" plain)"
   cd "$TMP"; wt_run reap
   [ "$status" -eq 0 ]
-  [[ "$output" == *"nothing to reap"* ]]      # unmerged: holt's own rule held
+  [[ "$output" == *"nothing to reap"* ]]      # unmerged: scruff's own rule held
   [ -e "$dir/.git" ]
 }
 
-@test "hooks: landed — a branch holt calls unmerged is reaped when the hook says landed" {
+@test "hooks: landed — a branch scruff calls unmerged is reaped when the hook says landed" {
   local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" trainlanded)"
   hook="$(mkhook landed 'echo "{\"via\": \"release-train\"}"; exit 0')"
   setcfg "[hooks]
@@ -2036,7 +2038,7 @@ landed = \"$hook\""
 
 @test "hooks: landed — a hook that says no keeps a branch git itself calls merged" {
   local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" heldback)"
-  git -C "$main" merge -q --no-edit worktree-heldback   # ancestry-merged: holt would reap
+  git -C "$main" merge -q --no-edit worktree-heldback   # ancestry-merged: scruff would reap
   hook="$(mkhook landed 'exit 1')"
   setcfg "[hooks]
 landed = \"$hook\""
@@ -2046,7 +2048,7 @@ landed = \"$hook\""
   git -C "$main" show-ref -q --verify refs/heads/worktree-heldback
 }
 
-@test "hooks: landed — exit 3 defers, leaving holt's own ladder in force" {
+@test "hooks: landed — exit 3 defers, leaving scruff's own ladder in force" {
   local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" deferred)"
   git -C "$main" merge -q --no-edit worktree-deferred
   hook="$(mkhook landed 'exit 3')"
@@ -2060,7 +2062,7 @@ landed = \"$hook\""
   local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" broken)"
   git -C "$main" merge -q --no-edit worktree-broken
   setcfg '[hooks]
-landed = "/nonexistent/holt-landed"'
+landed = "/nonexistent/scruff-landed"'
   cd "$TMP"; wt_run reap
   [ "$status" -eq 0 ]
   [[ "$output" == *"wouldn't run"* ]] || fail "a dead hook must say so: $output"
@@ -2069,16 +2071,16 @@ landed = "/nonexistent/holt-landed"'
 
 @test "hooks: preserve — it decides whether a closing pane's dirt becomes a wip commit" {
   local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" noswap)"
-  echo edit >"$dir/README.md"            # a TRACKED edit: holt would always preserve
+  echo edit >"$dir/README.md"            # a TRACKED edit: scruff would always preserve
   hook="$(mkhook preserve 'exit 1')"
   setcfg "[hooks]
 preserve = \"$hook\""
   hook_remove "$dir" 2>/dev/null
   run git -C "$main" log -1 --format=%s worktree-noswap
-  [[ "$output" != wip:* ]] || fail "the hook said don't preserve and holt did anyway: $output"
+  [[ "$output" != wip:* ]] || fail "the hook said don't preserve and scruff did anyway: $output"
 }
 
-@test "hooks: preserve — a yes wip-commits scratch holt would have dropped" {
+@test "hooks: preserve — a yes wip-commits scratch scruff would have dropped" {
   local main dir tip hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" keepall)"
   tip="$(git -C "$dir" rev-parse HEAD)"
   export FAKE_GH_MERGED=1 FAKE_GH_OID="$tip"     # landed; only untracked left
@@ -2088,13 +2090,13 @@ preserve = \"$hook\""
 preserve = \"$hook\""
   hook_remove "$dir" 2>/dev/null
   run git -C "$main" log -1 --format=%s worktree-keepall
-  [[ "$output" == wip:* ]] || fail "the hook said preserve and holt dropped it: $output"
+  [[ "$output" == wip:* ]] || fail "the hook said preserve and scruff dropped it: $output"
 }
 
-@test "hooks: a predicate is handed the situation as HOLT_* vars AND as JSON" {
+@test "hooks: a predicate is handed the situation as SCRUFF_* vars AND as JSON" {
   # Both channels carry the same table, because a seam may be a program with a
   # JSON parser or three lines of shell, and neither should have to become the
-  # other. HOLT_BASE_BRANCH is the one that needs pinning: HOLT_BASE is already
+  # other. SCRUFF_BASE_BRANCH is the one that needs pinning: SCRUFF_BASE is already
   # the lane base DIRECTORY, so the default branch had to be spelled apart.
   #
   # The hook only DUMPS its two inputs; every assertion lives out here in bats.
@@ -2110,8 +2112,8 @@ preserve = \"$hook\""
     read -r body
     printf "%s\n" "$body" >"'"$TMP"'/stdin"
     printf "hook=%s name=%s branch=%s repo=%s base=%s main=%s\n" \
-      "$HOLT_HOOK" "$HOLT_NAME" "$HOLT_BRANCH" "$HOLT_REPO" \
-      "$HOLT_BASE_BRANCH" "$HOLT_MAIN" >"'"$TMP"'/env"
+      "$SCRUFF_HOOK" "$SCRUFF_NAME" "$SCRUFF_BRANCH" "$SCRUFF_REPO" \
+      "$SCRUFF_BASE_BRANCH" "$SCRUFF_MAIN" >"'"$TMP"'/env"
     exit 3')"
   setcfg "[hooks]
 preserve = \"$hook\""
@@ -2119,7 +2121,7 @@ preserve = \"$hook\""
 
   run cat "$TMP/env"
   [ "$output" = "hook=preserve name=payload branch=worktree-payload repo=acme/alpha base=main main=$main" ] \
-    || fail "the HOLT_* vars are wrong: $output"
+    || fail "the SCRUFF_* vars are wrong: $output"
 
   run cat "$TMP/stdin"
   local json="$output" needle
@@ -2128,11 +2130,11 @@ preserve = \"$hook\""
   done
 }
 
-@test "hooks: resume — the hook reopens the session instead of holt exec'ing a client" {
+@test "hooks: resume — the hook reopens the session instead of scruff exec'ing a client" {
   local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" paned)"
   hook="$(mkhook resume '
-    printf "%s %s %s\n" "$HOLT_NAME" "$HOLT_PATH" "$HOLT_LANE_AGENT" >"'"$TMP"'/opened"
-    printf "%s\n" "$HOLT_COMMAND" >"'"$TMP"'/cmd"
+    printf "%s %s %s\n" "$SCRUFF_NAME" "$SCRUFF_PATH" "$SCRUFF_LANE_AGENT" >"'"$TMP"'/opened"
+    printf "%s\n" "$SCRUFF_COMMAND" >"'"$TMP"'/cmd"
     exit 0')"
   setcfg "[hooks]
 resume = \"$hook\""
@@ -2140,8 +2142,8 @@ resume = \"$hook\""
   [ "$status" -eq 0 ]
   run cat "$TMP/opened"
   [ "$output" = "paned $dir claude" ] || fail "resume payload is wrong: $output"
-  # A hook that spawns a pane runs what holt WOULD have run, or the pane lands
-  # on the picker holt just spared the user.
+  # A hook that spawns a pane runs what scruff WOULD have run, or the pane lands
+  # on the picker scruff just spared the user.
   [ "$(cat "$TMP/cmd")" = "claude --continue" ] || fail "wrong command: $(cat "$TMP/cmd")"
 }
 
@@ -2149,7 +2151,7 @@ resume = \"$hook\""
   local main dir hook; main="$(mkrepo alpha)"; dir="$(mkwt "$main" rebuilt)"
   hook_remove "$dir" >/dev/null 2>&1           # park it: branch survives, checkout gone
   [ ! -e "$dir" ]
-  hook="$(mkhook resume 'test -e "$HOLT_PATH/.git" && echo rebuilt >"'"$TMP"'/state"; exit 0')"
+  hook="$(mkhook resume 'test -e "$SCRUFF_PATH/.git" && echo rebuilt >"'"$TMP"'/state"; exit 0')"
   setcfg "[hooks]
 resume = \"$hook\""
   cd "$TMP"; wt_run rebuilt
@@ -2163,13 +2165,13 @@ resume = \"$hook\""
   parent="$(mkwt "$main" workshop)"
   mkdir -p "$HOME/.claude/projects/$(printf '%s' "$parent" | tr './' '--')"
   cd "$parent"; child="$("$WT" child "$sub" workshop 2>/dev/null)"
-  hook="$(mkhook resume 'printf "%s|%s\n" "$HOLT_PATH" "$HOLT_CHAT" >"'"$TMP"'/chat"; exit 0')"
+  hook="$(mkhook resume 'printf "%s|%s\n" "$SCRUFF_PATH" "$SCRUFF_CHAT" >"'"$TMP"'/chat"; exit 0')"
   setcfg "[hooks]
 resume = \"$hook\""
   cd "$TMP"; wt_run beta/workshop
   [ "$status" -eq 0 ]
   [ "$(cat "$TMP/chat")" = "$child|$parent" ] \
-    || fail "a hook opening a pane in \$HOLT_PATH would get an empty session: $(cat "$TMP/chat")"
+    || fail "a hook opening a pane in \$SCRUFF_PATH would get an empty session: $(cat "$TMP/chat")"
 }
 
 @test "hooks: resume — a hook that refuses exits 2, not 0" {
@@ -2183,7 +2185,7 @@ resume = \"$hook\""
 
 @test "hooks: open — a fresh lane's session is the machine's business too" {
   local main hook; main="$(mkrepo alpha)"
-  hook="$(mkhook open 'printf "%s %s\n" "$HOLT_NAME" "$HOLT_LANE_AGENT" >"'"$TMP"'/opened"; exit 0')"
+  hook="$(mkhook open 'printf "%s %s\n" "$SCRUFF_NAME" "$SCRUFF_LANE_AGENT" >"'"$TMP"'/opened"; exit 0')"
   setcfg "[hooks]
 open = \"$hook\""
   cd "$main"; wt_run new fresh --open
@@ -2208,7 +2210,7 @@ EOF
 
 @test "prompt: spawn hands the open hook the client's START invocation, not its bare open" {
   local b hook; b="$(mkrepo beta)"
-  hook="$(mkhook open 'printf "%s\n" "$HOLT_COMMAND" >"'"$TMP"'/cmd"; exit 0')"
+  hook="$(mkhook open 'printf "%s\n" "$SCRUFF_COMMAND" >"'"$TMP"'/cmd"; exit 0')"
   setcfg "[hooks]
 open = \"$hook\""
   run bash -c "'$WT' spawn '$b' notch-flicker --prompt 'fix the notch' 2>/dev/null"
@@ -2219,16 +2221,16 @@ open = \"$hook\""
   [ "$(cat "$TMP/cmd")" = "claude -- 'fix the notch'" ] || fail "wrong invocation: $(cat "$TMP/cmd")"
 }
 
-@test "prompt: a multi-line prompt with quotes and a leading dash survives HOLT_COMMAND" {
+@test "prompt: a multi-line prompt with quotes and a leading dash survives SCRUFF_COMMAND" {
   # The regression this exists for: `command` used to be a bare space-join of
-  # argv. Every invocation holt had ever handed a hook was one or two bare words
+  # argv. Every invocation scruff had ever handed a hook was one or two bare words
   # ("claude", "codex resume --last"), so the bug was invisible — and the first
   # prompt through it would shatter into words, or unbalance the opener's shell.
   local b hook brief; b="$(mkrepo beta)"
   mkclient claude
   brief="- rewrite \"the parser\"
   Next: run \$HOME/x.sh  # don't expand me"
-  hook="$(mkhook open 'bash -c "$HOLT_COMMAND" >"'"$TMP"'/argv" 2>&1; exit 0')"
+  hook="$(mkhook open 'bash -c "$SCRUFF_COMMAND" >"'"$TMP"'/argv" 2>&1; exit 0')"
   setcfg "[hooks]
 open = \"$hook\""
   run bash -c "'$WT' spawn '$b' parser --prompt \"\$1\" 2>/dev/null" _ "$brief"
@@ -2244,7 +2246,7 @@ $(cat "$TMP/argv")"
 @test "prompt: spawn with no open hook is degraded, not failed — the lane exists" {
   local b; b="$(mkrepo beta)"
   run bash -c "'$WT' spawn '$b' orphan --prompt 'do the thing'"
-  # 3, not 1: holt made the lane it was asked for. What was unavailable is
+  # 3, not 1: scruff made the lane it was asked for. What was unavailable is
   # somewhere to open it, and the caller needs to tell those two apart.
   [ "$status" -eq 3 ]
   [ -e "$CLAUDE_WT_BASE/beta/orphan/.git" ]
@@ -2253,7 +2255,7 @@ $(cat "$TMP/argv")"
 
 @test "prompt: --prompt-file reads the brief from a file, and - from stdin" {
   local b hook; b="$(mkrepo beta)"
-  hook="$(mkhook open 'printf "%s\n" "$HOLT_COMMAND" >"'"$TMP"'/cmd"; exit 0')"
+  hook="$(mkhook open 'printf "%s\n" "$SCRUFF_COMMAND" >"'"$TMP"'/cmd"; exit 0')"
   setcfg "[hooks]
 open = \"$hook\""
   printf 'ship the thing\n' >"$TMP/brief.md"        # trailing newline is not the task
@@ -2278,9 +2280,9 @@ open = \"$hook\""
 }
 
 @test "prompt: spawn WITHOUT a prompt never fires the open hook" {
-  # The pairing that makes the test above mean something. `holt spawn` on its
+  # The pairing that makes the test above mean something. `scruff spawn` on its
   # own is still "make me a lane and print its path" — a caller doing its own
-  # opening must not get a second window from holt.
+  # opening must not get a second window from scruff.
   local b hook; b="$(mkrepo beta)"
   hook="$(mkhook open 'echo fired >"'"$TMP"'/fired"; exit 0')"
   setcfg "[hooks]
@@ -2296,7 +2298,7 @@ open = \"$hook\""
   # window manager was down read 1 as "you asked wrong", retried, and made a
   # SECOND lane while the first sat on disk.
   local b hook; b="$(mkrepo beta)"
-  hook="$(mkhook open 'exit 7')"      # 7 means nothing to holt — a broken hook
+  hook="$(mkhook open 'exit 7')"      # 7 means nothing to scruff — a broken hook
   setcfg "[hooks]
 open = \"$hook\""
   run bash -c "'$WT' spawn '$b' broken --prompt 'do the thing'"
@@ -2316,7 +2318,7 @@ open = \"$hook\""
 }
 
 @test "prompt: an empty positional is refused instead of shifting the next one along" {
-  # `holt spawn "$repo" "" claude` used to fall through the name slot and name
+  # `scruff spawn "$repo" "" claude` used to fall through the name slot and name
   # the lane "claude". Every SDK passes the name positionally, so an unset
   # variable in a caller silently produced a misnamed lane.
   local b; b="$(mkrepo beta)"
@@ -2350,7 +2352,7 @@ open = \"$hook\""
 @test "prompt: --image reaches a client that can attach it, and is described to one that can't" {
   local b hook; b="$(mkrepo beta)"
   : >"$TMP/shot.png"
-  hook="$(mkhook open 'printf "%s\n" "$HOLT_COMMAND" >"'"$TMP"'/cmd"; exit 0')"
+  hook="$(mkhook open 'printf "%s\n" "$SCRUFF_COMMAND" >"'"$TMP"'/cmd"; exit 0')"
   setcfg "[hooks]
 open = \"$hook\""
   run bash -c "'$WT' spawn '$b' shot --agent codex --prompt 'look' --image '$TMP/shot.png' 2>/dev/null"
@@ -2368,7 +2370,7 @@ open = \"$hook\""
 
 @test "prompt: new --prompt implies --open, and keeps the lane's own client" {
   local main hook; main="$(mkrepo alpha)"
-  hook="$(mkhook open 'printf "%s|%s\n" "$HOLT_LANE_AGENT" "$HOLT_COMMAND" >"'"$TMP"'/cmd"; exit 0')"
+  hook="$(mkhook open 'printf "%s|%s\n" "$SCRUFF_LANE_AGENT" "$SCRUFF_COMMAND" >"'"$TMP"'/cmd"; exit 0')"
   setcfg "[hooks]
 open = \"$hook\""
   # No --open anywhere: a prompt with no session to hand it to is a prompt
@@ -2396,14 +2398,14 @@ open = \"$hook\""
 # gate that stands between them.
 
 mknamer() { # mknamer <body> — a namer shim, and the `fake` adapter that runs it
-  mkdir -p "$TMP/hooks" "$XDG_CONFIG_HOME/holt/adapters/namer"
+  mkdir -p "$TMP/hooks" "$XDG_CONFIG_HOME/scruff/adapters/namer"
   printf '#!/usr/bin/env bash\n%s\n' "$1" >"$TMP/hooks/namer"
   chmod +x "$TMP/hooks/namer"
   printf 'kind = "namer"\nid = "fake"\nname = ["%s", "{{.Prompt}}"]\n' "$TMP/hooks/namer" \
-    >"$XDG_CONFIG_HOME/holt/adapters/namer/fake.toml"
+    >"$XDG_CONFIG_HOME/scruff/adapters/namer/fake.toml"
 }
 
-lane_name() { # lane_name <path> — the basename holt chose
+lane_name() { # lane_name <path> — the basename scruff chose
   basename "$1"
 }
 
@@ -2431,7 +2433,7 @@ lane_name() { # lane_name <path> — the basename holt chose
   run cat "$TMP/req"
   [[ "$output" == *"the bar draws a draft PR in the merged colour"* ]] || fail "no task: $output"
   [[ "$output" == *"acme/beta"* ]] || fail "no repo: $output"
-  # The neighbours are in there because holt's own collision handling is a
+  # The neighbours are in there because scruff's own collision handling is a
   # numeric suffix, and `fix-mobile-2` is correct and unreadable.
   [[ "$output" == *"tart-backend"* ]] || fail "no neighbours: $output"
 }
@@ -2445,7 +2447,7 @@ lane_name() { # lane_name <path> — the basename holt chose
   [ "$output" = "$CLAUDE_WT_BASE/beta/notch-flicker" ] || fail "the namer overrode a given name: $output"
   [ ! -e "$TMP/ran" ] || fail "the namer ran for a lane that already had a name"
 
-  # No task, nothing to name after: `holt new` on its own must not start a
+  # No task, nothing to name after: `scruff new` on its own must not start a
   # process, which is the whole reason the ⌘↵ path is unaffected by this.
   cd "$main"; wt_run new
   [ "$status" -eq 0 ]
@@ -2474,9 +2476,9 @@ lane_name() { # lane_name <path> — the basename holt chose
   grep -q "ollama" "$TMP/err" || fail "the missing adapter went unnamed: $(cat "$TMP/err")"
 
   # An adapter file whose command isn't installed.
-  mkdir -p "$XDG_CONFIG_HOME/holt/adapters/namer"
-  printf 'kind = "namer"\nid = "gone"\nname = ["holt-namer-not-installed", "{{.Prompt}}"]\n' \
-    >"$XDG_CONFIG_HOME/holt/adapters/namer/gone.toml"
+  mkdir -p "$XDG_CONFIG_HOME/scruff/adapters/namer"
+  printf 'kind = "namer"\nid = "gone"\nname = ["scruff-namer-not-installed", "{{.Prompt}}"]\n' \
+    >"$XDG_CONFIG_HOME/scruff/adapters/namer/gone.toml"
   setcfg 'namer = "gone"'
   run bash -c "'$WT' spawn '$b' --prompt 'fix the notch' 2>'$TMP/err'"
   [ "$status" -eq 3 ]
@@ -2488,14 +2490,14 @@ lane_name() { # lane_name <path> — the basename holt chose
   local b; b="$(mkrepo beta)"
   setcfg 'namer = "fake"'
   local answer
-  for answer in '../../../etc/passwd' '-rf' '..' '/tmp/holt-namer-escape' 'a; rm -rf ~' 'beta'; do
+  for answer in '../../../etc/passwd' '-rf' '..' '/tmp/scruff-namer-escape' 'a; rm -rf ~' 'beta'; do
     mknamer "printf '%s\n' '$answer'"
     run bash -c "'$WT' spawn '$b' --prompt 'fix the notch' 2>/dev/null"
     [ "$status" -eq 3 ] || fail "spawn failed on answer '$answer': $output"
     [[ "$(dirname "$output")" = "$CLAUDE_WT_BASE/beta" ]] || fail "'$answer' escaped to $output"
     [[ "$(lane_name "$output")" =~ ^[a-z]+-[a-z]+$ ]] || fail "'$answer' became $(lane_name "$output")"
   done
-  [ ! -e "/tmp/holt-namer-escape" ]
+  [ ! -e "/tmp/scruff-namer-escape" ]
   # …and the repo naming itself is dropped rather than spending a word on what
   # every listing already shows.
   mknamer 'echo beta-nav-jitter'
@@ -2503,7 +2505,7 @@ lane_name() { # lane_name <path> — the basename holt chose
   [ "$(lane_name "$output")" = "nav-jitter" ] || fail "the repo named itself: $(lane_name "$output")"
 }
 
-@test "namer: the namer's stdin is empty, never the brief holt just read off fd 0" {
+@test "namer: the namer's stdin is empty, never the brief scruff just read off fd 0" {
   # `--prompt-file -` drains stdin to read the brief, and the client is handed a
   # terminal back afterwards. A namer that inherited fd 0 would either consume
   # what is left or block on a pipe nobody is writing to — a client that waits
@@ -2515,21 +2517,21 @@ lane_name() { # lane_name <path> — the basename holt chose
   run bash -c "'$WT' spawn '$b' --prompt-file - <'$TMP/brief.md' 2>/dev/null"
   [ "$status" -eq 3 ]
   [ "$output" = "$CLAUDE_WT_BASE/beta/draft-pr-grey" ] || fail "lane is at $output"
-  [ ! -s "$TMP/stdin" ] || fail "the namer was handed holt's stdin: $(cat "$TMP/stdin")"
+  [ ! -s "$TMP/stdin" ] || fail "the namer was handed scruff's stdin: $(cat "$TMP/stdin")"
 }
 
-@test "hooks: a lane's own fields never shadow holt's own environment" {
-  # Every HOLT_* a hook is given leaks into the pane that hook spawns, and into
-  # every window opened from it. So no field may be spelled as a variable holt
-  # itself reads: HOLT_STATE is the state DIRECTORY and HOLT_AGENT is the
-  # one-invocation client override, which is why the lane's are HOLT_LANE_STATE
-  # and HOLT_LANE_AGENT. When HOLT_STATE carried the lane's state, `holt reap`
+@test "hooks: a lane's own fields never shadow scruff's own environment" {
+  # Every SCRUFF_* a hook is given leaks into the pane that hook spawns, and into
+  # every window opened from it. So no field may be spelled as a variable scruff
+  # itself reads: SCRUFF_STATE is the state DIRECTORY and SCRUFF_AGENT is the
+  # one-invocation client override, which is why the lane's are SCRUFF_LANE_STATE
+  # and SCRUFF_LANE_AGENT. When SCRUFF_STATE carried the lane's state, `scruff reap`
   # in an agent pane wrote the machine's reap ledger to ./live/reaped.log,
   # inside whatever git checkout the pane was sitting in.
   local main hook; main="$(mkrepo alpha)"
   hook="$(mkhook open '
-    printf "state=%s agent=%s\n" "$HOLT_LANE_STATE" "$HOLT_LANE_AGENT" >"'"$TMP"'/lane"
-    printf "state=%s agent=%s\n" "$HOLT_STATE" "$HOLT_AGENT" >"'"$TMP"'/shadow"
+    printf "state=%s agent=%s\n" "$SCRUFF_LANE_STATE" "$SCRUFF_LANE_AGENT" >"'"$TMP"'/lane"
+    printf "state=%s agent=%s\n" "$SCRUFF_STATE" "$SCRUFF_AGENT" >"'"$TMP"'/shadow"
     exit 0')"
   setcfg "[hooks]
 open = \"$hook\""
@@ -2539,10 +2541,10 @@ open = \"$hook\""
   run cat "$TMP/lane"
   [ "$output" = "state=live agent=claude" ] || fail "the lane's own fields are wrong: $output"
 
-  # holt's own two must arrive untouched by the lane — empty here, because the
+  # scruff's own two must arrive untouched by the lane — empty here, because the
   # suite sets neither. A lane value in either is the bug.
   run cat "$TMP/shadow"
-  [ "$output" = "state= agent=" ] || fail "a lane field shadowed holt's own environment: $output"
+  [ "$output" = "state= agent=" ] || fail "a lane field shadowed scruff's own environment: $output"
 }
 
 @test "hooks: agent — the default client can be a program, not just a constant" {
@@ -2559,12 +2561,12 @@ agent = \"$hook\""
 
 # ── watch ────────────────────────────────────────────────────────────────────
 #
-# `holt watch --json` runs forever, so the suite's usual `run` — which waits
+# `scruff watch --json` runs forever, so the suite's usual `run` — which waits
 # for the process to exit before making $output/$status available — can't
 # drive it. These helpers stand in: start it in the background, poll its
 # output file until at least N lines have landed or a timeout passes, then
 # always stop it in `teardown` — including when an assertion fails partway,
-# so one red test never leaves a `holt watch` running loose past the suite.
+# so one red test never leaves a `scruff watch` running loose past the suite.
 #
 # WATCH_TIMEOUT is generous on purpose: fsnotify's underlying primitive
 # (kqueue on macOS, inotify on Linux) is normally sub-second, but a loaded CI
@@ -2573,7 +2575,7 @@ agent = \"$hook\""
 # met, so this only costs real time on a genuine failure.
 WATCH_TIMEOUT=8
 
-watch_start() { # watch_start [more args...] — background `holt watch --json`; sets $WATCH_OUT
+watch_start() { # watch_start [more args...] — background `scruff watch --json`; sets $WATCH_OUT
   WATCH_OUT="$TMP/watch-$BATS_TEST_NUMBER.out"
   : >"$WATCH_OUT"
   "$WT" watch --json "$@" >"$WATCH_OUT" 2>"$TMP/watch-$BATS_TEST_NUMBER.err" &
@@ -2609,13 +2611,13 @@ teardown() {
   [[ "$output" == *"unknown flag"* ]]
 }
 
-@test "watch: hello carries holt+schema+capabilities, then syncs the existing lane, then ready" {
+@test "watch: hello carries scruff+schema+capabilities, then syncs the existing lane, then ready" {
   local main; main="$(mkrepo alpha)"; mkwt "$main" sparkle >/dev/null
   cd "$TMP"; watch_start
   watch_wait_lines 3 "$WATCH_TIMEOUT" || fail "stream never reached 3 lines: $(cat "$WATCH_OUT")"
 
   [ "$(watch_kind 1)" = hello ] || fail "line 1 wasn't hello: $(watch_line 1)"
-  [[ "$(watch_line 1)" == *'"schema":1'* ]] || fail "hello carries no schema: $(watch_line 1)"
+  [[ "$(watch_line 1)" == *'"schema":2'* ]] || fail "hello carries no schema: $(watch_line 1)"
   [[ "$(watch_line 1)" == *'"capabilities":["registry"]'* ]] \
     || fail "hello carries no capabilities: $(watch_line 1)"
 
@@ -2662,7 +2664,7 @@ teardown() {
   [[ "$(watch_line 4)" == *'"state":"parked"'* ]]
 }
 
-@test "watch: holt <name> on a parked lane appears as resumed" {
+@test "watch: scruff <name> on a parked lane appears as resumed" {
   local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" comeback)"
   hook_remove "$dir" 2>/dev/null      # park it before the stream even starts
   cd "$TMP"; watch_start

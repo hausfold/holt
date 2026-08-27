@@ -5,22 +5,22 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/hausfold/holt/internal/config"
-	"github.com/hausfold/holt/internal/exitcode"
-	"github.com/hausfold/holt/internal/ui"
+	"github.com/hausfold/scruff/internal/config"
+	"github.com/hausfold/scruff/internal/exitcode"
+	"github.com/hausfold/scruff/internal/ui"
 )
 
-// `holt runtime` is the explicit, on-demand half of SPEC.md §5.5: a lane gets
+// `scruff runtime` is the explicit, on-demand half of SPEC.md §5.5: a lane gets
 // a runtime-isolation backend (a VM, a container) only when a caller names
 // one, never automatically from create or remove. That is a deliberate scope
 // cut — not every lane needs a VM, and wiring it into `HookCreate`/
-// `HookRemove` would mean building the repo-local `.holt.toml` selector this
+// `HookRemove` would mean building the repo-local `.scruff.toml` selector this
 // milestone doesn't have yet — so `--backend <id>` is required on every verb.
 
-// RuntimeCmd is `holt runtime <up|enter|down> <name> --backend <id>`.
+// RuntimeCmd is `scruff runtime <up|enter|down> <name> --backend <id>`.
 func (e *Env) RuntimeCmd(args []string) error {
 	if len(args) == 0 {
-		return exitcode.Usagef("usage: holt runtime <up|enter|down> <name> --backend <id>")
+		return exitcode.Usagef("usage: scruff runtime <up|enter|down> <name> --backend <id>")
 	}
 	verb, rest := args[0], args[1:]
 
@@ -38,7 +38,7 @@ func (e *Env) RuntimeCmd(args []string) error {
 		case "--backend":
 			i++
 			if i >= len(rest) {
-				return exitcode.Usagef("holt runtime %s --backend needs an id", verb)
+				return exitcode.Usagef("scruff runtime %s --backend needs an id", verb)
 			}
 			backend = rest[i]
 		default:
@@ -46,16 +46,16 @@ func (e *Env) RuntimeCmd(args []string) error {
 				continue
 			}
 			if a[0] == '-' {
-				return exitcode.Usagef("unknown flag %q — try `holt --help`", a)
+				return exitcode.Usagef("unknown flag %q — try `scruff --help`", a)
 			}
 			if name != "" {
-				return exitcode.Usagef("holt runtime %s takes at most one lane name", verb)
+				return exitcode.Usagef("scruff runtime %s takes at most one lane name", verb)
 			}
 			name = a
 		}
 	}
 	if name == "" {
-		return exitcode.Usagef("name a lane: holt runtime %s <name> --backend <id>", verb)
+		return exitcode.Usagef("name a lane: scruff runtime %s <name> --backend <id>", verb)
 	}
 
 	switch verb {
@@ -66,7 +66,7 @@ func (e *Env) RuntimeCmd(args []string) error {
 	case "down":
 		return e.RuntimeDown(name, backend)
 	default:
-		return exitcode.Usagef("usage: holt runtime <up|enter|down> <name> --backend <id>")
+		return exitcode.Usagef("usage: scruff runtime <up|enter|down> <name> --backend <id>")
 	}
 }
 
@@ -79,10 +79,10 @@ func runtimeEject(args []string) error {
 			continue
 		}
 		if a[0] == '-' {
-			return exitcode.Usagef("unknown flag %q — try `holt runtime eject %s`", a, config.BuiltinRuntime)
+			return exitcode.Usagef("unknown flag %q — try `scruff runtime eject %s`", a, config.BuiltinRuntime)
 		}
 		if named {
-			return exitcode.Usagef("holt runtime eject takes one backend id")
+			return exitcode.Usagef("scruff runtime eject takes one backend id")
 		}
 		id, named = a, true
 	}
@@ -125,10 +125,10 @@ func (e *Env) RuntimeUp(name, backend string) error {
 // RuntimeEnter drops into a lane's already-provisioned runtime backend.
 //
 // Exec-replace, the same chdir-and-exec shape HookResume/HookOpen already use
-// (config.go's doc comments) — holt has nothing left to do once the session
+// (config.go's doc comments) — scruff has nothing left to do once the session
 // starts, an interactive SSH/exec session is exactly the sort of thing that
 // should own the terminal directly, and there is no cleanup to run after: the
-// backend keeps running until a separate `holt runtime down`.
+// backend keeps running until a separate `scruff runtime down`.
 func (e *Env) RuntimeEnter(name, backend string) error {
 	entry, vars, adapter, err := e.resolveRuntime(name, backend)
 	if err != nil {
@@ -174,12 +174,12 @@ func (e *Env) RuntimeDown(name, backend string) error {
 }
 
 // resolveRuntime is the lookup every runtime verb starts from: the lane (via
-// the same matchLane resolver `holt <name>` and `holt drop` already use, so
+// the same matchLane resolver `scruff <name>` and `scruff drop` already use, so
 // `<repo>/<name>` disambiguation stays in one place), the adapter, and the
 // template variables built from it.
 func (e *Env) resolveRuntime(name, backend string) (Entry, config.TemplateVars, *config.RuntimeAdapter, error) {
 	if backend == "" {
-		return Entry{}, config.TemplateVars{}, nil, exitcode.Usagef("name a backend: holt runtime up|enter|down %s --backend <id>", name)
+		return Entry{}, config.TemplateVars{}, nil, exitcode.Usagef("name a backend: scruff runtime up|enter|down %s --backend <id>", name)
 	}
 	entry, err := e.matchLane(name)
 	if err != nil {
@@ -215,14 +215,14 @@ func (e *Env) templateVars(entry Entry, agent string) config.TemplateVars {
 
 // runInherited runs argv with the terminal inherited — the setup/teardown
 // commands are visible, interactive-capable child processes, not captured
-// output holt parses.
+// output scruff parses.
 func runInherited(argv []string) error {
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return cmd.Run()
 }
 
-// runtimeCommandError turns a failed setup/teardown command into holt's exit
+// runtimeCommandError turns a failed setup/teardown command into scruff's exit
 // code, and the two failure shapes mean different things.
 //
 // A binary that isn't on PATH at all is the same "a signal was unavailable"

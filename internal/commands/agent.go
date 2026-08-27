@@ -9,13 +9,13 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/hausfold/holt/internal/exitcode"
-	"github.com/hausfold/holt/internal/gitx"
-	"github.com/hausfold/holt/internal/registry"
-	"github.com/hausfold/holt/internal/ui"
+	"github.com/hausfold/scruff/internal/exitcode"
+	"github.com/hausfold/scruff/internal/gitx"
+	"github.com/hausfold/scruff/internal/registry"
+	"github.com/hausfold/scruff/internal/ui"
 )
 
-// This is the ONE client-specific seam in holt, and it is deliberately narrow.
+// This is the ONE client-specific seam in scruff, and it is deliberately narrow.
 // Every lane records its client in the registry, so changing the machine's
 // default later never makes a parked Codex branch reopen in Claude.
 //
@@ -36,21 +36,21 @@ import (
 // separate `--prompt` as another flag.
 // Never go back to appending the prompt bare.
 
-// agentSpec is what holt needs to know about a client. The 0.2 adapter loader
+// agentSpec is what scruff needs to know about a client. The 0.2 adapter loader
 // produces exactly this struct from a TOML file.
 type agentSpec struct {
 	id    string
 	start func(image, prompt string) []string
 	open  []string
 	// resume opens the client's session PICKER, filtered to the cwd. It is the
-	// right answer only when holt genuinely cannot tell which conversation is
+	// right answer only when scruff genuinely cannot tell which conversation is
 	// meant — a lane whose chat lives in a shared parent checkout.
 	resume []string
 	// last continues the newest conversation in the cwd, with no picker. A
 	// lane's own checkout is a directory only that lane's agent ever ran in, so
 	// "the newest conversation here" IS the lane's chat — asking which one is a
 	// question with one answer, and answering it for the user is the point of
-	// `holt <name>`. Empty means the client has no such mode and the picker
+	// `scruff <name>`. Empty means the client has no such mode and the picker
 	// stands.
 	last []string
 	// imageFlag reports whether the client can attach a local image itself.
@@ -123,7 +123,7 @@ func specFor(id string) (agentSpec, bool) {
 // picker.
 //
 // `own` says the lane's chat lives in the lane's OWN checkout. `pick` is the
-// user overriding from the command line, for the case holt's rule gets wrong:
+// user overriding from the command line, for the case scruff's rule gets wrong:
 // a lane whose newest conversation is not the one wanted (a throwaway session
 // started in the same checkout, or a deliberate second thread).
 func resumeArgv(spec agentSpec, own, pick bool) []string {
@@ -146,9 +146,9 @@ func resolveAgent(id string) (agentSpec, error) {
 
 // execClient replaces this process with the client.
 //
-// A real exec, not a child: holt IS the pane's process, so closing the client
+// A real exec, not a child: scruff IS the pane's process, so closing the client
 // closes the pane — and under the rice's binds that fires the same remove hook
-// Claude's own exit does. A child process would leave holt sitting in the middle,
+// Claude's own exit does. A child process would leave scruff sitting in the middle,
 // and the pane would outlive the client.
 func execClient(argv []string) error {
 	path, err := exec.LookPath(argv[0])
@@ -158,7 +158,7 @@ func execClient(argv []string) error {
 	return syscall.Exec(path, argv, os.Environ())
 }
 
-// shellOf is the shell `holt new --cmd` runs a command string through: the
+// shellOf is the shell `scruff new --cmd` runs a command string through: the
 // user's own $SHELL when they have one, /bin/sh otherwise. Their shell, because
 // the command was typed by them and may lean on their aliases and functions.
 func shellOf() string {
@@ -168,7 +168,7 @@ func shellOf() string {
 	return "/bin/sh"
 }
 
-// AgentCmd is the public client seam: `holt agent <default|start|open|resume> …`.
+// AgentCmd is the public client seam: `scruff agent <default|start|open|resume> …`.
 func (e *Env) AgentCmd(args []string) error {
 	switch argAt(args, 0) {
 	case "default":
@@ -189,7 +189,7 @@ func (e *Env) AgentCmd(args []string) error {
 		}
 		return execClient(spec.resume)
 	default:
-		return exitcode.Usagef("usage: holt agent <default|start|open|resume> …")
+		return exitcode.Usagef("usage: scruff agent <default|start|open|resume> …")
 	}
 }
 
@@ -217,7 +217,7 @@ func (e *Env) agentStart(args []string) error {
 
 // startArgv is the one place a first-turn prompt becomes a client invocation.
 //
-// Shared by `holt agent start` and by the `--prompt` endings of `new` and
+// Shared by `scruff agent start` and by the `--prompt` endings of `new` and
 // `spawn`, because all three are the same act — a lane whose session opens
 // already knowing the task — and a second copy of the image rule would be a
 // second copy to get wrong.
@@ -245,24 +245,24 @@ func startArgv(spec agentSpec, image, prompt string) []string {
 //
 // Claude Code keys workspace trust on the EXACT cwd, in `~/.claude.json` under
 // `projects["<abs path>"].hasTrustDialogAccepted`. There is no inheritance from a
-// parent directory and none from the git common dir — so a checkout holt just
+// parent directory and none from the git common dir — so a checkout scruff just
 // made is, correctly, a directory Claude has never seen. Claude's own
 // `--worktree` doesn't prompt because it seeds that key for the worktree it
-// creates; every checkout holt makes instead (the palette's `holt spawn`,
-// `holt new` on a claude machine, `holt child`) got the dialog. Same worktree,
+// creates; every checkout scruff makes instead (the palette's `scruff spawn`,
+// `scruff new` on a claude machine, `scruff child`) got the dialog. Same worktree,
 // same repo, different answer depending on who ran `git worktree add` — which
 // reads as a bug in the spawn, because it is one.
 //
 // Deliberately narrow, in three ways:
 //
 //   - It only ever COPIES a decision the user already made. If the parent repo
-//     isn't trusted, this is a no-op — holt never grants trust on the user's
+//     isn't trusted, this is a no-op — scruff never grants trust on the user's
 //     behalf, it propagates it to a checkout of the same code.
 //   - Every failure is silent and harmless. A missing/unreadable/unparseable
 //     `~/.claude.json` costs one trust prompt, which is exactly the status quo;
 //     nothing here is worth failing a spawn over.
 //   - It is a no-op for every client with no such prompt. Codex and OpenCode
-//     have none, and holt must not invent one. pi does, and gets its own
+//     have none, and scruff must not invent one. pi does, and gets its own
 //     propagation below — a different file, a different shape, the same rule.
 //
 // The write is read-modify-write on a file Claude Code also owns and rewrites
@@ -325,7 +325,7 @@ func trustWorktreeClaude(main, dir string) {
 	// Temp file in the same directory + rename, so a crash mid-write can never
 	// leave Claude with a truncated config. 0600 because this file holds
 	// credentials, and CreateTemp's own 0600 is what we keep.
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".claude.json.holt-*")
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".claude.json.scruff-*")
 	if err != nil {
 		return
 	}
@@ -345,7 +345,7 @@ func trustWorktreeClaude(main, dir string) {
 // is a flat path → bool map and it DOES inherit from a parent folder, so one
 // `{"/Users/you/code": true}` covers every repo underneath it. (Absolute — pi
 // writes the resolved path and nothing here expands `~`.) That inheritance is
-// also exactly why a lane still prompts: holt's checkouts live at
+// also exactly why a lane still prompts: scruff's checkouts live at
 // `~/.cache/claude-worktrees/<repo>/<name>`, outside whatever tree the user
 // trusted, so no ancestor of the new directory has a decision saved.
 //
@@ -398,7 +398,7 @@ func trustWorktreePi(main, dir string) {
 	if err := enc.Encode(doc); err != nil {
 		return
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".trust.json.holt-*")
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".trust.json.scruff-*")
 	if err != nil {
 		return
 	}
@@ -411,7 +411,7 @@ func trustWorktreePi(main, dir string) {
 		return
 	}
 	// CreateTemp makes 0600 and the rename would carry it, silently tightening
-	// a file holt does not own. Put pi's own mode back first.
+	// a file scruff does not own. Put pi's own mode back first.
 	_ = os.Chmod(tmp.Name(), info.Mode().Perm())
 	_ = os.Rename(tmp.Name(), path)
 }
@@ -455,7 +455,7 @@ func projDir(cwd string) string {
 //
 // Clients own their transcript stores, and only Claude exposes a cheap
 // cwd → transcript-directory test. Codex and OpenCode keep private session
-// indexes, so their cwd-filtered pickers are the authority and holt must not
+// indexes, so their cwd-filtered pickers are the authority and scruff must not
 // guess on their behalf — "unknown" is the honest answer, and the caller
 // degrades to opening the picker.
 func agentHasChat(agent, cwd string) bool {
@@ -473,7 +473,7 @@ func agentHasChat(agent, cwd string) bool {
 // genuinely different context than this lane's own repo:
 //
 //  1. the parent is itself a lane — a nested spawn;
-//  2. the parent is a checkout of a DIFFERENT repo — a `holt child`, e.g. a
+//  2. the parent is a checkout of a DIFFERENT repo — a `scruff child`, e.g. a
 //     workshop pane that spawned this sub-repo lane.
 //
 // A plain same-repo lane's parent is its OWN main checkout, whose transcripts

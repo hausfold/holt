@@ -1,5 +1,5 @@
 {
-  description = "holt — the worktree-lifecycle substrate for coding agents";
+  description = "scruff — the worktree-lifecycle substrate for coding agents";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
@@ -21,19 +21,19 @@
           pname = "scruff";
           inherit version;
           src = ./.;
-          # holt picked up its first dependency (fsnotify, for `holt watch`) —
+          # scruff picked up its first dependency (fsnotify, for `scruff watch`) —
           # see go.mod.
           vendorHash = "sha256-gTscipNyZtkaGkzOsEvREFtetqnSwG9HMbRUYbugkHw=";
-          ldflags = [ "-X github.com/hausfold/holt/internal/commands.Version=${version}" ];
+          ldflags = [ "-X github.com/hausfold/scruff/internal/commands.Version=${version}" ];
 
           # Build ONLY the CLI. Left unset, buildGoModule walks every directory
           # holding .go files and builds each as `./dir` of the main module —
           # which since the Go SDK landed (#18) includes `sdk/go`, and that is
           # its OWN module (`sdk/go/go.mod`, so consumers can
-          # `go get github.com/hausfold/holt/sdk/go` without inheriting holt's
+          # `go get github.com/hausfold/scruff/sdk/go` without inheriting scruff's
           # deps). Go rightly refuses it:
-          #   main module (github.com/hausfold/holt) does not contain package
-          #   github.com/hausfold/holt/sdk/go
+          #   main module (github.com/hausfold/scruff) does not contain package
+          #   github.com/hausfold/scruff/sdk/go
           # internal/* still gets compiled — as dependencies of the CLI, which
           # is the only thing this derivation installs.
           subPackages = [ "cmd/scruff" ];
@@ -57,7 +57,7 @@
             runHook preCheck
             go build -o scruff ./cmd/scruff
             ln -sf scruff holt
-            bats test/holt.bats
+            bats test/scruff.bats
             runHook postCheck
           '';
 
@@ -69,19 +69,19 @@
         };
 
         # The agent skill (ai/SKILL.md), so a consumer can install it without
-        # installing holt at all — no Go toolchain, no binary. (It does NOT
+        # installing scruff at all — no Go toolchain, no binary. (It does NOT
         # isolate the binary's hash: `src = ./.` is unfiltered, so `ai/` is in
         # the Go derivation's closure and a prose edit rebuilds it regardless.)
         # See nix/skill.nix.
         scruff-skill = pkgs.callPackage ./nix/skill.nix { };
-        # The old attribute name, alive until 1.1.0 — haus asks for
-        # `holt-skill` today and flips to `scruff-skill` on its own schedule.
+        # The old attribute name, alive until 1.1.0 — a consumer still asking
+        # for `holt-skill` gets the same derivation.
         holt-skill = pkgs.callPackage ./nix/skill.nix { };
       });
 
       # The family convention: every haus flake exports an overlay so a
-      # consumer writes `pkgs.holt` rather than reaching into
-      # `inputs.holt.packages.${system}`. Same shape as pounce/trill/perch.
+      # consumer writes `pkgs.scruff` rather than reaching into
+      # `inputs.scruff.packages.${system}`. Same shape as pounce/trill/perch.
       # `final.system` is a deprecated nixpkgs alias — reading it makes every
       # downstream eval print "'system' has been renamed to/replaced by
       # 'stdenv.hostPlatform.system'". Use the real attribute.

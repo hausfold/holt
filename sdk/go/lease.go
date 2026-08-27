@@ -1,4 +1,4 @@
-package holt
+package scruff
 
 import (
 	"context"
@@ -26,7 +26,7 @@ type LeaseOptions struct {
 // embedder's "session" (a connection, not a cwd — SPEC.md §14.2) should
 // hold from connect to disconnect:
 //
-//	lease := c.Lease(ctx, laneDir, holt.LeaseOptions{})
+//	lease := c.Lease(ctx, laneDir, scruff.LeaseOptions{})
 //	// ... serve the session ...
 //	lease.Release(context.Background())
 //

@@ -1,49 +1,49 @@
-# holt (Rust SDK)
+# scruff (Rust SDK)
 
-A thin Rust client over the [`holt`](../../README.md) binary — the
+A thin Rust client over the [`scruff`](../../README.md) binary — the
 worktree-lifecycle substrate for parallel coding agents. It shells out to
-`holt` (`tokio::process` + `--json`, `watch --json` for a live NDJSON
+`scruff` (`tokio::process` + `--json`, `watch --json` for a live NDJSON
 stream) rather than talking to a daemon.
 
 Async (tokio): `watch()` is naturally a stream. A sync caller can still
 drive every method with `tokio::runtime::Runtime::block_on`.
 
-Import name is `holt`; the crate on crates.io is `hausfold-holt` (plain
-`holt` is already taken by an unrelated project).
+Import name is `scruff`; the crate on crates.io is `hausfold-scruff` (plain
+`scruff` is already taken by an unrelated project).
 
 ## Install
 
 ```sh
-cargo add hausfold-holt
+cargo add hausfold-scruff
 ```
 
 ```toml
 [dependencies]
-hausfold-holt = "0.1"
+hausfold-scruff = "0.1"
 ```
 
 For local development against this repo instead, point at the path:
 
 ```toml
 [dependencies]
-hausfold-holt = { path = "../holt/sdk/rust", package = "hausfold-holt" }
+hausfold-scruff = { path = "../scruff/sdk/rust", package = "hausfold-scruff" }
 ```
 
-`holt` itself must be on `PATH`, or set `HoltClient { bin: Some("/path/to/holt".into()), ..Default::default() }`.
+`scruff` itself must be on `PATH`, or set `ScruffClient { bin: Some("/path/to/scruff".into()), ..Default::default() }`.
 
 ## Two shapes of usage
 
-**Programmatic (a web backend, an orchestrator).** Every `HoltClient` method
+**Programmatic (a web backend, an orchestrator).** Every `ScruffClient` method
 except the two ending in `_interactive` captures the child's stdout and
 returns — safe to call from a server with many concurrent sessions.
-`HoltClient::default()` is a complete client; cheap to `clone()` and safe to
+`ScruffClient::default()` is a complete client; cheap to `clone()` and safe to
 share across tasks, since every call is a fresh subprocess.
 
 ```rust
 use futures_util::StreamExt;
-use holt::HoltClient;
+use scruff::ScruffClient;
 
-let client = HoltClient::default();
+let client = ScruffClient::default();
 
 let envelope = client.list().await?;
 for lane in &envelope.lanes {
@@ -61,14 +61,14 @@ let dir = client.child("/path/to/some-repo", Some("task-42")).await?;
 let mut lines = Box::pin(client.watch());
 while let Some(line) = lines.next().await {
     let line = line?;
-    if line.kind == holt::watch_kind::CREATED {
+    if line.kind == scruff::watch_kind::CREATED {
         notify_ui(line.lane);
     }
 }
 
 // Scoped to one lane: same stream, minus the hello/ready framing that
 // names no lane. Its item is `WatchEvent`, not `WatchLine` — hello is
-// already filtered out, so the header-only fields (`holt`, `schema`,
+// already filtered out, so the header-only fields (`scruff`, `schema`,
 // `capabilities`) aren't in the type at all. Same contract as `watchLane`
 // in the TS/Python/Swift SDKs.
 let mut events = Box::pin(client.watch_lane(&dir));
@@ -84,14 +84,14 @@ Consuming `watch()` and want the same narrower type? `line.into_event()`
 returns `None` for the hello header and `Some(WatchEvent)` for everything
 else.
 
-Dropping the `watch()`/`watch_lane()` stream kills the underlying `holt
+Dropping the `watch()`/`watch_lane()` stream kills the underlying `scruff
 watch` process (`kill_on_drop`) — that's the only way to stop it, since
 `watch` has no built-in end condition.
 
 **Interactive (a real terminal TUI).** `new_interactive` / `resume_interactive`
-inherit the calling process's stdio, so when holt execs the configured
+inherit the calling process's stdio, so when scruff execs the configured
 agent client (`claude`, `codex`, `opencode`, `pi`), it takes over the real
-terminal — same as running `holt new` by hand — and control returns to you
+terminal — same as running `scruff new` by hand — and control returns to you
 when that session ends.
 
 ```rust
@@ -107,12 +107,12 @@ command as text rather than exec'ing.
 
 ## Holding a session open: leases
 
-holt's sweep (`reap`) needs to know a checkout is in use. On a human's
+scruff's sweep (`reap`) needs to know a checkout is in use. On a human's
 machine, `lsof` answers that; a server holding one session per lane has no
 pane or shell to check, so it says so itself with a lease:
 
 ```rust
-let mut lease = client.lease(lane_dir, holt::LeaseOptions::default()); // refreshes on a background task, < the 90s TTL
+let mut lease = client.lease(lane_dir, scruff::LeaseOptions::default()); // refreshes on a background task, < the 90s TTL
 // ... serve the session ...
 lease.release().await?;
 ```
@@ -124,7 +124,7 @@ instant that pid dies, no refresh loop needed.
 A lease can only **save** a lane from `reap`, never condemn one — "nobody
 leased it" isn't proof nobody's there.
 
-`HoltClient::lease` fires its first heartbeat on a background task rather
+`ScruffClient::lease` fires its first heartbeat on a background task rather
 than blocking on it, so a failed take surfaces on the next refresh rather
 than immediately. Call `client.heartbeat(...)` yourself first if you need
 the initial take to be synchronous and its error immediate. `Lease::release`
@@ -135,30 +135,30 @@ since `Drop` can't run async code.
 
 ## Types for a frontend
 
-`holt::types` (re-exported at the crate root) has no dependencies beyond
+`scruff::types` (re-exported at the crate root) has no dependencies beyond
 `serde`. Import just the structs if you're modeling the same wire shape
 elsewhere:
 
 ```rust
-use holt::{Lane, WatchEvent, WatchLine};
+use scruff::{Lane, WatchEvent, WatchLine};
 ```
 
 `lane_state`, `landed_verdict`, and `watch_kind` are plain `&str` constant
 modules, not Rust `enum`s — `Lane::state`/`Landed::verdict`/`WatchLine::kind`
 stay `String`, so an unrecognized wire value decodes as opaque data instead
 of failing. Compare with `==` against the constants
-(`lane.state == holt::lane_state::LIVE`).
+(`lane.state == scruff::lane_state::LIVE`).
 
 ## What's NOT here yet
 
 `hook create`/`hook remove` have no wrapper — shell out via
 `tokio::process::Command` yourself if you need them. Types are hand-ported
-from the Go structs, not generated; if holt's JSON shape drifts from this
+from the Go structs, not generated; if scruff's JSON shape drifts from this
 file, that's a bug here.
 
 ## Testing
 
-`tests/fake-holt.sh` stands in for the real binary, shared with the other
+`tests/fake-scruff.sh` stands in for the real binary, shared with the other
 SDKs' fixtures of the same name.
 
 ```sh

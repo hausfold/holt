@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# One version number, written into every place holt declares one.
+# One version number, written into every place scruff declares one.
 #
-# holt ships SIX artifacts out of one repo — the CLI plus five SDKs — and until
+# scruff ships SIX artifacts out of one repo — the CLI plus five SDKs — and until
 # this script existed each carried its own hand-typed string. Four of them are
 # already live on third-party registries at 0.1.0 (npm, PyPI, crates.io, and the
 # SwiftPM mirror), and npm/PyPI/crates versions are IMMUTABLE: a number published
-# once can never be re-cut, only superseded. That is why holt is semver rather
+# once can never be re-cut, only superseded. That is why scruff is semver rather
 # than the family's usual CalVer — the number is a compatibility contract read by
 # consumers of a public library, not just a date, and the four registries already
 # hold semver.
@@ -14,17 +14,17 @@
 #
 #   sdk/go     Go modules take their version from a git tag and nothing else.
 #              `sdk/go` is its own module (its own go.mod, so `go get` doesn't
-#              drag in holt's deps), so the tag is PREFIXED with the path:
+#              drag in scruff's deps), so the tag is PREFIXED with the path:
 #              `sdk/go/v<version>`. release.yml pushes it.
 #   sdk/swift  SwiftPM needs Package.swift at a repo root, so sdk/swift is
-#              mirrored to hausfold/holt-swift and the version is a tag on the
+#              mirrored to hausfold/scruff-swift and the version is a tag on the
 #              MIRROR. sync-mirror.sh pushes it; release.yml calls that.
 #
 # Usage:
 #   script/stamp-version.sh 0.2.0            write it everywhere
 #   script/stamp-version.sh --check 0.2.0    verify everywhere already says it
 #
-# `bench release holt <version>` calls the write form; release.yml calls the
+# `bench release scruff <version>` calls the write form; release.yml calls the
 # check form against the pushed tag, so a tag can never claim a version the
 # code doesn't.
 set -euo pipefail
@@ -43,12 +43,12 @@ fi
 # Strict X.Y.Z, no prerelease suffix. Not pedantry: the five ecosystems only
 # agree on the plain triple. PEP 440 would silently rewrite `0.2.0-rc1` to
 # `0.2.0rc1` on the Python side while npm and crates keep it verbatim, so the
-# one number would stop being one number. If holt ever wants prereleases they
+# one number would stop being one number. If scruff ever wants prereleases they
 # need per-ecosystem spellings, and that belongs here, deliberately — not as an
 # accident of a loose regex.
 if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "stamp-version: '$version' is not a plain X.Y.Z semver" >&2
-  echo "  (holt releases have no prerelease suffix — see the comment in this script)" >&2
+  echo "  (scruff releases have no prerelease suffix — see the comment in this script)" >&2
   exit 2
 fi
 

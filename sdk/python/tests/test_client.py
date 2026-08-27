@@ -3,20 +3,20 @@ from contextlib import aclosing
 
 import pytest
 
-from holt import HoltClient, HoltClientOptions, HoltError
-from holt.exec import RunOptions, run
-from holt.watch import watch_lane
+from scruff import ScruffClient, ScruffClientOptions, ScruffError
+from scruff.exec import RunOptions, run
+from scruff.watch import watch_lane
 
-FAKE_HOLT = os.path.join(os.path.dirname(__file__), "fake-holt.sh")
+FAKE_SCRUFF = os.path.join(os.path.dirname(__file__), "fake-scruff.sh")
 
 
-def client() -> HoltClient:
-    return HoltClient(HoltClientOptions(bin=FAKE_HOLT))
+def client() -> ScruffClient:
+    return ScruffClient(ScruffClientOptions(bin=FAKE_SCRUFF))
 
 
 async def test_list_parses_the_json_envelope_with_nullable_discipline_intact() -> None:
     envelope = await client().list()
-    assert envelope.schema == 1
+    assert envelope.schema == 2
     assert len(envelope.lanes) == 2
 
     sparkle = envelope.lanes[0]
@@ -41,7 +41,7 @@ async def test_watch_yields_hello_sync_ready_then_live_changes_and_stops_on_brea
 
 async def test_watch_lane_filters_to_one_lanes_events_only() -> None:
     seen = []
-    async with aclosing(watch_lane("/repo/.holt/haus/fresh", RunOptions(bin=FAKE_HOLT))) as stream:
+    async with aclosing(watch_lane("/repo/.scruff/haus/fresh", RunOptions(bin=FAKE_SCRUFF))) as stream:
         async for ev in stream:
             seen.append(ev.kind)
             break
@@ -50,7 +50,7 @@ async def test_watch_lane_filters_to_one_lanes_events_only() -> None:
 
 async def test_client_watch_lane_filters_the_same_way_on_its_own_options() -> None:
     seen = []
-    async with aclosing(client().watch_lane("/repo/.holt/haus/fresh")) as stream:
+    async with aclosing(client().watch_lane("/repo/.scruff/haus/fresh")) as stream:
         async for ev in stream:
             seen.append(ev.kind)
             break
@@ -62,7 +62,7 @@ async def test_client_watch_lane_filters_the_same_way_on_its_own_options() -> No
 # three docstrings used to claim the opposite.
 async def test_watch_lane_passes_a_lanes_sync_through() -> None:
     seen = []
-    async with aclosing(client().watch_lane("/repo/.holt/haus/sparkle")) as stream:
+    async with aclosing(client().watch_lane("/repo/.scruff/haus/sparkle")) as stream:
         async for ev in stream:
             seen.append(ev.kind)
             break
@@ -71,7 +71,7 @@ async def test_watch_lane_passes_a_lanes_sync_through() -> None:
 
 async def test_child_returns_only_the_new_checkout_path() -> None:
     directory = await client().child("/repo/other")
-    assert directory == "/repo/.holt/other/new-lane"
+    assert directory == "/repo/.scruff/other/new-lane"
 
 
 async def test_resume_captured_stdout_never_execs() -> None:
@@ -79,9 +79,9 @@ async def test_resume_captured_stdout_never_execs() -> None:
     assert "claude --resume" in out
 
 
-async def test_error_mapping_nonzero_exit_raises_holt_error_carrying_the_real_exit_code() -> None:
-    with pytest.raises(HoltError) as exc_info:
-        await run(["reap-refused"], RunOptions(bin=FAKE_HOLT))
+async def test_error_mapping_nonzero_exit_raises_scruff_error_carrying_the_real_exit_code() -> None:
+    with pytest.raises(ScruffError) as exc_info:
+        await run(["reap-refused"], RunOptions(bin=FAKE_SCRUFF))
     err = exc_info.value
     assert err.code == 2
     assert err.refused is True
@@ -90,6 +90,6 @@ async def test_error_mapping_nonzero_exit_raises_holt_error_carrying_the_real_ex
 
 async def test_lease_release_calls_heartbeat_release() -> None:
     c = client()
-    lease = await c.lease("/repo/.holt/haus/sparkle", pid=12345)
+    lease = await c.lease("/repo/.scruff/haus/sparkle", pid=12345)
     await lease.release()
-    # No raise: fake-holt's heartbeat branch accepts --release silently.
+    # No raise: fake-scruff's heartbeat branch accepts --release silently.

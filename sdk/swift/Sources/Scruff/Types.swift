@@ -1,4 +1,4 @@
-// Wire types for holt's frozen public contracts — SPEC.md §2.2 (`--json`) and
+// Wire types for scruff's frozen public contracts — SPEC.md §2.2 (`--json`) and
 // §14.3 step 2 (`watch --json`). Hand-ported from the Go source of truth
 // (internal/commands/json.go, internal/commands/watch.go), same as the TS
 // and Python SDKs — see this package's README for the drift risk that
@@ -12,10 +12,10 @@
 
 import Foundation
 
-/// holt's exit-code contract (SPEC.md §2.4). `.refused` vs `.usage` is the
+/// scruff's exit-code contract (SPEC.md §2.4). `.refused` vs `.usage` is the
 /// one that matters to a caller: "you asked wrong" vs "I declined to
 /// destroy something".
-public enum HoltExitCode: Int32, Sendable {
+public enum ScruffExitCode: Int32, Sendable {
     case ok = 0
     case usage = 1
     case refused = 2
@@ -26,15 +26,15 @@ public enum HoltExitCode: Int32, Sendable {
 
 /// An extensible, string-backed "closed set" — SPEC.md §2.2's discipline:
 /// "additions are minor, removals major." Unlike a Swift `enum`, decoding an
-/// unrecognized value never throws; it just becomes a `HoltOpenEnum` whose
+/// unrecognized value never throws; it just becomes a `ScruffOpenEnum` whose
 /// `rawValue` doesn't match any of the `static let` cases. That mirrors the
 /// TS/Python SDKs, where an unknown string flows through untouched rather
-/// than blowing up JSON parsing — the same leniency that lets holt add
+/// than blowing up JSON parsing — the same leniency that lets scruff add
 /// `landed`/`source: "forge"` later without breaking a pinned consumer
 /// (SPEC.md §14.4). `Tag` is a phantom type purely to keep e.g. `LaneState`
 /// and `LandedVerdict` from being interchangeable despite sharing a
 /// representation.
-public struct HoltOpenEnum<Tag>: RawRepresentable, Hashable, Codable, Sendable {
+public struct ScruffOpenEnum<Tag>: RawRepresentable, Hashable, Codable, Sendable {
     public let rawValue: String
 
     public init(rawValue: String) {
@@ -51,7 +51,7 @@ public struct HoltOpenEnum<Tag>: RawRepresentable, Hashable, Codable, Sendable {
     }
 }
 
-extension HoltOpenEnum: CustomStringConvertible {
+extension ScruffOpenEnum: CustomStringConvertible {
     public var description: String { rawValue }
 }
 
@@ -59,7 +59,7 @@ public enum LaneStateTag {}
 /// A lane's lifecycle state. Closed set — SPEC.md §2.2: "additions are
 /// minor, removals major." Treat an unrecognized value as opaque, not an
 /// error.
-public typealias LaneState = HoltOpenEnum<LaneStateTag>
+public typealias LaneState = ScruffOpenEnum<LaneStateTag>
 extension LaneState {
     public static let live = LaneState(rawValue: "live")
     public static let parked = LaneState(rawValue: "parked")
@@ -67,7 +67,7 @@ extension LaneState {
 }
 
 public enum LandedVerdictTag {}
-public typealias LandedVerdict = HoltOpenEnum<LandedVerdictTag>
+public typealias LandedVerdict = ScruffOpenEnum<LandedVerdictTag>
 extension LandedVerdict {
     public static let yes = LandedVerdict(rawValue: "yes")
     public static let no = LandedVerdict(rawValue: "no")
@@ -76,10 +76,10 @@ extension LandedVerdict {
 }
 
 public enum LandedViaTag {}
-/// `nil` on the wire means holt has no verdict path to report — see
-/// `HoltLane.landed`. That's distinct from an unrecognized non-null string,
+/// `nil` on the wire means scruff has no verdict path to report — see
+/// `ScruffLane.landed`. That's distinct from an unrecognized non-null string,
 /// which still round-trips as an opaque `LandedVia`.
-public typealias LandedVia = HoltOpenEnum<LandedViaTag>
+public typealias LandedVia = ScruffOpenEnum<LandedViaTag>
 extension LandedVia {
     public static let neverDiverged = LandedVia(rawValue: "never-diverged")
     public static let ancestry = LandedVia(rawValue: "ancestry")
@@ -102,7 +102,7 @@ public struct LandedInfo: Codable, Hashable, Sendable {
 
 public struct PostMergeAhead: Codable, Hashable, Sendable {
     public let commits: Int
-    /// PR number, or `0` when there isn't one — holt doesn't null this
+    /// PR number, or `0` when there isn't one — scruff doesn't null this
     /// field today (`internal/commands/json.go`'s `jsonPostMerge`), unlike
     /// `pr` at the envelope level. Treat `0` as "none" here, not as PR #0.
     public let pr: Int
@@ -119,10 +119,10 @@ public struct PostMergeAhead: Codable, Hashable, Sendable {
 ///
 /// `occupied` and `dirty` are three-state on purpose: `nil` means "not
 /// determined" (no lsof, no forge, cache miss), which is categorically
-/// different from `false`. Every consumer bug in holt's bash-era statusline
+/// different from `false`. Every consumer bug in scruff's bash-era statusline
 /// came from collapsing that `nil` into `false` — do not do that here
 /// either.
-public struct HoltLane: Codable, Hashable, Sendable {
+public struct ScruffLane: Codable, Hashable, Sendable {
     public let name: String
     public let repo: String
     public let main: String
@@ -166,16 +166,16 @@ public struct HoltLane: Codable, Hashable, Sendable {
     }
 }
 
-/// The `holt --json` / `holt list --json` envelope — byte-identical between
+/// The `scruff --json` / `scruff list --json` envelope — byte-identical between
 /// the two spellings (SPEC.md §2.2).
-public struct HoltEnvelope: Codable, Hashable, Sendable {
-    public let holt: String
+public struct ScruffEnvelope: Codable, Hashable, Sendable {
+    public let scruff: String
     public let schema: Int
-    public let lanes: [HoltLane]
+    public let lanes: [ScruffLane]
     public let warnings: [String]
 
-    public init(holt: String, schema: Int, lanes: [HoltLane], warnings: [String]) {
-        self.holt = holt
+    public init(scruff: String, schema: Int, lanes: [ScruffLane], warnings: [String]) {
+        self.scruff = scruff
         self.schema = schema
         self.lanes = lanes
         self.warnings = warnings
@@ -183,15 +183,15 @@ public struct HoltEnvelope: Codable, Hashable, Sendable {
 }
 
 // ---------------------------------------------------------------------------
-// `holt watch --json` — SPEC.md §14.3 step 2, §14.4.
+// `scruff watch --json` — SPEC.md §14.3 step 2, §14.4.
 
 public enum WatchEventKindTag {}
 /// Closed set, same discipline as `LaneState`/`LandedVerdict`: additions
 /// are minor, removals major. An unrecognized kind is noise to ignore, not
-/// an error to throw on — that's what lets holt add `landed`/
+/// an error to throw on — that's what lets scruff add `landed`/
 /// `source: "forge"` later without breaking every SDK pinned to v1
 /// (SPEC.md §14.4).
-public typealias WatchEventKind = HoltOpenEnum<WatchEventKindTag>
+public typealias WatchEventKind = ScruffOpenEnum<WatchEventKindTag>
 extension WatchEventKind {
     public static let sync = WatchEventKind(rawValue: "sync")
     public static let ready = WatchEventKind(rawValue: "ready")
@@ -204,12 +204,12 @@ extension WatchEventKind {
 }
 
 /// First line of every `watch` stream. A version header, not an event —
-/// see `capabilities` below for why it carries more than `{holt, schema}`.
+/// see `capabilities` below for why it carries more than `{scruff, schema}`.
 public struct WatchHello: Codable, Hashable, Sendable {
     public let seq: Int
-    public let holt: String
+    public let scruff: String
     public let schema: Int
-    /// What families of event this holt build can ever send on this
+    /// What families of event this scruff build can ever send on this
     /// stream. v1 always sends exactly `["registry"]`; a future `"forge"`
     /// entry is how a consumer learns a `landed`/`post_merge_ahead` event
     /// kind might show up without guessing from which kinds happen to have
@@ -217,7 +217,7 @@ public struct WatchHello: Codable, Hashable, Sendable {
     public let capabilities: [String]
 
     enum CodingKeys: String, CodingKey {
-        case seq, holt, schema, capabilities
+        case seq, scruff, schema, capabilities
     }
 }
 
@@ -226,9 +226,9 @@ public struct WatchEvent: Codable, Hashable, Sendable {
     public let kind: WatchEventKind
     /// Monotonic across the WHOLE stream, hello included — lets a consumer
     /// fanning this out over its own transport (e.g. a websocket) detect a
-    /// dropped line without holt knowing anything about that transport.
+    /// dropped line without scruff knowing anything about that transport.
     public let seq: Int
-    /// RFC3339 UTC, as sent on the wire. When THIS holt process observed
+    /// RFC3339 UTC, as sent on the wire. When THIS scruff process observed
     /// the change, not necessarily when it happened at the source. `nil`
     /// on `hello` — never present here, since `WatchHello` is a separate
     /// type (see `WatchLine`).
@@ -238,14 +238,14 @@ public struct WatchEvent: Codable, Hashable, Sendable {
     /// provider.
     public let source: String?
     /// Present on every kind except `ready` and `warning`.
-    public let lane: HoltLane?
+    public let lane: ScruffLane?
     /// Present only on `warning` — the same text `warnings[]` carries
     /// under `--json`, pushed here because a stream reader has no
     /// envelope to poll.
     public let message: String?
 }
 
-/// A line of `holt watch --json`: either the version header or a lifecycle
+/// A line of `scruff watch --json`: either the version header or a lifecycle
 /// event. Swift has no anonymous union, so this stands in for the TS/
 /// Python SDKs' `WatchHello | WatchEvent` — switch on it rather than
 /// checking `.kind` by hand.
@@ -265,7 +265,7 @@ public enum WatchLine: Sendable {
 
     /// The lane an `.event` carries, or `nil` for `.hello` and for event
     /// kinds (`ready`, `warning`) that name no lane.
-    public var lane: HoltLane? {
+    public var lane: ScruffLane? {
         switch self {
         case .hello: return nil
         case .event(let event): return event.lane

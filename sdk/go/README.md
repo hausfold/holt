@@ -1,26 +1,26 @@
-# holt (Go SDK)
+# scruff (Go SDK)
 
-A thin Go client over the [`holt`](../../README.md) binary — the
+A thin Go client over the [`scruff`](../../README.md) binary — the
 worktree-lifecycle substrate for parallel coding agents. It shells out to
-`holt` (`os/exec` + `--json`, `watch --json` for a live NDJSON stream)
+`scruff` (`os/exec` + `--json`, `watch --json` for a live NDJSON stream)
 rather than talking to a daemon.
 
-This directory is its own Go module (`github.com/hausfold/holt/sdk/go`),
+This directory is its own Go module (`github.com/hausfold/scruff/sdk/go`),
 separate from the CLI's at the repo root, so importing it doesn't pull in
-holt's own dependencies (fsnotify, the CLI framework) — only the standard
+scruff's own dependencies (fsnotify, the CLI framework) — only the standard
 library.
 
 ## Install
 
 ```sh
-go get github.com/hausfold/holt/sdk/go
+go get github.com/hausfold/scruff/sdk/go
 ```
 
 Versions come from pushed tags shaped `sdk/go/vX.Y.Z`. None exist yet —
-for now, use `go get github.com/hausfold/holt/sdk/go@<commit-sha>` or a
+for now, use `go get github.com/hausfold/scruff/sdk/go@<commit-sha>` or a
 `replace` directive pointing at a local checkout.
 
-`holt` itself must be on `PATH`, or set `Client.Bin` to its path.
+`scruff` itself must be on `PATH`, or set `Client.Bin` to its path.
 
 ## Two shapes of usage
 
@@ -32,10 +32,10 @@ zero value is a complete client:
 ```go
 import (
 	"context"
-	holt "github.com/hausfold/holt/sdk/go"
+	scruff "github.com/hausfold/scruff/sdk/go"
 )
 
-c := &holt.Client{}
+c := &scruff.Client{}
 ctx := context.Background()
 
 envelope, err := c.List(ctx)
@@ -55,20 +55,20 @@ dir, err := c.Child(ctx, "/path/to/some-repo", "task-42")
 // Live updates instead of polling — created/parked/resumed/reaped/changed.
 // Go 1.23's range-over-func makes this a plain for-range, no channel or
 // callback plumbing needed: breaking out of the loop (or canceling ctx)
-// kills the underlying `holt watch` process.
+// kills the underlying `scruff watch` process.
 for line, err := range c.Watch(ctx) {
 	if err != nil {
 		log.Println("watch:", err)
 		break
 	}
-	if line.Kind == holt.WatchCreated {
+	if line.Kind == scruff.WatchCreated {
 		notifyUI(line.Lane)
 	}
 }
 
 // Scoped to one lane: same stream, minus the hello/ready framing that
 // names no lane. It yields WatchEvent rather than WatchLine — hello is
-// already filtered out, so the header-only fields (Holt, Schema,
+// already filtered out, so the header-only fields (Scruff, Schema,
 // Capabilities) aren't in the type at all. Same contract as watchLane in
 // the TS/Python/Swift SDKs.
 for event, err := range c.WatchLane(ctx, dir) {
@@ -87,9 +87,9 @@ returns `(WatchEvent, false)` for the hello header and `(event, true)` for
 everything else.
 
 **Interactive (a real terminal TUI).** `NewInteractive` / `ResumeInteractive`
-inherit the calling process's stdio, so when holt execs the configured
+inherit the calling process's stdio, so when scruff execs the configured
 agent client (`claude`, `codex`, `opencode`, `pi`), it takes over the real
-terminal — same as running `holt new` by hand — and control returns to
+terminal — same as running `scruff new` by hand — and control returns to
 you when that session ends.
 
 ```go
@@ -100,20 +100,20 @@ if err := c.NewInteractive(ctx, "task-42", ""); err != nil {
 // ... the agent owned the screen; you're back here when it exits.
 ```
 
-**Do not call `NewInteractive` from a server.** `holt new` execs the agent
+**Do not call `NewInteractive` from a server.** `scruff new` execs the agent
 client unconditionally — it doesn't check for a TTY the way `resume`
 does — so piped stdio blocks forever. `Resume` (non-interactive) is safe
-from a server: holt detects piped stdout and prints the reopen command as
+from a server: scruff detects piped stdout and prints the reopen command as
 text instead of exec'ing.
 
 ## Holding a session open: leases
 
-holt's sweep (`reap`) needs to know a checkout is in use. On a human's
+scruff's sweep (`reap`) needs to know a checkout is in use. On a human's
 machine, `lsof` answers that. A server holding one session per lane has
 no pane and no shell cwd'd anywhere — so it says so itself, with a lease:
 
 ```go
-lease := c.Lease(ctx, laneDir, holt.LeaseOptions{}) // refreshes on an interval, < the 90s TTL
+lease := c.Lease(ctx, laneDir, scruff.LeaseOptions{}) // refreshes on an interval, < the 90s TTL
 // ... serve the session ...
 lease.Release(context.Background())
 ```
@@ -132,19 +132,19 @@ to be synchronous and its error immediate.
 
 ## Errors
 
-Every method that shells out returns `*holt.Error` on a non-zero exit,
-carrying holt's real exit code:
+Every method that shells out returns `*scruff.Error` on a non-zero exit,
+carrying scruff's real exit code:
 
 ```go
 _, err := c.Unpark(ctx)
-var herr *holt.Error
+var herr *scruff.Error
 if errors.As(err, &herr) && herr.Refused() {
-	// holt declined for safety (occupied, dirty, already pushed) —
+	// scruff declined for safety (occupied, dirty, already pushed) —
 	// different handling than a plain usage error.
 }
 ```
 
-`Refused()` is "holt declined to destroy something"; `Degraded()` is
+`Refused()` is "scruff declined to destroy something"; `Degraded()` is
 "completed, but a signal was unavailable (forge down, no `lsof`)" — check
 an `Envelope`'s `Warnings` for why.
 
@@ -157,7 +157,7 @@ by import, so this module has no dependency on the CLI module.
 
 ## Testing
 
-`testdata/fake-holt.sh` stands in for the real binary (shared with
+`testdata/fake-scruff.sh` stands in for the real binary (shared with
 `sdk/ts` and `sdk/python`'s fixture of the same name).
 
 ```sh

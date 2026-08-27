@@ -3,20 +3,20 @@ use std::fmt;
 use crate::types::exit_code;
 
 /// Returned by every SDK call that shells out and gets back a non-zero exit.
-/// Carries holt's actual exit code (SPEC.md §2.4) rather than collapsing
-/// every failure into one shape — [`HoltError::refused`] is how a caller
-/// tells "holt declined to destroy something" from "you asked wrong"
+/// Carries scruff's actual exit code (SPEC.md §2.4) rather than collapsing
+/// every failure into one shape — [`ScruffError::refused`] is how a caller
+/// tells "scruff declined to destroy something" from "you asked wrong"
 /// (`exit_code::USAGE`) or "registry locked" (`exit_code::LOCKED`), and each
 /// deserves different handling (retry, surface to a human, or just don't
 /// retry).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HoltError {
+pub struct ScruffError {
     pub code: i32,
     pub stderr: String,
     pub command: Vec<String>,
 }
 
-impl HoltError {
+impl ScruffError {
     pub(crate) fn new(code: i32, stderr: impl Into<String>, command: Vec<String>) -> Self {
         Self {
             code,
@@ -25,7 +25,7 @@ impl HoltError {
         }
     }
 
-    /// `true` when holt declined for safety (occupied, dirty, or not
+    /// `true` when scruff declined for safety (occupied, dirty, or not
     /// provably landed) rather than because the call itself was wrong.
     pub fn refused(&self) -> bool {
         self.code == exit_code::REFUSED
@@ -50,10 +50,10 @@ fn exit_label(code: i32) -> String {
     }
 }
 
-impl fmt::Display for HoltError {
+impl fmt::Display for ScruffError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let label = exit_label(self.code);
-        write!(f, "holt {}: {label}", self.command.join(" "))?;
+        write!(f, "scruff {}: {label}", self.command.join(" "))?;
         if !self.stderr.trim().is_empty() {
             write!(f, " — {}", self.stderr.trim())?;
         }
@@ -61,4 +61,4 @@ impl fmt::Display for HoltError {
     }
 }
 
-impl std::error::Error for HoltError {}
+impl std::error::Error for ScruffError {}

@@ -30,22 +30,22 @@ The table below is only what's wired in *this* repo.
 | `.opencode/plugins/nix-bootstrap.js` | OpenCode | Plugin load *is* session start; runs the same script, swallowing every error. |
 
 No repo-local flows live here, and that's a decision rather than a gap: `/ship`,
-`/docs-sync` and `/release` all move changes *between* repos, and holt is
+`/docs-sync` and `/release` all move changes *between* repos, and scruff is
 deliberately ignorant of the family it happens to be developed in. They live in
-the workshop. If holt ever grows a flow of its own it goes in
+the workshop. If scruff ever grows a flow of its own it goes in
 `.agents/skills/<name>/SKILL.md`, symlinked into `.claude/skills/<name>/` and
 `.opencode/skills/`, never copied.
 
 ## Caveats
 
 - **This repo is what the machine's worktree hooks call.** `~/.claude/settings.json`
-  points `WorktreeCreate`/`WorktreeRemove` at `holt hook create` / `holt hook
+  points `WorktreeCreate`/`WorktreeRemove` at `scruff hook create` / `scruff hook
   remove`, so a broken hook path here breaks every agent pane on the machine —
   including the one you're standing in. Exercise hook changes by piping JSON to
   the built binary, not by opening a pane and hoping.
 - **`.claude/settings.local.json` is not part of this layer.** It's a
   machine-local tool allowlist — permission state, not a project rule.
-- **A Linux container can build and test holt** (Go + bats), unlike the family's
+- **A Linux container can build and test scruff** (Go + bats), unlike the family's
   macOS app repos. What it can't exercise is anything that shells out to a mac
   client, or the macOS side of the occupancy/`lsof` probing — which is why CI
   runs the acceptance suite on both OSes, and why a green Linux run alone isn't

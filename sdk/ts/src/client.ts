@@ -1,24 +1,24 @@
 import { spawn } from "node:child_process";
 import { run, runJSON, type RunOptions } from "./exec.js";
-import { HoltError } from "./errors.js";
+import { ScruffError } from "./errors.js";
 import { watchAll, watchLane } from "./watch.js";
-import type { HoltEnvelope, WatchEvent, WatchLine } from "./types.js";
+import type { ScruffEnvelope, WatchEvent, WatchLine } from "./types.js";
 
-export interface HoltClientOptions {
-  /** Path to the holt binary, or a bare name resolved on PATH. Defaults to
-   * `"holt"`. */
+export interface ScruffClientOptions {
+  /** Path to the scruff binary, or a bare name resolved on PATH. Defaults to
+   * `"scruff"`. */
   bin?: string;
-  /** Working directory every command runs from — most of holt's commands are
-   * cwd-sensitive (`new`, `park`, a bare `holt <name>`). Defaults to the
+  /** Working directory every command runs from — most of scruff's commands are
+   * cwd-sensitive (`new`, `park`, a bare `scruff <name>`). Defaults to the
    * SDK process's own cwd. */
   cwd?: string;
   /** Extra environment variables, merged over the current process's env.
-   * Useful for `HOLT_AGENT`, `HOLT_OCCUPANCY=lease`. */
+   * Useful for `SCRUFF_AGENT`, `SCRUFF_OCCUPANCY=lease`. */
   env?: Record<string, string | undefined>;
 }
 
 /**
- * A thin client over the `holt` binary. Every method shells out — there is
+ * A thin client over the `scruff` binary. Every method shells out — there is
  * no daemon, no port, no socket (SPEC.md §14.1) — so this class holds
  * nothing but the options each call needs, and is cheap to construct as
  * often as you like.
@@ -28,23 +28,23 @@ export interface HoltClientOptions {
  * other method captures output and returns. Mixing them up matters: see
  * each method's doc comment.
  */
-export class HoltClient {
+export class ScruffClient {
   private readonly opts: RunOptions;
 
-  constructor(options: HoltClientOptions = {}) {
+  constructor(options: ScruffClientOptions = {}) {
     this.opts = { bin: options.bin, cwd: options.cwd, env: options.env };
   }
 
-  /** `holt --json` / `holt list --json` — byte-identical (SPEC.md §2.2).
-   * The full snapshot: every live/parked lane, across every repo holt knows
+  /** `scruff --json` / `scruff list --json` — byte-identical (SPEC.md §2.2).
+   * The full snapshot: every live/parked lane, across every repo scruff knows
    * about. Poll this for landedness and PR state; use {@link watch} for
    * everything else, since it's push rather than poll. */
-  async list(): Promise<HoltEnvelope> {
-    return runJSON<HoltEnvelope>(["--json"], this.opts);
+  async list(): Promise<ScruffEnvelope> {
+    return runJSON<ScruffEnvelope>(["--json"], this.opts);
   }
 
   /**
-   * `holt watch --json` as an async iterable of typed lines — a `hello`,
+   * `scruff watch --json` as an async iterable of typed lines — a `hello`,
    * then a `sync` burst for every lane already alive, `ready`, then live
    * changes for as long as you keep iterating. Stop iterating (`break`,
    * `return`, or dropping the generator) to kill the underlying process.
@@ -54,7 +54,7 @@ export class HoltClient {
    * scoped to one lane's `path`.
    *
    * ```ts
-   * for await (const line of holt.watch()) {
+   * for await (const line of scruff.watch()) {
    *   if (line.kind === "created") console.log("new lane:", line.lane?.name);
    * }
    * ```
@@ -82,7 +82,7 @@ export class HoltClient {
   }
 
   /**
-   * `holt child <repo> [name]` — a lane on ANOTHER repo, registered as a
+   * `scruff child <repo> [name]` — a lane on ANOTHER repo, registered as a
    * child of `cwd`. Prints only the new checkout's path on stdout
    * (SPEC.md §2.3's "only the path" discipline extends here too) and never
    * execs a client, which is what makes it the right primitive for an
@@ -95,7 +95,7 @@ export class HoltClient {
     return stdout.trim();
   }
 
-  /** `holt spawn <repo> <name> [agent]` — a named lane for a caller with no
+  /** `scruff spawn <repo> <name> [agent]` — a named lane for a caller with no
    * pane of its own (a scheduler, a web backend). Like {@link child}, only
    * ever creates the lane and prints its path; never execs. */
   async spawn(repoPath: string, name: string, agent?: string): Promise<string> {
@@ -105,7 +105,7 @@ export class HoltClient {
   }
 
   /**
-   * `holt <name>` / `holt resume <name>` with stdout captured rather than a
+   * `scruff <name>` / `scruff resume <name>` with stdout captured rather than a
    * terminal — which means the Go binary's own TTY check (`ui.IsTTY`)
    * sees a pipe and, by design, never execs a client. It rebuilds the
    * checkout if needed and returns the human-readable result: either
@@ -119,7 +119,7 @@ export class HoltClient {
     return stdout;
   }
 
-  /** `holt park [label]` — commits the working tree as one `wip:` commit on
+  /** `scruff park [label]` — commits the working tree as one `wip:` commit on
    * the current branch. Never touches the shared stash stack (README's
    * "park, not git stash" section) — this is the one safe way for
    * concurrent lanes to set work aside. */
@@ -127,22 +127,22 @@ export class HoltClient {
     await run(["park", ...(label ? [label] : [])], this.opts);
   }
 
-  /** `holt unpark` — reverses the most recent `park`, putting its changes
-   * back uncommitted. Throws {@link HoltError} with `.refused === true`
-   * if that commit is already pushed (holt will not rewrite published
+  /** `scruff unpark` — reverses the most recent `park`, putting its changes
+   * back uncommitted. Throws {@link ScruffError} with `.refused === true`
+   * if that commit is already pushed (scruff will not rewrite published
    * history) or HEAD isn't a parked commit. */
   async unpark(): Promise<void> {
     await run(["unpark"], this.opts);
   }
 
-  /** `holt reap` — sweeps every LANDED lane nobody is standing in (occupied,
+  /** `scruff reap` — sweeps every LANDED lane nobody is standing in (occupied,
    * per {@link heartbeat}/`lsof`, always wins). Never removes the checkout
-   * holt is being run from, and never removes a stray. */
+   * scruff is being run from, and never removes a stray. */
   async reap(): Promise<void> {
     await run(["reap"], this.opts);
   }
 
-  /** `holt reship [name]` — pushes a branch that outran its already-merged
+  /** `scruff reship [name]` — pushes a branch that outran its already-merged
    * PR, and opens the follow-up. Throws with `.degraded === true` if `gh`
    * itself is unavailable. */
   async reship(name?: string): Promise<void> {
@@ -150,12 +150,12 @@ export class HoltClient {
   }
 
   /**
-   * `holt heartbeat [path] [--pid N | --release]` — takes, refreshes, or
+   * `scruff heartbeat [path] [--pid N | --release]` — takes, refreshes, or
    * drops the occupancy lease on a checkout (SPEC.md §9.1, §14.2). This is
-   * the seam built for exactly this SDK: a program embedding holt has no
+   * the seam built for exactly this SDK: a program embedding scruff has no
    * pane and no shell cwd'd anywhere, so the lease is the only way `reap`
    * learns a checkout is in use. A lease can only SAVE a lane from the
-   * sweep, never condemn one — see {@link HoltClient.lease} for a
+   * sweep, never condemn one — see {@link ScruffClient.lease} for a
    * self-refreshing wrapper instead of calling this on a timer yourself.
    */
   async heartbeat(path?: string, options: { pid?: number } = {}): Promise<void> {
@@ -177,7 +177,7 @@ export class HoltClient {
    * cwd — SPEC.md §14.2) should hold from connect to disconnect:
    *
    * ```ts
-   * const lease = holt.lease(laneDir);
+   * const lease = scruff.lease(laneDir);
    * // ... serve the session ...
    * await lease.release();
    * ```
@@ -191,8 +191,8 @@ export class HoltClient {
   }
 
   /**
-   * `holt new [name] --open [agent]` with stdio INHERITED from the calling
-   * process. holt execs the configured agent client unconditionally here
+   * `scruff new [name] --open [agent]` with stdio INHERITED from the calling
+   * process. scruff execs the configured agent client unconditionally here
    * (unlike `resume`, `new` doesn't check for a TTY) — appropriate for a
    * real terminal app (a TUI) that wants to hand off the screen and get
    * control back when the agent session ends, and WRONG for a server: it
@@ -200,12 +200,12 @@ export class HoltClient {
    * whatever the agent expects.
    */
   async newInteractive(name?: string, agent?: string): Promise<void> {
-    // --open is explicit: bare `holt new` only prints the lane's path.
+    // --open is explicit: bare `scruff new` only prints the lane's path.
     await runInteractive(["new", ...(name ? [name] : []), "--open", ...(agent ? [agent] : [])], this.opts);
   }
 
-  /** `holt resume <name>` / `holt <name>` with stdio INHERITED, so a real
-   * terminal's TTY check passes and holt hands off the screen to the
+  /** `scruff resume <name>` / `scruff <name>` with stdio INHERITED, so a real
+   * terminal's TTY check passes and scruff hands off the screen to the
    * agent client. Same caveat as {@link newInteractive}: blocks until that
    * session ends. */
   async resumeInteractive(name: string): Promise<void> {
@@ -215,7 +215,7 @@ export class HoltClient {
 
 function runInteractive(args: string[], opts: RunOptions): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn(opts.bin ?? "holt", args, {
+    const child = spawn(opts.bin ?? "scruff", args, {
       cwd: opts.cwd,
       env: opts.env ? { ...process.env, ...opts.env } : process.env,
       stdio: "inherit",
@@ -223,7 +223,7 @@ function runInteractive(args: string[], opts: RunOptions): Promise<void> {
     child.on("error", reject);
     child.on("close", (code: number | null) => {
       if (code !== 0) {
-        reject(new HoltError(code ?? 1, "", [opts.bin ?? "holt", ...args]));
+        reject(new ScruffError(code ?? 1, "", [opts.bin ?? "scruff", ...args]));
       } else {
         resolve();
       }
@@ -232,26 +232,26 @@ function runInteractive(args: string[], opts: RunOptions): Promise<void> {
 }
 
 /**
- * A held occupancy lease. See {@link HoltClient.lease}.
+ * A held occupancy lease. See {@link ScruffClient.lease}.
  */
 export class Lease {
   private timer: ReturnType<typeof setInterval> | undefined;
   private released = false;
 
   constructor(
-    private readonly client: HoltClient,
+    private readonly client: ScruffClient,
     private readonly path: string,
     private readonly options: { pid?: number; refreshMs?: number },
   ) {
     // A constructor can't be awaited, so a failed first heartbeat can't be
     // raised to the caller here. The `.catch` is load-bearing, not decoration:
     // `void`-ing a rejecting promise is still an UNHANDLED rejection, which
-    // Node terminates the process over by default — so a lane path holt
+    // Node terminates the process over by default — so a lane path scruff
     // refuses would take the embedder's whole server down with it.
     //
     // What that costs, stated honestly: on the refresh path the next tick
     // retries, so a transient failure self-heals and a permanent one keeps
-    // failing visibly in holt's own logs. On the `pid` path there IS no next
+    // failing visibly in scruff's own logs. On the `pid` path there IS no next
     // call — no timer runs, and `release()` only ever calls
     // `heartbeat --release` — so a lease that never got taken looks exactly
     // like one that did. Call `client.heartbeat(path, { pid })` yourself first

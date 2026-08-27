@@ -6,13 +6,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hausfold/holt/internal/compat"
+	"github.com/hausfold/scruff/internal/compat"
 )
 
-// rescuePATH makes holt survive being invoked with no PATH at all.
+// rescuePATH makes scruff survive being invoked with no PATH at all.
 //
 // This is a cutover requirement, not a nicety: Claude Code fires the
-// WorktreeCreate/WorktreeRemove hooks with a bare environment, and holt shells
+// WorktreeCreate/WorktreeRemove hooks with a bare environment, and scruff shells
 // out to `git` for everything and `gh` for PR state. Without this, the hook that
 // is the tool's whole reason for existing fails at the first `git` call — and it
 // fails at pane-open time, which is the worst possible moment to discover it.
@@ -22,7 +22,7 @@ import (
 //
 //   - it is a rescue for the bare-PATH case, not an override of the caller's
 //     environment — a user with their own git ahead of ours keeps it;
-//   - the acceptance suite drives holt with shim `gh`/`lsof` early on PATH, and
+//   - the acceptance suite drives scruff with shim `gh`/`lsof` early on PATH, and
 //     prepending would let the real ones win every time, making the whole suite
 //     silently test the machine instead of the code.
 //
@@ -31,7 +31,7 @@ import (
 // re-adds the very profile bindir the client lives in, so narrowing PATH cannot
 // hide it. The bash `wt` has no such switch, which is why the equivalent test
 // there can only be skipped. It is also the honest knob for anyone who wants
-// holt to resolve strictly against the PATH they handed it.
+// scruff to resolve strictly against the PATH they handed it.
 func rescuePATH() {
 	if compat.Getenv("PATH_RESCUE") == "0" {
 		return

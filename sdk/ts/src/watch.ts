@@ -4,7 +4,7 @@ import type { RunOptions } from "./exec.js";
 import type { WatchEvent, WatchLine } from "./types.js";
 
 /**
- * `holt watch --json` as an async generator of typed lines. One object per
+ * `scruff watch --json` as an async generator of typed lines. One object per
  * NDJSON line on stdout, in order: `hello`, a `sync` burst for every lane
  * already alive, `ready`, then live changes for as long as the process runs
  * (SPEC.md §14.3 step 2).
@@ -15,7 +15,7 @@ import type { WatchEvent, WatchLine } from "./types.js";
  * short: `watch` has no built-in end condition, by design (SPEC.md §14).
  */
 export async function* watchAll(opts: RunOptions = {}): AsyncGenerator<WatchLine> {
-  const child = spawn(opts.bin ?? "holt", ["watch", "--json"], {
+  const child = spawn(opts.bin ?? "scruff", ["watch", "--json"], {
     cwd: opts.cwd,
     env: opts.env ? { ...process.env, ...opts.env } : process.env,
     stdio: ["ignore", "pipe", "pipe"],

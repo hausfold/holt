@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hausfold/holt/internal/config"
-	"github.com/hausfold/holt/internal/gitx"
+	"github.com/hausfold/scruff/internal/config"
+	"github.com/hausfold/scruff/internal/gitx"
 )
 
 // This file answers the one question the whole safety story rests on: has this
@@ -28,7 +28,7 @@ import (
 //
 // Uncertainty always resolves to "not landed", in every branch of this file.
 
-// Verdict is how confident holt is that a branch has landed.
+// Verdict is how confident scruff is that a branch has landed.
 type Verdict struct {
 	Landed     bool
 	Via        string // never-diverged | ancestry | pr-head-oid | patch-equivalence | merge-tree-empty
@@ -84,7 +84,7 @@ func hookVerdict(res config.Result) Verdict {
 	return v
 }
 
-// builtinLanded is holt's own ladder — the default the `landed` hook replaces.
+// builtinLanded is scruff's own ladder — the default the `landed` hook replaces.
 func (e *Env) builtinLanded(main, branch string) Verdict {
 	base := gitx.DefaultBranch(main)
 
@@ -272,7 +272,7 @@ func (e *Env) forgetForge(key string) { _ = os.Remove(e.forgeCachePath(key)) }
 // cachedForge runs a forge query, memoised on disk.
 //
 // On disk rather than in memory because the cache must span invocations: the
-// statusline refresher and a `holt` listing seconds apart should cost one query
+// statusline refresher and a `scruff` listing seconds apart should cost one query
 // between them, not two. A failed query writes an empty file only when nothing
 // is cached, so an offline run asks once rather than once per row — and never
 // clobbers a good answer with an empty one.

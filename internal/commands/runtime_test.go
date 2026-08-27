@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hausfold/holt/internal/exitcode"
+	"github.com/hausfold/scruff/internal/exitcode"
 )
 
 // These cover RuntimeCmd's argv parsing and the pre-lookup checks in
@@ -19,8 +19,8 @@ func TestRuntimeCmdUsageErrors(t *testing.T) {
 		args []string
 		want string
 	}{
-		{"no args", nil, "holt runtime <up|enter|down>"},
-		{"unknown verb", []string{"sideways", "lane", "--backend", "tart"}, "holt runtime <up|enter|down>"},
+		{"no args", nil, "scruff runtime <up|enter|down>"},
+		{"unknown verb", []string{"sideways", "lane", "--backend", "tart"}, "scruff runtime <up|enter|down>"},
 		{"missing lane name", []string{"up", "--backend", "tart"}, "name a lane"},
 		{"unknown flag", []string{"up", "lane", "--nope"}, "unknown flag"},
 		{"--backend with no value", []string{"up", "lane", "--backend"}, "needs an id"},
@@ -48,8 +48,8 @@ func TestRuntimeCmdUsageErrors(t *testing.T) {
 // running it; what is testable here is every decision it makes BEFORE it
 // shells out — which is also where its refusals live.
 func TestTartNaming(t *testing.T) {
-	if got := tartVM("my-lane"); got != "holt-my-lane" {
-		t.Errorf("tartVM = %q, want holt-my-lane — the prefix is what keeps teardown off a VM holt didn't create", got)
+	if got := tartVM("my-lane"); got != "scruff-my-lane" {
+		t.Errorf("tartVM = %q, want scruff-my-lane — the prefix is what keeps teardown off a VM scruff didn't create", got)
 	}
 	t.Setenv("HOLT_TART_USER", "")
 	if got := tartUser(); got != "admin" {

@@ -1,7 +1,7 @@
-// Package ui is holt's only writer of human-facing text.
+// Package ui is scruff's only writer of human-facing text.
 //
 // It is a thin adapter over [snug], which owns the palette, the glyphs and the
-// folding. holt names ROLES, never colours: the three xterm-256 indices this
+// folding. scruff names ROLES, never colours: the three xterm-256 indices this
 // file used to carry were copied out of the bash `wt` during the cutover, and
 // measured against nebelung they sat ΔE 21.8 / 22.3 / 27.4 from the tokens they
 // were meant to be — with `say` resolving to blue, the one hue nebelung exists
@@ -12,7 +12,7 @@
 // than a style choice (SPEC.md §2.3): stdout carries DATA only — the new
 // checkout path from `create`/`child`, the JSON from `--json`. Every diagnostic,
 // prompt and progress line goes to stderr, because callers do
-// `cd "$(holt child …)"` and Claude Code's WorktreeCreate hook reads the path off
+// `cd "$(scruff child …)"` and Claude Code's WorktreeCreate hook reads the path off
 // stdout. snug's Printer holds the same contract from its side: Say/Warn/Fail
 // write to Err, and Data is the only thing that reaches Out.
 package ui
@@ -23,7 +23,7 @@ import (
 	"github.com/hausfold/snug"
 )
 
-// printer is holt's voice, taken once at startup as snug intends — the terminal
+// printer is scruff's voice, taken once at startup as snug intends — the terminal
 // is measured there, not per line.
 var printer = snug.NewPrinter()
 

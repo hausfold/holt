@@ -10,11 +10,11 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/hausfold/holt/internal/config"
-	"github.com/hausfold/holt/internal/exitcode"
-	"github.com/hausfold/holt/internal/gitx"
-	"github.com/hausfold/holt/internal/registry"
-	"github.com/hausfold/holt/internal/ui"
+	"github.com/hausfold/scruff/internal/config"
+	"github.com/hausfold/scruff/internal/exitcode"
+	"github.com/hausfold/scruff/internal/gitx"
+	"github.com/hausfold/scruff/internal/registry"
+	"github.com/hausfold/scruff/internal/ui"
 )
 
 // New, Spawn and Child are three answers to "who is asking", and they differ in
@@ -26,7 +26,7 @@ import (
 //	         client, becoming that pane's session.
 //	Child  — a pane working on ANOTHER repo. Same parent rule, so the child's PR
 //	         surfaces under the lane that spawned it. Prints the path so the
-//	         caller can `cd "$(holt child …)"`. A taken name is fatal: there is
+//	         caller can `cd "$(scruff child …)"`. A taken name is fatal: there is
 //	         a human here to tell.
 //	Spawn  — nobody's pane (the palette's command runs under launchd). The lane
 //	         it opens is TOP-LEVEL, so the parent is the repo's own main
@@ -35,11 +35,11 @@ import (
 //	         palette has nobody to tell and a dead end there is a command that
 //	         silently did nothing.
 
-// NewOpts is how `holt new` was asked to finish.
+// NewOpts is how `scruff new` was asked to finish.
 //
 // The DEFAULT is to create the lane and print its path, nothing more — a lane is
-// a checkout, and what runs in it is the caller's business (`cd "$(holt new)"`,
-// the same shape as `holt child`). Opening a session is opt-in: "make me a lane"
+// a checkout, and what runs in it is the caller's business (`cd "$(scruff new)"`,
+// the same shape as `scruff child`). Opening a session is opt-in: "make me a lane"
 // and "make me a lane and become claude inside it" are different asks, and only
 // the second one takes the terminal away from you.
 type NewOpts struct {
@@ -49,9 +49,9 @@ type NewOpts struct {
 	// Prompt is the lane's FIRST TURN, and it implies Open: a task with no
 	// session to hand it to is a task nobody reads. It changes which client
 	// invocation gets run — `spec.start`, not `spec.open` — and nothing else
-	// about the lane. holt neither stores it nor reads it; it is one argv
+	// about the lane. scruff neither stores it nor reads it; it is one argv
 	// element passed through, and what the agent then does with it is the
-	// agent's business, not holt's.
+	// agent's business, not scruff's.
 	Prompt string
 	Image  string // a local file the first turn should look at
 	// Stdin records that Prompt was drained from fd 0, so the exec path can
@@ -59,11 +59,11 @@ type NewOpts struct {
 	Stdin bool
 }
 
-// NewCmd parses `holt new [name] [agent] [--open [agent]] [--agent id] [--cmd …]`.
+// NewCmd parses `scruff new [name] [agent] [--open [agent]] [--agent id] [--cmd …]`.
 //
 // The second POSITIONAL is still an agent id, and it still implies --open: that
 // is the spelling the rice's spawn bind and every shipped hook config use
-// (`holt new <name> codex`), and breaking it would break the headline keybind on
+// (`scruff new <name> codex`), and breaking it would break the headline keybind on
 // every machine that hasn't rebuilt yet.
 func (e *Env) NewCmd(args []string) error {
 	var name string
@@ -135,13 +135,13 @@ func (e *Env) NewCmd(args []string) error {
 			case strings.HasPrefix(a, "--image="):
 				opts.Image = a[len("--image="):]
 			case strings.HasPrefix(a, "-"):
-				return exitcode.Usagef("unknown flag %q — try `holt --help`", a)
+				return exitcode.Usagef("unknown flag %q — try `scruff --help`", a)
 			case name == "":
 				name = a
 			case opts.Agent == "":
 				opts.Agent, opts.Open = a, true
 			default:
-				return exitcode.Usagef("usage: holt new [name] [--open [agent]] [--cmd '<command>']")
+				return exitcode.Usagef("usage: scruff new [name] [--open [agent]] [--cmd '<command>']")
 			}
 		}
 	}
@@ -194,13 +194,13 @@ func (e *Env) New(want string, opts NewOpts) error {
 	trustWorktree(agentID, main, dir)
 	ui.Say("created %s lane '%s' → %s", filepath.Base(main), name, dir)
 
-	// The default ending: ONLY the path on stdout, so: cd "$(holt new)".
+	// The default ending: ONLY the path on stdout, so: cd "$(scruff new)".
 	if !opts.Open && opts.Cmd == "" {
 		ui.Out("%s\n", dir)
 		return nil
 	}
 
-	// --cmd is the escape hatch for anything that isn't a client holt knows: a
+	// --cmd is the escape hatch for anything that isn't a client scruff knows: a
 	// multiplexer pane, a shell, a build. It skips the open hook, because the
 	// caller has already said exactly what to run.
 	if opts.Cmd != "" {
@@ -211,11 +211,11 @@ func (e *Env) New(want string, opts NewOpts) error {
 	}
 
 	// How a fresh lane gets its session is the machine's business, same as
-	// `resume`. holt's own answer is to become the client; a machine with a
+	// `resume`. scruff's own answer is to become the client; a machine with a
 	// multiplexer would rather have a pane.
 	entry := Entry{Main: main, Branch: "worktree-" + name, Path: dir, State: Live}
 	// Resolved without the install check that resolveAgent does below: the hook
-	// is told what holt WOULD run, and an uninstalled client is that hook's
+	// is told what scruff WOULD run, and an uninstalled client is that hook's
 	// problem to report, not a reason to withhold the command.
 	openSpec, _ := specFor(agentID)
 	argv := openSpec.open
@@ -228,7 +228,7 @@ func (e *Env) New(want string, opts NewOpts) error {
 
 	// The client is resolved LAST, and its absence is not fatal to the lane:
 	// the checkout and the registry row are already on disk, so an uninstalled
-	// client costs you this launch, not the branch. `holt <name>` picks it up.
+	// client costs you this launch, not the branch. `scruff <name>` picks it up.
 	if _, err := resolveAgent(agentID); err != nil {
 		return err
 	}
@@ -249,7 +249,7 @@ func (e *Env) New(want string, opts NewOpts) error {
 // and the statusline stays blind to it.
 func (e *Env) Child(target, want string) error {
 	if target == "" {
-		return exitcode.Usagef("usage: holt child <repo-path> [name]")
+		return exitcode.Usagef("usage: scruff child <repo-path> [name]")
 	}
 	if fi, err := os.Stat(target); err != nil || !fi.IsDir() {
 		return exitcode.Usagef("no such directory: %s", target)
@@ -271,10 +271,10 @@ func (e *Env) Child(target, want string) error {
 
 	dir := filepath.Join(e.Base, e.bucketFor(main), want)
 	if _, err := os.Stat(dir); err == nil {
-		return exitcode.Usagef("a lane already exists at %s — pass another name: holt child %s <name>", dir, target)
+		return exitcode.Usagef("a lane already exists at %s — pass another name: scruff child %s <name>", dir, target)
 	}
 	if gitx.HasBranch(main, "worktree-"+want) {
-		return exitcode.Usagef("branch worktree-%s already exists in %s — pass another name: holt child %s <name>",
+		return exitcode.Usagef("branch worktree-%s already exists in %s — pass another name: scruff child %s <name>",
 			want, filepath.Base(main), target)
 	}
 	if err := e.addWorktree(main, want, dir); err != nil {
@@ -290,11 +290,11 @@ func (e *Env) Child(target, want string) error {
 	})
 	trustWorktree(agentID, main, dir)
 	ui.Say("created %s lane '%s' → %s", filepath.Base(main), want, dir)
-	ui.Out("%s\n", dir) // ONLY the path on stdout, so: cd "$(holt child …)"
+	ui.Out("%s\n", dir) // ONLY the path on stdout, so: cd "$(scruff child …)"
 	return nil
 }
 
-// SpawnOpts is how `holt spawn` was asked to finish. Same two fields as
+// SpawnOpts is how `scruff spawn` was asked to finish. Same two fields as
 // NewOpts' prompt half, and they mean the same thing — see there.
 type SpawnOpts struct {
 	Agent  string
@@ -302,11 +302,11 @@ type SpawnOpts struct {
 	Image  string
 }
 
-// SpawnCmd parses `holt spawn <repo> <name> [agent] [--agent id]
+// SpawnCmd parses `scruff spawn <repo> <name> [agent] [--agent id]
 // [--prompt TEXT | --prompt-file FILE] [--image FILE]`.
 //
 // The third POSITIONAL is still an agent id: that is the spelling every shipped
-// palette command uses (`holt spawn "$repo" "$slug" "$agent"`), and it predates
+// palette command uses (`scruff spawn "$repo" "$slug" "$agent"`), and it predates
 // the flags.
 func (e *Env) SpawnCmd(args []string) error {
 	var target, want string
@@ -362,13 +362,13 @@ func (e *Env) SpawnCmd(args []string) error {
 			case strings.HasPrefix(a, "--image="):
 				opts.Image = a[len("--image="):]
 			case strings.HasPrefix(a, "-"):
-				return exitcode.Usagef("unknown flag %q — try `holt --help`", a)
+				return exitcode.Usagef("unknown flag %q — try `scruff --help`", a)
 			case a == "":
 				// An empty positional is an unset variable in the caller, never
 				// an intention. Falling through would hand this slot to the NEXT
-				// argument: `holt spawn "$repo" "" claude` named the lane
+				// argument: `scruff spawn "$repo" "" claude` named the lane
 				// "claude". Every SDK passes the name positionally.
-				return exitcode.Usagef("usage: holt spawn <repo> <name> — an argument is empty")
+				return exitcode.Usagef("usage: scruff spawn <repo> <name> — an argument is empty")
 			case target == "":
 				target = a
 			case want == "":
@@ -376,7 +376,7 @@ func (e *Env) SpawnCmd(args []string) error {
 			case opts.Agent == "":
 				opts.Agent = a
 			default:
-				return exitcode.Usagef("usage: holt spawn <repo> <name> [--prompt '<task>' | --prompt-file <file>]")
+				return exitcode.Usagef("usage: scruff spawn <repo> <name> [--prompt '<task>' | --prompt-file <file>]")
 			}
 		}
 	}
@@ -399,15 +399,15 @@ func (e *Env) SpawnCmd(args []string) error {
 // degraded run, not a failure — see below.
 func (e *Env) Spawn(target, want string, opts SpawnOpts) error {
 	if target == "" {
-		return exitcode.Usagef("usage: holt spawn <repo-path> <name>")
+		return exitcode.Usagef("usage: scruff spawn <repo-path> <name>")
 	}
 	// The name stays required, with one exception: a spawn that carries a task
-	// has something to be named AFTER, so `holt spawn <repo> --prompt …` may
+	// has something to be named AFTER, so `scruff spawn <repo> --prompt …` may
 	// leave it out and let the namer (or a random pair) fill it in. Without a
 	// task there is nothing to derive from, and a nameless spawn is still the
 	// caller forgetting an argument.
 	if want == "" && opts.Prompt == "" {
-		return exitcode.Usagef("usage: holt spawn <repo-path> <name>")
+		return exitcode.Usagef("usage: scruff spawn <repo-path> <name>")
 	}
 	agentID := orDefault(opts.Agent, e.Agent)
 	spec, ok := specFor(agentID)
@@ -438,7 +438,7 @@ func (e *Env) Spawn(target, want string, opts SpawnOpts) error {
 	trustWorktree(agentID, main, dir)
 	ui.Say("created %s lane '%s' → %s", filepath.Base(main), name, dir)
 	// The path goes to stdout BEFORE the seam runs, and unconditionally: a
-	// caller reading `dir="$(holt spawn …)"` still gets one, and a caller that
+	// caller reading `dir="$(scruff spawn …)"` still gets one, and a caller that
 	// asked for a window still needs to be told where the lane landed in order
 	// to report it. The seam's own exit status is what says whether the window
 	// happened.
@@ -467,8 +467,8 @@ func (e *Env) Spawn(target, want string, opts SpawnOpts) error {
 	// whose window manager was down read "you asked wrong", retried, and got a
 	// second lane while the first sat on disk with its path already on stdout.
 	//
-	// Deliberately NOT holt's `new` fallback of exec'ing the client: `spawn` is
-	// the "nobody's pane" verb, so the process holt would replace belongs to a
+	// Deliberately NOT scruff's `new` fallback of exec'ing the client: `spawn` is
+	// the "nobody's pane" verb, so the process scruff would replace belongs to a
 	// script, a palette command or another agent's tool call — all of which
 	// would hang on a client waiting for a terminal that isn't there.
 	//
@@ -486,12 +486,12 @@ func (e *Env) Spawn(target, want string, opts SpawnOpts) error {
 
 // ── shared plumbing ──────────────────────────────────────────────────────────
 
-// restoreStdin puts a terminal back on fd 0 before holt execs a client.
+// restoreStdin puts a terminal back on fd 0 before scruff execs a client.
 //
 // `--prompt-file -` drains stdin, which leaves fd 0 at EOF — and an
 // interactive client handed an exhausted, non-tty stdin does not draw a UI, it
 // reads nothing and leaves. So the one path that both consumes stdin AND execs
-// (`holt new --prompt-file -`) reopens the controlling terminal first.
+// (`scruff new --prompt-file -`) reopens the controlling terminal first.
 //
 // Best-effort by design: with no controlling terminal there was nothing to
 // restore, and refusing the lane over it would be worse than the client
@@ -611,7 +611,7 @@ func (e *Env) freeName(main, want string) (name, dir string, err error) {
 
 // randomName gives an unnamed spawn a throwaway two-word name, in the spirit of
 // the ones Claude generates. It only has to be recognisable in a listing and on
-// a branch for as long as the work lives — `holt spawn` (the palette) is where
+// a branch for as long as the work lives — `scruff spawn` (the palette) is where
 // names come from the TASK; this is the "just give me a pane" path, so it
 // doesn't ask for one.
 func randomName() string {

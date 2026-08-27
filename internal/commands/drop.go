@@ -5,23 +5,23 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hausfold/holt/internal/exitcode"
-	"github.com/hausfold/holt/internal/gitx"
-	"github.com/hausfold/holt/internal/occupancy"
-	"github.com/hausfold/holt/internal/ui"
+	"github.com/hausfold/scruff/internal/exitcode"
+	"github.com/hausfold/scruff/internal/gitx"
+	"github.com/hausfold/scruff/internal/occupancy"
+	"github.com/hausfold/scruff/internal/ui"
 )
 
-// This file is holt's answer to the lanes `reap` will never take: the ones
+// This file is scruff's answer to the lanes `reap` will never take: the ones
 // whose PR was CLOSED unmerged, and the ones in a repo the forge has archived.
 //
 // Both were reported as "not landed", which is correct and also useless — the
 // work cannot land, so the lane sits in every listing forever and the only exit
-// is `git branch -D` by hand, outside holt, unrecorded.
+// is `git branch -D` by hand, outside scruff, unrecorded.
 //
 // The fix is deliberately NOT to widen `reap`. A closed PR means the work was
 // REJECTED, not landed, and an archived repo means it can no longer be
 // submitted — in both cases the commits are the only copy, and a sweep that
-// deleted them would be holt doing the exact thing it exists to never do. The
+// deleted them would be scruff doing the exact thing it exists to never do. The
 // asymmetry is the point: `reap` is automatic and therefore may only ever take
 // landed work; `drop` is typed by a human at a named lane and may take
 // anything, because a person just said so and the ledger can hand it back.
@@ -44,15 +44,15 @@ func (e *Env) matchLane(want string) (Entry, error) {
 	}
 	switch len(matches) {
 	case 0:
-		return Entry{}, exitcode.Usagef("no lane named '%s' — run: holt", want)
+		return Entry{}, exitcode.Usagef("no lane named '%s' — run: scruff", want)
 	case 1:
 		return matches[0], nil
 	default:
-		return Entry{}, exitcode.Usagef("'%s' exists in more than one repo — qualify it: holt <repo>/%s", name, name)
+		return Entry{}, exitcode.Usagef("'%s' exists in more than one repo — qualify it: scruff <repo>/%s", name, name)
 	}
 }
 
-// Drop retires a lane whose work will never land — `holt drop <name>`.
+// Drop retires a lane whose work will never land — `scruff drop <name>`.
 //
 // Everything `reap` refuses on is refused here too EXCEPT landedness: a pane
 // standing in the checkout still wins (removing it yanks the cwd out from under
@@ -61,7 +61,7 @@ func (e *Env) matchLane(want string) (Entry, error) {
 // waived, and only because a human typed this lane's name.
 func (e *Env) Drop(want string) error {
 	if want == "" {
-		return exitcode.Usagef("name the lane to drop: holt drop <name>  (holt, to see them)")
+		return exitcode.Usagef("name the lane to drop: scruff drop <name>  (scruff, to see them)")
 	}
 	entry, err := e.matchLane(want)
 	if err != nil {
@@ -83,12 +83,12 @@ func (e *Env) Drop(want string) error {
 				label, occupancy.Describe(entry.Path, held))
 		}
 		if gitx.Dirty(entry.Path) {
-			return exitcode.Refusedf("%s has uncommitted changes and no PR to fall back on — `holt park` them first, or commit", label)
+			return exitcode.Refusedf("%s has uncommitted changes and no PR to fall back on — `scruff park` them first, or commit", label)
 		}
 	}
 
 	// Ledger BEFORE anything is destroyed, and echo the recovery line even on
-	// the happy path. A drop is the one deletion holt performs that no forge
+	// the happy path. A drop is the one deletion scruff performs that no forge
 	// record justifies, so the undo has to be in front of you at the moment it
 	// happens rather than filed away for a bad day.
 	sha := gitx.Rev(entry.Main, entry.Branch)

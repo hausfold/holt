@@ -1,17 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { HoltClient } from "../src/client.js";
-import { HoltError } from "../src/errors.js";
+import { ScruffClient } from "../src/client.js";
+import { ScruffError } from "../src/errors.js";
 import { run } from "../src/exec.js";
 
-const bin = path.join(path.dirname(fileURLToPath(import.meta.url)), "fake-holt.sh");
-const client = () => new HoltClient({ bin });
+const bin = path.join(path.dirname(fileURLToPath(import.meta.url)), "fake-scruff.sh");
+const client = () => new ScruffClient({ bin });
 
 describe("list", () => {
   test("parses the --json envelope with nullable discipline intact", async () => {
     const envelope = await client().list();
-    expect(envelope.schema).toBe(1);
+    expect(envelope.schema).toBe(2);
     expect(envelope.lanes).toHaveLength(2);
 
     const sparkle = envelope.lanes[0]!;
@@ -38,7 +38,7 @@ describe("watch", () => {
   test("watchLane filters to one lane's events only", async () => {
     const { watchLane } = await import("../src/watch.js");
     const seen: string[] = [];
-    for await (const ev of watchLane("/repo/.holt/haus/fresh", { bin })) {
+    for await (const ev of watchLane("/repo/.scruff/haus/fresh", { bin })) {
       seen.push(ev.kind);
       break;
     }
@@ -47,7 +47,7 @@ describe("watch", () => {
 
   test("client.watchLane() filters the same way, on the client's own options", async () => {
     const seen: string[] = [];
-    for await (const ev of client().watchLane("/repo/.holt/haus/fresh")) {
+    for await (const ev of client().watchLane("/repo/.scruff/haus/fresh")) {
       seen.push(ev.kind);
       break;
     }
@@ -59,7 +59,7 @@ describe("watch", () => {
   // Pinned because three docstrings used to claim the opposite.
   test("watchLane passes a lane's sync through — only hello/ready are stripped", async () => {
     const seen: string[] = [];
-    for await (const ev of client().watchLane("/repo/.holt/haus/sparkle")) {
+    for await (const ev of client().watchLane("/repo/.scruff/haus/sparkle")) {
       seen.push(ev.kind);
       break;
     }
@@ -70,7 +70,7 @@ describe("watch", () => {
 describe("child", () => {
   test("returns only the new checkout path", async () => {
     const dir = await client().child("/repo/other");
-    expect(dir).toBe("/repo/.holt/other/new-lane");
+    expect(dir).toBe("/repo/.scruff/other/new-lane");
   });
 });
 
@@ -82,13 +82,13 @@ describe("resume", () => {
 });
 
 describe("error mapping", () => {
-  test("non-zero exit throws HoltError carrying the real exit code", async () => {
+  test("non-zero exit throws ScruffError carrying the real exit code", async () => {
     expect.assertions(4);
     try {
       await run(["reap-refused"], { bin });
     } catch (err) {
-      expect(err).toBeInstanceOf(HoltError);
-      const e = err as HoltError;
+      expect(err).toBeInstanceOf(ScruffError);
+      const e = err as ScruffError;
       expect(e.code).toBe(2);
       expect(e.refused).toBe(true);
       expect(e.stderr).toContain("occupied");
@@ -99,8 +99,8 @@ describe("error mapping", () => {
 describe("heartbeat / lease", () => {
   test("lease.release() calls heartbeat --release", async () => {
     const c = client();
-    const lease = c.lease("/repo/.holt/haus/sparkle", { pid: 12345 });
+    const lease = c.lease("/repo/.scruff/haus/sparkle", { pid: 12345 });
     await lease.release();
-    // No throw: fake-holt's heartbeat branch accepts --release silently.
+    // No throw: fake-scruff's heartbeat branch accepts --release silently.
   });
 });

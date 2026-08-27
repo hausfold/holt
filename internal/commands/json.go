@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/hausfold/holt/internal/gitx"
-	"github.com/hausfold/holt/internal/occupancy"
+	"github.com/hausfold/scruff/internal/gitx"
+	"github.com/hausfold/scruff/internal/occupancy"
 )
 
 // The --json envelope is a frozen public contract (SPEC.md §2.2): `bench`, the
@@ -24,7 +24,7 @@ import (
 // statusline came from conflating those two.
 
 type jsonEnvelope struct {
-	Holt     string     `json:"holt"`
+	Scruff   string     `json:"scruff"`
 	Schema   int        `json:"schema"`
 	Lanes    []jsonLane `json:"lanes"`
 	Warnings []string   `json:"warnings"`
@@ -82,8 +82,8 @@ func (e *Env) listJSON(rows []listRow) error {
 	occ := e.Occupancy()
 
 	out := jsonEnvelope{
-		Holt:     Version,
-		Schema:   1,
+		Scruff:   Version,
+		Schema:   2,
 		Lanes:    []jsonLane{},
 		Warnings: []string{},
 	}
@@ -99,7 +99,7 @@ func (e *Env) listJSON(rows []listRow) error {
 
 // toJSONLane builds one lane's --json payload.
 //
-// `holt watch` (SPEC.md §14.3 step 2) calls this too, and that reuse is load-
+// `scruff watch` (SPEC.md §14.3 step 2) calls this too, and that reuse is load-
 // bearing, not incidental: the constraint on that command is that event
 // payloads carry this exact shape, not a parallel one an SDK would have to
 // learn twice. occ is threaded in rather than recomputed here because a sweep

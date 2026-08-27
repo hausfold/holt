@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hausfold/holt/internal/registry"
+	"github.com/hausfold/scruff/internal/registry"
 )
 
 // notifyEnv is an Env with a registry holding one lane, for the cwd → lane
@@ -94,7 +94,7 @@ func TestTrillSendArgsDeclinesUnknownEvents(t *testing.T) {
 }
 
 // A pane outside any lane still banners, named after its directory — and
-// carries no click, because there is no lane for `holt focus` to go to.
+// carries no click, because there is no lane for `scruff focus` to go to.
 func TestTrillSendArgsFallsBackToDirectoryName(t *testing.T) {
 	e, _ := notifyEnv(t)
 	args, ok := e.trillSendArgs(map[string]any{
@@ -110,7 +110,7 @@ func TestTrillSendArgsFallsBackToDirectoryName(t *testing.T) {
 }
 
 // The banner is clickable, and the lane it names is qualified by repo — the
-// same spelling `holt focus` (and matchLane behind it) accepts, because one
+// same spelling `scruff focus` (and matchLane behind it) accepts, because one
 // name can exist in two repos.
 func TestTrillSendArgsOffersTheLaneAsAClick(t *testing.T) {
 	e, row := notifyEnv(t)
@@ -289,7 +289,7 @@ func TestLaneIDMatchesTheHookPathsSpelling(t *testing.T) {
 		t.Fatalf("askKey = %q", got)
 	}
 	// A row that is missing either half names no lane, and must not become
-	// `holt//sparkle` — a key that would clear nothing and mark nothing.
+	// `scruff//sparkle` — a key that would clear nothing and mark nothing.
 	if laneID("", "sparkle") != "" || laneID("/Users/x/code/haus", "") != "" {
 		t.Fatal("half a row is not a lane")
 	}

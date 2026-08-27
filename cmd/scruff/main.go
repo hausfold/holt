@@ -10,7 +10,7 @@
 // checkout (a parked lane has none), `agent` is the CLIENT a lane runs, and
 // `session` belongs to the multiplexer and to the clients. See SPEC.md §0.
 //
-// This tool was called `holt` until 0.5.0 and still answers to it — the old
+// This tool was called `holt` until 1.0.0 and still answers to it — the old
 // name is a symlink onto this same binary, and it is deleted at 1.1.0. The
 // whole cutover is docs/rename.md.
 package main
@@ -18,10 +18,10 @@ package main
 import (
 	"os"
 
-	"github.com/hausfold/holt/internal/commands"
-	"github.com/hausfold/holt/internal/compat"
-	"github.com/hausfold/holt/internal/exitcode"
-	"github.com/hausfold/holt/internal/ui"
+	"github.com/hausfold/scruff/internal/commands"
+	"github.com/hausfold/scruff/internal/compat"
+	"github.com/hausfold/scruff/internal/exitcode"
+	"github.com/hausfold/scruff/internal/ui"
 )
 
 func main() {

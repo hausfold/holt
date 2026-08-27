@@ -1,4 +1,4 @@
-// Package exitcode defines holt's public exit-code contract (SPEC.md §2.4).
+// Package exitcode defines scruff's public exit-code contract (SPEC.md §2.4).
 //
 // The distinction that matters to every wrapper script is Usage (1) vs Refused
 // (2): "you asked wrong" and "I declined to destroy something" are different
@@ -15,11 +15,11 @@ const (
 	Usage    = 1 // bad arguments, missing precondition, not a git repo
 	Refused  = 2 // declined for safety: occupied, dirty, or not provably landed
 	Degraded = 3 // completed, but a signal was unavailable (forge down, no lsof)
-	Conflict = 4 // a finding, not an error: `holt overlap` / `holt batch`
-	Locked   = 5 // another holt holds the registry lock
+	Conflict = 4 // a finding, not an error: `scruff overlap` / `scruff batch`
+	Locked   = 5 // another scruff holds the registry lock
 )
 
-// Error is an error carrying the exit code holt should terminate with.
+// Error is an error carrying the exit code scruff should terminate with.
 type Error struct {
 	Code int
 	Msg  string

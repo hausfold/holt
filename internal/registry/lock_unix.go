@@ -7,10 +7,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hausfold/holt/internal/exitcode"
+	"github.com/hausfold/scruff/internal/exitcode"
 )
 
-// lockTimeout bounds how long we wait for another holt to finish a mutation.
+// lockTimeout bounds how long we wait for another scruff to finish a mutation.
 // Registry writes are milliseconds; anything past this is a wedged process, and
 // blocking a pane's teardown forever is worse than failing loudly.
 const lockTimeout = 5 * time.Second
@@ -18,7 +18,7 @@ const lockTimeout = 5 * time.Second
 // lock takes an exclusive flock on path, returning the release function.
 //
 // flock, not a lockfile: the kernel releases it when the process dies, so a
-// crashed holt cannot wedge every future invocation. The bash version used a
+// crashed scruff cannot wedge every future invocation. The bash version used a
 // mkdir lock and needed a "break it after 5 seconds" escape hatch precisely
 // because a directory outlives the process that made it.
 func lock(path string) (func(), error) {
@@ -37,7 +37,7 @@ func lock(path string) (func(), error) {
 		}
 		if time.Now().After(deadline) {
 			f.Close()
-			return nil, exitcode.Lockedf("another holt is holding the registry (%s) — retry in a moment", path)
+			return nil, exitcode.Lockedf("another scruff is holding the registry (%s) — retry in a moment", path)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}

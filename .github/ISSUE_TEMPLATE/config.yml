@@ -9,10 +9,10 @@ blank_issues_enabled: false
 # it 404s for exactly the person it's for. script/issue-labels.sh turns it on.
 contact_links:
   - name: A security or privacy problem
-    url: https://github.com/hausfold/holt/security/advisories/new
+    url: https://github.com/hausfold/scruff/security/advisories/new
     about: Report it privately, never in a public issue. We answer these first.
   - name: The docs
-    url: https://github.com/hausfold/holt#readme
+    url: https://github.com/hausfold/scruff#readme
     about: Worth a look first — but a bug report that turns out to be documented is still a docs bug, so file it anyway.
   # ⚠️ This is a DIRECTORY, not a door. github.com/hausfold has no "new issue"
   # button, so anything here that reads as "file it at this link" sends someone

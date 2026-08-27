@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: Turn a piece of work into a self-contained prompt a FRESH agent session can act on cold — copied to the clipboard, or spawned straight into a new holt lane with its own checkout, branch and window. Use when the user says "hand this off", "make me a handoff", "write a prompt for a new session/pane/agent", "I want to start this somewhere else", "spawn an agent to do this", "kick this off in <repo>", or when work has to leave this session and survive the transition.
+description: Turn a piece of work into a self-contained prompt a FRESH agent session can act on cold — copied to the clipboard, or spawned straight into a new scruff lane with its own checkout, branch and window. Use when the user says "hand this off", "make me a handoff", "write a prompt for a new session/pane/agent", "I want to start this somewhere else", "spawn an agent to do this", "kick this off in <repo>", or when work has to leave this session and survive the transition.
 ---
 
 # handoff — a prompt a cold agent can act on
@@ -17,12 +17,12 @@ afterwards is one line.
 | the user said | ending |
 |---|---|
 | "hand this off", "make me a handoff", `/handoff` | **clipboard** — copy it, print it, stop |
-| "spawn an agent for this", "kick this off in <repo>", `/handoff spawn` | **lane** — `holt spawn`, which opens a checkout, a branch and a window on it |
+| "spawn an agent for this", "kick this off in <repo>", `/handoff spawn` | **lane** — `scruff spawn`, which opens a checkout, a branch and a window on it |
 
 **The clipboard is the default; the lane ending needs the explicit word.**
 Spawning costs a branch, a window and another agent's context — nobody should
 get one because a request was ambiguous. When it is, take the clipboard ending
-and print the `holt spawn` line: it is then one paste away.
+and print the `scruff spawn` line: it is then one paste away.
 
 ## The steps
 
@@ -37,7 +37,7 @@ and print the `holt spawn` line: it is then one paste away.
    `<scratchpad>/handoff-<hh-mm-ss>.md`, or `/tmp` if there is none. A fresh name
    each time — a second handoff in one session must not overwrite the first,
    since by then the clipboard has moved on and the file is the only copy left.
-   It is also what the lane ending hands to `holt`.
+   It is also what the lane ending hands to `scruff`.
 3. **Take the ending the user asked for** — below.
 4. **Print it** between the markers, exactly as shown, then stop — no follow-up
    offer, no "let me know if". If something essential was missing, one line
@@ -55,12 +55,12 @@ the ready-made lane command underneath.
 # The MAIN checkout, never this worktree: `--git-common-dir` resolves to it
 # from inside a lane too.
 repo="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
-holt spawn "$repo" <name> --prompt-file <that file>
+scruff spawn "$repo" <name> --prompt-file <that file>
 ```
 
 - **`<name>` comes from the objective, not its first words.** Three or four
   identity-carrying words, kebab-case — `bar-pill-flickers`, not
-  `look-into-why-the`; holt suffixes it if it is taken. Omit it only where the
+  `look-into-why-the`; scruff suffixes it if it is taken. Omit it only where the
   machine sets `namer` — you wrote the brief, so you are the better namer.
 - **`--prompt-file`, never `--prompt "$(cat …)"`.** A brief is multi-line and
   routinely holds quotes, backticks and `$`; the file form never crosses a
@@ -73,9 +73,9 @@ holt spawn "$repo" <name> --prompt-file <that file>
 
 Read the exit code: **0** the lane opened (its path is on stdout — report the
 lane and branch); **3** the lane exists but nothing opened
-it — not a failure, so report the command holt printed to run inside the
+it — not a failure, so report the command scruff printed to run inside the
 checkout, and say it soon: a lane with no commits yet is sweepable by any other
-pane's `holt reap`; **1** the invocation was wrong, usually a
+pane's `scruff reap`; **1** the invocation was wrong, usually a
 repo path that isn't a main checkout.
 
 Then stop. **Do not follow the lane into the work**: the point of a handoff is
@@ -106,7 +106,7 @@ Watch out: <the one gotcha that costs 20 minutes if they don't know it.>
 - **Name the repo and the branch, not just the checkout path.** A lane's
   checkout at `~/.cache/…/<repo>/<name>` is deleted when its pane closes (the
   work is parked on the branch first). The branch is the durable handle —
-  `holt <name>` rebuilds the checkout around it. Give paths inside the repo as
+  `scruff <name>` rebuilds the checkout around it. Give paths inside the repo as
   repo-relative, so they survive wherever it gets checked out.
 - **Say what's unproven.** "Builds, not feel-tested" beats a confident "done" —
   a handoff that overstates state is worse than none.

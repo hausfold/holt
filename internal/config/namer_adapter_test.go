@@ -12,7 +12,7 @@ func writeNamerAdapter(t *testing.T, id, body string) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
-	adapters := filepath.Join(dir, "holt", "adapters", "namer")
+	adapters := filepath.Join(dir, "scruff", "adapters", "namer")
 	if err := os.MkdirAll(adapters, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -108,10 +108,10 @@ func TestBuiltinNamerTOMLParsesAsAFileWould(t *testing.T) {
 func TestNamerConfigKey(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
-	if err := os.MkdirAll(filepath.Join(dir, "holt"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "scruff"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "holt", "config.toml"),
+	if err := os.WriteFile(filepath.Join(dir, "scruff", "config.toml"),
 		[]byte("agent = \"codex\"\nnamer = \"claude\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestNamerConfigKey(t *testing.T) {
 	}
 }
 
-// No key is the default, and the default is the behaviour holt had before the
+// No key is the default, and the default is the behaviour scruff had before the
 // key existed: nothing runs, and an unnamed lane keeps its random word pair.
 func TestNamerIsUnsetByDefault(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())

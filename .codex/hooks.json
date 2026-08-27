@@ -7,7 +7,7 @@
           {
             "type": "command",
             "command": "bash .agents/setup.sh",
-            "statusMessage": "holt: bootstrapping Nix"
+            "statusMessage": "scruff: bootstrapping Nix"
           }
         ]
       }

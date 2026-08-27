@@ -1,4 +1,4 @@
-package holt
+package scruff
 
 import (
 	"bufio"
@@ -9,7 +9,7 @@ import (
 	"os/exec"
 )
 
-// Watch runs `holt watch --json` as a range-over-func iterator of typed
+// Watch runs `scruff watch --json` as a range-over-func iterator of typed
 // lines: a hello, then a sync burst for every lane already alive, ready,
 // then live changes for as long as you keep ranging (SPEC.md §14.3 step
 // 2). This is the primitive onOpen/onParked/... callback-style APIs are
@@ -18,7 +18,7 @@ import (
 //
 //	for line, err := range c.Watch(ctx) {
 //	    if err != nil { ...; break }
-//	    if line.Kind == holt.WatchCreated { fmt.Println("new lane:", line.Lane.Name) }
+//	    if line.Kind == scruff.WatchCreated { fmt.Println("new lane:", line.Lane.Name) }
 //	}
 //
 // Unlike the TS/Python SDKs, there is no separate "stop iterating" verb:

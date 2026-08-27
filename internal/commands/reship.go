@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hausfold/holt/internal/exitcode"
-	"github.com/hausfold/holt/internal/gitx"
-	"github.com/hausfold/holt/internal/ui"
+	"github.com/hausfold/scruff/internal/exitcode"
+	"github.com/hausfold/scruff/internal/gitx"
+	"github.com/hausfold/scruff/internal/ui"
 )
 
 // Reship pushes a branch that outran its merged PR, and opens the follow-up.
@@ -57,7 +57,7 @@ func (e *Env) Reship(want string) error {
 
 	ui.Say("pushing %s → origin (%s)", branch, slug)
 	if _, err := gitx.Run(main, "push", "-u", "origin", branch); err != nil {
-		return exitcode.Usagef("push failed — resolve it, then re-run: holt reship (%v)", err)
+		return exitcode.Usagef("push failed — resolve it, then re-run: scruff reship (%v)", err)
 	}
 
 	// An OPEN PR already covers these commits; the push above was the whole job.
@@ -77,7 +77,7 @@ func (e *Env) Reship(want string) error {
 		return exitcode.Usagef("gh pr create failed: %v", err)
 	}
 	// The listing reads open PRs through a 120 s disk cache. Drop this repo's
-	// entry, or the very next `holt` still shows the lane as +N and still says
+	// entry, or the very next `scruff` still shows the lane as +N and still says
 	// "covered by no PR" about the PR whose URL we are about to print.
 	e.forgetForge(openMapKey(slug))
 	suffix := ""
@@ -94,7 +94,7 @@ func (e *Env) reshipTarget(want string) (main, branch string, err error) {
 	if want == "" {
 		main, err = gitx.MainCheckout(e.Cwd)
 		if err != nil {
-			return "", "", exitcode.Usagef("not in a git repo — name a lane instead: holt reship <name>")
+			return "", "", exitcode.Usagef("not in a git repo — name a lane instead: scruff reship <name>")
 		}
 		branch = gitx.CurrentBranch(e.Cwd)
 		if branch == "" {
@@ -119,17 +119,17 @@ func (e *Env) reshipTarget(want string) (main, branch string, err error) {
 	}
 	switch len(matches) {
 	case 0:
-		return "", "", exitcode.Usagef("no lane named '%s' — run: holt", want)
+		return "", "", exitcode.Usagef("no lane named '%s' — run: scruff", want)
 	case 1:
 		return matches[0].Main, matches[0].Branch, nil
 	default:
-		return "", "", exitcode.Usagef("'%s' exists in more than one repo — qualify it: holt reship <repo>/%s", name, name)
+		return "", "", exitcode.Usagef("'%s' exists in more than one repo — qualify it: scruff reship <repo>/%s", name, name)
 	}
 }
 
-// reshipBody is a PR body holt can write HONESTLY: what this PR carries, and
+// reshipBody is a PR body scruff can write HONESTLY: what this PR carries, and
 // what it follows. The What / Why / Verify / Watch-out a reviewer is owed is
-// prompted for, not faked — holt did not write the code and has nothing true to
+// prompted for, not faked — scruff did not write the code and has nothing true to
 // say about why it exists.
 func reshipBody(main, base, branch string, prNum int) string {
 	after := ""
@@ -143,7 +143,7 @@ func reshipBody(main, base, branch string, prNum int) string {
 	}
 	return "Commits on `" + branch + "` that landed after " + after + "merged:\n\n" +
 		strings.Join(lines, "\n") +
-		"\n\n_Opened by `holt reship` — add What / Why / Verify / Watch-out._\n"
+		"\n\n_Opened by `scruff reship` — add What / Why / Verify / Watch-out._\n"
 }
 
 func (e *Env) openPRFor(slug, branch string) string {

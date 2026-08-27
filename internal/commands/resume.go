@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hausfold/holt/internal/config"
-	"github.com/hausfold/holt/internal/exitcode"
-	"github.com/hausfold/holt/internal/gitx"
-	"github.com/hausfold/holt/internal/registry"
-	"github.com/hausfold/holt/internal/ui"
+	"github.com/hausfold/scruff/internal/config"
+	"github.com/hausfold/scruff/internal/exitcode"
+	"github.com/hausfold/scruff/internal/gitx"
+	"github.com/hausfold/scruff/internal/registry"
+	"github.com/hausfold/scruff/internal/ui"
 )
 
 // Resume rebuilds a lane's checkout and reopens the agent chat that made it.
@@ -65,12 +65,12 @@ func (e *Env) Resume(want string, pick bool) error {
 		return exitcode.Usagef("unknown agent %q recorded for this lane", agent)
 	}
 
-	// A spawned lane (`holt child`, or a nested spawn) has no chat of its own —
+	// A spawned lane (`scruff child`, or a nested spawn) has no chat of its own —
 	// reopen the client session that spawned it. The checkout above is still
 	// rebuilt either way, so the branch's files are on disk; this only decides
 	// which directory the client's picker opens in.
 	chat := e.chatHome(agent, entry.Path)
-	// Whether the chat is the lane's own is exactly the question "can holt name
+	// Whether the chat is the lane's own is exactly the question "can scruff name
 	// the conversation?" — one checkout only this lane's agent ever ran in has
 	// one newest conversation and that is it; a shared parent has many, and
 	// only the user can say which.
@@ -90,7 +90,7 @@ func (e *Env) Resume(want string, pick bool) error {
 	}
 
 	// The checkout is on disk and the chat's home is known; what "reopen this
-	// session" MEANS is the machine's business from here. holt's own answer —
+	// session" MEANS is the machine's business from here. scruff's own answer —
 	// chdir, then become the client — is right for a tool invoked from the pane
 	// that will host it, and wrong for every machine that would rather open a
 	// pane of its own. That is the `resume` hook.
@@ -132,7 +132,7 @@ func (e *Env) rebuild(entry Entry, agent string) error {
 	return nil
 }
 
-// openSession puts an action seam — `resume` or `open` — the question holt was
+// openSession puts an action seam — `resume` or `open` — the question scruff was
 // about to answer by exec'ing a client.
 //
 // `chat` is the seam's whole reason for existing beyond `path`: a spawned
@@ -140,9 +140,9 @@ func (e *Env) rebuild(entry Entry, agent string) error {
 // pane must be told to cd somewhere that is NOT the checkout it just rebuilt.
 // Getting that wrong is how a resumed child lane opens an empty session.
 //
-// `argv` is the command holt was about to exec, already resolved to continue-
+// `argv` is the command scruff was about to exec, already resolved to continue-
 // the-newest or open-the-picker. A hook that spawns a pane should run it rather
-// than re-derive it, or the pane lands on the picker holt just avoided.
+// than re-derive it, or the pane lands on the picker scruff just avoided.
 func (e *Env) openSession(hook string, entry Entry, agent, chat string, argv []string) config.Result {
 	if !e.Cfg.Defined(hook) {
 		return config.Result{Answer: config.Defer}
@@ -156,7 +156,7 @@ func (e *Env) openSession(hook string, entry Entry, agent, chat string, argv []s
 	return res
 }
 
-// hookOutcome turns an action hook's answer into holt's exit code. A hook that
+// hookOutcome turns an action hook's answer into scruff's exit code. A hook that
 // handled the work is a success; one that refused keeps its refusal's meaning,
 // because a wrapper script has to tell "you asked wrong" from "I declined".
 func hookOutcome(hook string, res config.Result) error {
@@ -179,7 +179,7 @@ func clientInstalled(id string) bool {
 // shell — which is what the `command` field and `HOLT_COMMAND` have always been
 // (lifecycle.md: "run it; don't rebuild it"), and what every opener does with it.
 //
-// Each element is quoted independently. Until `--prompt`, every argv holt handed
+// Each element is quoted independently. Until `--prompt`, every argv scruff handed
 // a hook was one or two bare words (`claude`, `codex resume --last`) where a
 // space-join and a quoted join are byte-identical — so this changes nothing that
 // already exists, and stops the one thing that would otherwise break the moment

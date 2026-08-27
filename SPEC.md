@@ -1,14 +1,14 @@
-# holt — design spec
+# scruff — design spec
 
 **The worktree-lifecycle substrate.** A rewrite of the haus rice's old
 worktree tool (`haus/modules/den/wt.sh`, 1295 lines of bash) as a
 standalone, repo-agnostic, client-agnostic Go binary — a dev-focused sister to
 pounce / perch / trill, with `haus` and `bench` demoted to consumers.
 
-This is the design doc; it stays the authority on *what* holt is even as the code
+This is the design doc; it stays the authority on *what* scruff is even as the code
 lands beside it. **Update, post-cutover:** the bash predecessor has since been
 retired entirely (haus#245) — every caller this doc describes as
-transitional now points at `holt` alone, with no fallback to roll back to.
+transitional now points at `scruff` alone, with no fallback to roll back to.
 
 Status: ejected from the workshop incubator to its own repo (2026-08-03), with
 its history intact. Implementation progress is
@@ -27,7 +27,7 @@ the branch that's still alive after the pane died, the checkout nobody is sittin
 in, the tree with 40 uncommitted minutes in it, the branch whose PR merged
 yesterday and which has kept committing since.
 
-holt's product is not "make worktrees". It's the **state machine and its safety
+scruff's product is not "make worktrees". It's the **state machine and its safety
 invariants**:
 
 ```
@@ -51,7 +51,7 @@ subordinate to them:
    checkouts, parked branches with no dir at all).
 
 The actions at each transition — what to build, what to test, what to deploy —
-belong to the user. holt has no opinion about your build system, and states so in
+belong to the user. scruff has no opinion about your build system, and states so in
 the README.
 
 ### Non-goals (say these in the README's second paragraph)
@@ -64,7 +64,7 @@ conflict *resolution*. No opinion about which agent you should run.
 
 Against first-party worktree support: vendors will never ship cross-client (no
 one is going to support codex **and** opencode **and** claude in one registry),
-never ship cross-repo parentage (`holt child` has no equivalent anywhere), and
+never ship cross-repo parentage (`scruff child` has no equivalent anywhere), and
 treat the lifecycle invariants as an afterthought because losing *your* work
 isn't *their* problem. Park, PR-verified reap, occupancy detection, and
 post-merge drift detection are the product.
@@ -82,7 +82,7 @@ means something narrower and the overload was the bug:
 |---|---|
 | **worktree** | git's — the checkout on disk. A *parked* lane has none, so "worktree" cannot name the unit; §0's whole point is that the branch is the durable artifact and the directory is disposable. |
 | **agent** | the **client**: `claude`, `codex`, `opencode`, `pi`. Registry field 6, `--json` `agent`, `--agent`, `HOLT_AGENT`. Frozen (§2.1) — a lane *runs* an agent, it is not one. |
-| **session** | somebody else's: zellij's session, and each client's own transcript/resume session. holt never names its own unit this. |
+| **session** | somebody else's: zellij's session, and each client's own transcript/resume session. scruff never names its own unit this. |
 
 `pane` stays available for the terminal pane a lane is (or isn't) occupied by.
 It is what `occupied` is *for*, but not what `occupied` **observes**: the built-in
@@ -98,12 +98,12 @@ window that does not exist.
 
 | | |
 |---|---|
-| Name | **`holt`** — an otter's den; also a small wood. Free on npm and crates.io. Alternate: `copse`. |
+| Name | **`scruff`** — the loose skin a mother cat carries a kitten by: the kitten goes limp and is never dropped, which is invariant 1 in one image. Shipped as `holt` (an otter's den) through 0.5.0 and renamed at 1.0.0 — [docs/rename.md](./docs/rename.md) is that cutover. |
 | Why not `wt` | Already worktrunk's binary name, and Windows Terminal's. Non-negotiable rename. |
 | Language | **Go.** Subprocess orchestrator, zero CPU-bound work — Rust/Zig buy nothing. CGo-free cross-compilation dominates for prebuilt-binary distribution. `x/sys/unix` has `Clonefileat` + `FICLONE` so reflink needs no CGo. charm (`fang`, `huh`) makes `doctor` good, and styled output is `hausfold/snug` — charm's `x/ansi` under the family's own role vocabulary, without lipgloss's styling engine. Bun `--compile` measured 60 MB / 9 ms — startup fine, size not. |
 | License | **Apache-2.0.** A commercial GUI must be able to embed the substrate (that's the thesis), and the patent grant matters for that. |
-| Install CTA | `bun i -g holt` — an npm wrapper that downloads a prebuilt binary (the esbuild/biome pattern), **not** a bun-runtime tool. Also `brew install hausfold/tap/holt`, `curl … | sh`, and `go install`. |
-| Tests | The bash predecessor's `haus/test/wt.bats` (1026 lines, 77 tests) is black-box — it drives the CLI with shim `gh`/`lsof` on `PATH`, and already has a `WT_UNDER_TEST` seam for pointing it at another implementation. It becomes holt's acceptance suite on day one, and is the single best de-risking asset in the extraction. **Not quite unchanged:** four call sites drop `bash` (a Go binary isn't sourced), and three assertions on user-facing strings carry the new command name. No test *body* changes — which is the property that matters, because it means the contract is unmoved. |
+| Install CTA | `bun i -g scruff` — an npm wrapper that downloads a prebuilt binary (the esbuild/biome pattern), **not** a bun-runtime tool. Also `brew install hausfold/tap/scruff`, `curl … | sh`, and `go install`. |
+| Tests | The bash predecessor's `haus/test/wt.bats` (1026 lines, 77 tests) is black-box — it drives the CLI with shim `gh`/`lsof` on `PATH`, and already has a `WT_UNDER_TEST` seam for pointing it at another implementation. It becomes scruff's acceptance suite on day one, and is the single best de-risking asset in the extraction. **Not quite unchanged:** four call sites drop `bash` (a Go binary isn't sourced), and three assertions on user-facing strings carry the new command name. No test *body* changes — which is the property that matters, because it means the contract is unmoved. |
 
 ---
 
@@ -124,66 +124,66 @@ name    main-checkout    branch    checkout-path    parent    agent
 Field 4 (checkout path) is the primary key. Field 6 is the client id
 (`claude|codex|opencode|pi`); **a row with fewer than 6 fields means `claude`** —
 that's the already-shipped v0 migration case and it must survive. So does a
-field 6 naming a client holt no longer knows (`jcode`, accepted through
+field 6 naming a client scruff no longer knows (`jcode`, accepted through
 0.2.x): it reads as `claude`, and the next write persists that. Narrowing this
 set is allowed; stranding a lane over it is not.
 
 **Rule for 0.1: read the existing file unchanged.** No format migration on
 cutover day. Julien's machine had live rows written by the bash predecessor;
-holt reads them, writes them back byte-compatibly, and only *then* earns the
+scruff reads them, writes them back byte-compatibly, and only *then* earns the
 right to propose v1.
 
-Proposed v1 (post-cutover, opt-in, `holt migrate`):
+Proposed v1 (post-cutover, opt-in, `scruff migrate`):
 
 ```toml
-# $HOLT_STATE/registry/<sha256(checkout-path)[:12]>.toml   — one file per lane
+# $SCRUFF_STATE/registry/<sha256(checkout-path)[:12]>.toml   — one file per lane
 schema   = 1
 name     = "sparkle"
 repo     = "hausfold/haus"   # remote slug — see §4
 main     = "/Users/j/code/workshop/haus"
 branch   = "worktree-sparkle"
-path     = "/Users/j/.cache/holt/hausfold-haus/sparkle"
+path     = "/Users/j/.cache/scruff/hausfold-haus/sparkle"
 parent   = "/Users/j/code/workshop"
 agent    = "claude"
 created  = 2026-08-03T10:04:00Z
 ```
 
 Why one-file-per-row rather than a better TSV: it makes the lock story trivial
-(create/rename is atomic on every filesystem holt targets), it kills the
+(create/rename is atomic on every filesystem scruff targets), it kills the
 read-modify-write race that `reg_put` currently papers over with a temp file +
 rename of the *whole* table, and it lets a corrupt row be quarantined instead of
-poisoning the parse. `schema = N` on every row; unknown-higher schema ⇒ holt
+poisoning the parse. `schema = N` on every row; unknown-higher schema ⇒ scruff
 refuses to write and says which version to upgrade to.
 
-**Locking.** 0.1 must take an exclusive `flock(2)` on `$HOLT_STATE/registry.lock`
+**Locking.** 0.1 must take an exclusive `flock(2)` on `$SCRUFF_STATE/registry.lock`
 for every mutation and a shared one for every read that will act on the result.
 The bash version's TSV rewrite is a genuine lost-update race whenever two panes
 close simultaneously; it's rare enough that it hasn't bitten, and that's luck.
 
 ### 2.2 `--json` output
 
-Every listing/state command takes `--json`, and because bare `holt` IS the
-listing, **`holt --json` is a synonym for `holt list --json`** — byte-identical
+Every listing/state command takes `--json`, and because bare `scruff` IS the
+listing, **`scruff --json` is a synonym for `scruff list --json`** — byte-identical
 output, pinned by the suite. Consumers should not have to know that `list` is
 the implied verb. One envelope, so they can version-check without sniffing:
 
 ```json
 {
-  "holt": "0.1.0",
-  "schema": 1,
+  "scruff": "1.0.0",
+  "schema": 2,
   "lanes": [
     {
       "name": "sparkle",
       "repo": "hausfold/haus",
       "main": "/Users/j/code/workshop/haus",
       "branch": "worktree-sparkle",
-      "path": "/Users/j/.cache/holt/hausfold-haus/sparkle",
+      "path": "/Users/j/.cache/scruff/hausfold-haus/sparkle",
       "parent": "/Users/j/code/workshop",
       "agent": "claude",
       "state": "live",
       "occupied": true,
       "occupied_by": [
-        { "pid": 46864, "command": "node", "path": "/Users/j/.cache/holt/hausfold-haus/sparkle", "via": "lsof" }
+        { "pid": 46864, "command": "node", "path": "/Users/j/.cache/scruff/hausfold-haus/sparkle", "via": "lsof" }
       ],
       "dirty": true,
       "ahead": 3,
@@ -222,12 +222,17 @@ Contract points that matter:
   (a lease knows the pid, never the name) and nothing in the safety model reads
   any of it — occupancy still resolves to *keep* regardless.
 - `warnings[]` is where degraded-mode explanations go. Never silently degrade.
+- **`schema` is `2` from 1.0.0.** Schema 1 spelled the version key `holt`;
+  the 1.0.0 rename made it `scruff`, and renaming a required envelope field is
+  exactly the break this counter exists to announce. A consumer pinned to
+  schema 1 reads the old key and should refuse a payload it doesn't know —
+  the five SDKs move with the CLI, on one version number.
 - Field additions are non-breaking; consumers must ignore unknown keys.
 - `post_merge_ahead.diverged` disambiguates a case `commits` alone cannot: the
   same nonzero count means "committed after the merge" (reshippable) when the
   branch's history includes what merged, and "this tip never built on what
   merged" (a stale or sideways checkout — a second local copy of the same
-  branch, an amend) when it does not. `holt reship` refuses the latter rather
+  branch, an amend) when it does not. `scruff reship` refuses the latter rather
   than pushing content the merge already superseded; the CLI marks it `~N` in
   the state column, distinct from `+N`. **A rebase is not that case**, whatever
   it does to the SHAs: the question is settled first by asking whether
@@ -242,29 +247,29 @@ Contract points that matter:
   collapses to `{0, 0, false}` and `+N` comes down: the lane is simply in
   flight. Compared by OID, never by mere existence, because a commit made after
   that push is genuinely uncovered and is the case the marker exists for. Before
-  #60 the map behind this listed MERGED PRs only, so the follow-up PR `holt
+  #60 the map behind this listed MERGED PRs only, so the follow-up PR `scruff
   reship` had just opened was invisible and the lane went on being told to
   reship, forever.
 
 ### 2.3 Hook protocol
 
-holt is the target of Claude Code's `WorktreeCreate` / `WorktreeRemove` hooks and
+scruff is the target of Claude Code's `WorktreeCreate` / `WorktreeRemove` hooks and
 must stay tolerant of their drift. Today's bash `hook_field` accepts *either*
 `name`/`worktree_name` and *either* `base_path`/`cwd` because the docs and 2.1.x
 disagree. Keep that: **accept a set of aliases per logical field, first hit
-wins**, and log (to `$HOLT_STATE/log`) which alias fired so a future CC bump is
+wins**, and log (to `$SCRUFF_STATE/log`) which alias fired so a future CC bump is
 diagnosable rather than silent.
 
 ```
-holt hook create   < JSON on stdin  → the new checkout path on stdout, NOTHING else
-holt hook remove   < JSON on stdin  → human text on stderr, nothing on stdout
+scruff hook create   < JSON on stdin  → the new checkout path on stdout, NOTHING else
+scruff hook remove   < JSON on stdin  → human text on stderr, nothing on stdout
 ```
 
-The "only the path on stdout" rule is load-bearing (`cd "$(holt child …)"` and the
+The "only the path on stdout" rule is load-bearing (`cd "$(scruff child …)"` and the
 CC hook both depend on it). Every diagnostic goes to stderr. This is a contract,
 not a style choice, and needs a test.
 
-A generic `holt hook` also lets non-Claude clients wire in: the same JSON on
+A generic `scruff hook` also lets non-Claude clients wire in: the same JSON on
 stdin from a Codex/OpenCode plugin gets the same behaviour.
 
 ### 2.4 Exit codes
@@ -277,8 +282,8 @@ The bash version has exactly two (0 / 1-via-`die`). Consumers need more:
 | 1 | usage / precondition error (bad args, not a git repo) |
 | 2 | **refused for safety** — occupied, dirty, or not provably landed |
 | 3 | degraded — the operation completed but a signal was unavailable (forge down, no `lsof`); pairs with a `warnings[]` entry |
-| 4 | conflict found (`holt overlap`, `holt batch`) — a finding, not an error |
-| 5 | lock contention / another holt holds the registry |
+| 4 | conflict found (`scruff overlap`, `scruff batch`) — a finding, not an error |
+| 5 | lock contention / another scruff holds the registry |
 
 `2` vs `1` is the one that matters: a wrapper script must be able to distinguish
 "you asked wrong" from "I declined to destroy something".
@@ -299,7 +304,7 @@ existing signal and close the remaining holes explicitly.
 | Merge commit | ✅ | MERGED | ancestry |
 | Rebase-and-merge (forge button) | ❌ (new SHAs) | MERGED, `headRefOid` = pre-rebase tip = local tip | `headRefOid == local tip` |
 | Squash-and-merge | ❌ | MERGED, `headRefOid` = local tip | `headRefOid == local tip` |
-| Merged, then more commits on the branch | ❌ | MERGED, `headRefOid` ≠ tip | `post_merge_ahead` → `+N`, `holt reship` |
+| Merged, then more commits on the branch | ❌ | MERGED, `headRefOid` ≠ tip | `post_merge_ahead` → `+N`, `scruff reship` |
 | Merged, then the lane caught up on the default branch | ❌ | MERGED, `headRefOid` ≠ tip | `+N` counts `headRefOid..branch` **`--not` default** — a rebase onto, or a merge from, the default branch drags its already-landed commits past `headRefOid`, and billing those to the lane read `live+131` for two commits of its own |
 | Branch amended/rebased *after* its merge | ❌ | MERGED, `headRefOid` unreachable | count falls back to 1 — "at least one commit here didn't land" |
 | Merged into a release branch, later to default | eventually ✅ | maybe | ancestry, once it arrives |
@@ -308,7 +313,7 @@ existing signal and close the remaining holes explicitly.
 | Merged from a fork | ❌ | `headRefName` may be `owner:branch` | **gap → §3.3** |
 | PR merged >100 PRs ago | ❌ | outside the repo-wide `--limit 100` map | already safe: `branch_landed` keeps its own precise per-branch query, so the horizon only costs an annotation, never a wrong reap |
 | Forge unreachable / no `gh` / offline | ❌ | unknown | **not landed** — keep. Correct, and stays correct. |
-| PR closed unmerged, or the repo archived | ❌ | `CLOSED` / `isArchived` | **not landed, and never will be** — `reap` names it and keeps it; `holt drop` is the only thing that takes it (§6.4b) |
+| PR closed unmerged, or the repo archived | ❌ | `CLOSED` / `isArchived` | **not landed, and never will be** — `reap` names it and keeps it; `scruff drop` is the only thing that takes it (§6.4b) |
 
 The existing division of labour is right and must survive the port: the **listing**
 uses one repo-wide `merged_map` query (a per-branch query costs ~0.5 s each, which
@@ -342,8 +347,8 @@ alike — which is exactly why it must **not** be a reap trigger by default. Spe
 
 - surfaced as `landed.verdict = "contained"`, `via = "merge-tree-empty"`,
   `confidence = "heuristic"`
-- shown in `holt list` as `landed?` (with the `?`)
-- `holt reap` ignores it unless given `--contained`, and even then requires
+- shown in `scruff list` as `landed?` (with the `?`)
+- `scruff reap` ignores it unless given `--contained`, and even then requires
   clean + unoccupied + at least one commit not in default
 
 Same primitive as §7 — one `merge-tree` implementation serves both features.
@@ -358,7 +363,7 @@ blind). Fix: match on the branch suffix after the last `:` **and** require
 
 ### 3.4 Degraded mode is a first-class state
 
-If the forge is unreachable, holt must say so — `exit 3`, a `warnings[]` entry,
+If the forge is unreachable, scruff must say so — `exit 3`, a `warnings[]` entry,
 and a visible marker in the listing — not quietly report every branch as unlanded.
 Silent degradation is how a user learns to distrust the tool.
 
@@ -414,21 +419,21 @@ common case, not the exotic one.
 ```
 identity = owner/name   from `git remote get-url origin`, scheme/user/host stripped
 path key = owner-name   (slug with '/' → '-')
-$HOLT_HOME/<owner-name>/<worktree-name>
+$SCRUFF_HOME/<owner-name>/<worktree-name>
 ```
 
 - No `origin`? Try `upstream`, then the first remote alphabetically, then fall
   back to `local/<basename>` and record `repo = null` in the registry — degraded,
-  works, and `holt doctor` tells you to add a remote.
-- Multiple remotes disagreeing (fork workflows): `origin` wins; `holt doctor`
+  works, and `scruff doctor` tells you to add a remote.
+- Multiple remotes disagreeing (fork workflows): `origin` wins; `scruff doctor`
   reports the ambiguity.
 - The bucket directory is **cosmetic**; every command re-derives a lane's main
   checkout from the checkout itself (`git rev-parse --git-common-dir`), exactly as
   `resume_rows` does today. Never parse identity out of a path.
 
-**Migration:** existing rows keep their existing `path`. holt reads them, resolves
+**Migration:** existing rows keep their existing `path`. scruff reads them, resolves
 them, and never rewrites a path under a live row — new lanes get slug buckets,
-old ones stay where they are. One `holt doctor --relocate` can offer to move them
+old ones stay where they are. One `scruff doctor --relocate` can offer to move them
 later. Cutover day changes nothing on disk.
 
 ---
@@ -443,7 +448,7 @@ the file a user would write.
 ### 5.1 Resolution order
 
 ```
-1. ~/.config/holt/adapters/<kind>/<id>.toml     — user
+1. ~/.config/scruff/adapters/<kind>/<id>.toml     — user
 2. built-in (embedded)                          — shipped
 ```
 
@@ -452,7 +457,7 @@ templates makes `git clone` + worktree-create a remote-code-execution path;
 worktrunk hit the same wall and disables `--execute` in project hook bodies.
 Per-user adapters cover every real case today. Loosening later behind a
 direnv-style content-hash trust prompt is a *minor* release; tightening after
-teams have committed `.holt/adapters/` is *breaking*. Ship tight.
+teams have committed `.scruff/adapters/` is *breaking*. Ship tight.
 
 A user adapter with the same id as a built-in shadows it wholesale (no merging —
 merged config is unpredictable and undebuggable).
@@ -500,19 +505,19 @@ a bare `{{.Prompt}}` argv element is read as a flag: the client exits with
 `unknown option '- …'` before the pane draws. The built-in three do this today.
 
 `has_chat` replaces the hardcoded "only Claude exposes a cheap cwd → transcript
-test" special case: an adapter that omits it simply answers "unknown", and holt
+test" special case: an adapter that omits it simply answers "unknown", and scruff
 falls back to the client's own cwd-filtered picker, which is today's behaviour for
 Codex and OpenCode.
 
-**`resume` and `last` are two rungs, and which one fires is holt's decision, not
+**`resume` and `last` are two rungs, and which one fires is scruff's decision, not
 the adapter's.** A lane's own checkout is a directory only that lane's agent ever
 ran in, so "the newest conversation here" *is* the lane's chat — presenting a
 picker there asks the user to answer a question with one answer, from a list
-whose entries are indistinguishable at a glance. `holt <name>` therefore runs
+whose entries are indistinguishable at a glance. `scruff <name>` therefore runs
 `last` whenever the chat lives in the lane's own checkout, and `resume` only for
-the one case where holt genuinely cannot name the conversation: a spawned lane
-(`holt child`, a nested spawn) whose chat lives in a SHARED parent checkout full
-of unrelated sessions. `holt <name> --pick` forces the picker for when the newest
+the one case where scruff genuinely cannot name the conversation: a spawned lane
+(`scruff child`, a nested spawn) whose chat lives in a SHARED parent checkout full
+of unrelated sessions. `scruff <name> --pick` forces the picker for when the newest
 isn't the one wanted. An adapter that omits `last` keeps the picker everywhere —
 `last` is the addition, not the default.
 
@@ -527,7 +532,7 @@ column.
 ### 5.4 Forge — six lines
 
 Detected from the remote host, so `gh`/`glab`/`tea`/`bb` is chosen automatically.
-**holt never implements an auth flow of its own** — it delegates to whatever forge
+**scruff never implements an auth flow of its own** — it delegates to whatever forge
 CLI is on `PATH`, and falls back to the git-only merge-base check when none is.
 
 ```toml
@@ -539,7 +544,7 @@ pr_for_branch  = ["gh", "pr", "list", "-R", "{{.Repo}}", "--head", "{{.Branch}}"
 open_prs       = ["gh", "pr", "list", "-R", "{{.Repo}}", "--state", "open", "--limit", "100", "--json", "number,headRefName,headRefOid,title,url"]
 ```
 
-Adapters declare **JSON-emitting** commands and holt maps them through a small
+Adapters declare **JSON-emitting** commands and scruff maps them through a small
 per-adapter key mapping (`number`/`state`/`head_oid`/`head_ref`), so `glab`'s
 different field names are a config concern, not a code concern. Every forge call
 goes through the existing 6-second timeout + on-disk cache — a stalled network
@@ -552,21 +557,21 @@ Default backend is `none` + deterministic port/env allocation (§6). Containers 
 
 **One backend ships built in: `tart`.** `--backend tart` with no adapter file
 clones an image, boots the guest headless with the lane shared in, and waits
-for an address — `HOLT_TART_BASE` names the image, `HOLT_TART_USER` the account
+for an address — `SCRUFF_TART_BASE` names the image, `SCRUFF_TART_USER` the account
 `enter` sshes in as. It is built in because its `setup` is three commands and a
 wait, which one argv slot cannot hold, so the file-only rule made every user
 write the same script before the verb worked at all. It changes nothing about
 the mechanism: a `tart.toml` on disk still wins, nothing is automatic, and
-`holt runtime eject tart` prints the file to start from. It exists because an
+`scruff runtime eject tart` prints the file to start from. It exists because an
 agent lane that has to *see* a desktop change work should take a disposable
 macOS rather than the screen its user is sitting at.
 
 ```toml
 kind  = "runtime"
 id    = "apple-container"
-setup = ["container", "run", "-d", "--name", "holt-{{.Name}}", "-v", "{{.Path}}:/work", "IMAGE"]
-enter = ["container", "exec", "-it", "holt-{{.Name}}", "bash"]
-teardown = ["container", "rm", "-f", "holt-{{.Name}}"]
+setup = ["container", "run", "-d", "--name", "scruff-{{.Name}}", "-v", "{{.Path}}:/work", "IMAGE"]
+enter = ["container", "exec", "-it", "scruff-{{.Name}}", "bash"]
+teardown = ["container", "rm", "-f", "scruff-{{.Name}}"]
 ```
 
 ### 5.6 Namer — one line
@@ -585,14 +590,14 @@ Selected by a top-level `namer = "<id>"` config key, and **absent by default**:
 no key, no process, and an unnamed lane keeps taking a random word pair, exactly
 as it did before this kind existed.
 
-`{{.Prompt}}` here is holt's whole naming REQUEST — the instruction, the repo,
-the lane names already taken and the task, composed by holt — and the command
-answers on stdout with the name and nothing else. holt owns that wording so that
-name quality is holt's problem rather than every adapter file's; an adapter that
+`{{.Prompt}}` here is scruff's whole naming REQUEST — the instruction, the repo,
+the lane names already taken and the task, composed by scruff — and the command
+answers on stdout with the name and nothing else. scruff owns that wording so that
+name quality is scruff's problem rather than every adapter file's; an adapter that
 disagrees wraps a script and reshapes the text it was handed.
 
-**holt never talks to a model.** It runs one argv and reads a word off stdout, so
-there is no HTTP client here, no vendor and no API key for holt to hold. The
+**scruff never talks to a model.** It runs one argv and reads a word off stdout, so
+there is no HTTP client here, no vendor and no API key for scruff to hold. The
 built-in runs the `claude` binary a machine spawning agents already has, which
 means the naming call is authenticated the same way the agents are; pointing the
 same key at a local model, or at a script with no model in it at all, is a file.
@@ -618,19 +623,19 @@ the dev server wants port 3000 that four other worktrees already want.
 
 Two kinds, and the difference is what they are allowed to change.
 
-**Lifecycle hooks** run *around* a transition holt is going to make anyway:
+**Lifecycle hooks** run *around* a transition scruff is going to make anyway:
 `pre-create`, `post-create`, `pre-park`, `post-unpark`, `pre-reap`, `post-reap`.
 Each runs argv-slices (no shell), with the §5.2 variables, and a non-zero exit on
 a `pre-*` hook aborts the transition (exit 2 — refused).
 
-**Policy seams** (§6.5) run *instead of* a decision holt would have made. They
+**Policy seams** (§6.5) run *instead of* a decision scruff would have made. They
 are the answer to the question the lifecycle hooks can't reach: not "do
 something extra when a branch is reaped", but "no — *this* is what reapable
 means here."
 
 ### 6.2 Config file
 
-`~/.config/holt/config.toml` for the machine-wide defaults; `<repo>/.holt.toml`
+`~/.config/scruff/config.toml` for the machine-wide defaults; `<repo>/.scruff.toml`
 for the repo. **The split on repo-local config is by execution, not by file:**
 
 The machine config's implemented top-level default is `agent = "claude"` (or
@@ -648,9 +653,9 @@ is a decision on some machines and a constant on most.
 | `secrets` | ✅ | declarative paths, never contents |
 | `run` / any hook body | ❌ unless trusted | it's execution — same RCE reasoning as §5.1 |
 
-`holt trust` records a content-hash of `<repo>/.holt.toml`; a changed hash
+`scruff trust` records a content-hash of `<repo>/.scruff.toml`; a changed hash
 re-prompts (direnv's model, applied to exactly the one dangerous key). Untrusted
-`run` entries are *listed* by `holt doctor` — "this repo wants to run X; `holt
+`run` entries are *listed* by `scruff doctor` — "this repo wants to run X; `scruff
 trust` to allow" — not silently dropped.
 
 ### 6.3 Built-in steps
@@ -683,25 +688,25 @@ Deterministic, so the same branch gets the same port every rebuild, and
 collision-checked against the registry's other live allocations.
 
 **Defer, don't fight.** If `.envrc` (direnv), `mise.toml`, `flake.nix` +
-`.envrc`, or `.devcontainer/` is present, holt's default is to **do nothing** and
+`.envrc`, or `.devcontainer/` is present, scruff's default is to **do nothing** and
 say so: those tools already own environment materialisation, and racing them
-produces two half-configured environments. `holt doctor` reports "direnv detected
-— holt is deferring; add `[bootstrap] force = true` to override."
+produces two half-configured environments. `scruff doctor` reports "direnv detected
+— scruff is deferring; add `[bootstrap] force = true` to override."
 
 **Secrets:** files listed under `secrets` are `chmod 600` on create and
 shredded (overwrite + unlink) on reap. They're never copied into a park commit —
-a `.gitignore`d secret must stay ignored, and `holt park` must refuse to `git add
+a `.gitignore`d secret must stay ignored, and `scruff park` must refuse to `git add
 -A` a file matching a `secrets` entry even if it's untracked-but-not-ignored.
 That's a 5/5 failure mode and needs a test.
 
-### 6.4 `holt doctor`
+### 6.4 `scruff doctor`
 
 Inspects a repo and **writes a proposed config** — the single best onboarding
 lever, because the alternative is reading a TOML reference.
 
 ```
-holt doctor            # inspect, print findings + a proposed .holt.toml, write nothing
-holt doctor --write    # write it
+scruff doctor            # inspect, print findings + a proposed .scruff.toml, write nothing
+scruff doctor --write    # write it
 ```
 
 It detects: package manager and its heavy dirs; `.env*` files that are gitignored
@@ -716,7 +721,7 @@ checkouts, orphan branches, disk used per repo.
 
 Two lanes can never land, and neither is "not landed yet":
 
-| shape | forge record | holt's answer |
+| shape | forge record | scruff's answer |
 |---|---|---|
 | The branch's PR was **closed unmerged** | latest PR `CLOSED`, none `MERGED` | named by `reap`, never swept — the work was *rejected*, and those commits are the only copy |
 | The repo is **archived** on the forge | `isArchived: true` | named by `reap`, never swept — nothing can be submitted anywhere any more |
@@ -726,7 +731,7 @@ everything around them with no signal at all. The obvious fix — let `reap` tak
 them — is the wrong one, and the asymmetry is the whole design: **`reap` is
 automatic, so it may only ever take landed work; `drop` is a human typing one
 lane's name, so it may take anything.** Widening the automatic sweep to delete
-rejected work is precisely the thing holt exists to never do.
+rejected work is precisely the thing scruff exists to never do.
 
 `deadEnd` costs two forge calls, so it is asked **only of lanes a sweep has
 already declined to reap** — the listing (which the statusline runs several
@@ -735,7 +740,7 @@ times a minute) never pays for it.
 **The ledger.** Every branch deletion — `reap`, the parked sweep, the remove
 hook, `drop` — writes one line to `$STATE/reaped.log` *before* the delete:
 `when, repo, name, branch, sha, via, pr`, tab-separated, append-only field
-order. `holt reaped` reads it back with the recovery command spelled out.
+order. `scruff reaped` reads it back with the recovery command spelled out.
 
 This exists because a branch deletion destroys its own evidence: `git branch -D`
 takes the branch's reflog with it and `git worktree remove` takes
@@ -748,7 +753,7 @@ attributable.
 
 ### 6.5 Policy seams — the hardcoded facts, and how to disagree with them
 
-holt grew out of one machine's rice, and it inherited that machine's answers to
+scruff grew out of one machine's rice, and it inherited that machine's answers to
 questions that only *look* universal. "Landed" means merged into the default
 branch. "Reapable" means landed, clean and unoccupied. "Resume" means become the
 client process. Every one of those is a house rule wearing a universal name, and
@@ -756,31 +761,31 @@ every one of them is wrong somewhere: a shop that merges into a release train, a
 machine that can enumerate its own panes better than `lsof` can, a multiplexer
 user who wants a new pane rather than a hijacked one.
 
-The fix is not more configuration keys. It is to name each decision, ship holt's
+The fix is not more configuration keys. It is to name each decision, ship scruff's
 answer as the *default* rather than the *mechanism*, and let a consumer replace
 it. That is the difference between a tool and a substrate: haus should be
-able to say "here is what resuming means on my machine" without holt having ever
+able to say "here is what resuming means on my machine" without scruff having ever
 heard of zellij.
 
 #### The protocol
 
-A seam is a program, not an expression language. holt execs the hook's argv and
+A seam is a program, not an expression language. scruff execs the hook's argv and
 reads the answer off the exit code.
 
 | exit | predicate seam | action seam |
 |---|---|---|
-| `0` | yes | handled — holt does nothing further |
+| `0` | yes | handled — scruff does nothing further |
 | `1` | no | failed |
-| `2` | no, **refused for safety** | refused — propagates as holt's exit 2 |
+| `2` | no, **refused for safety** | refused — propagates as scruff's exit 2 |
 | `3` | **no opinion — run the built-in** | **declined — run the built-in** |
 | anything else, or wouldn't exec | defer, **and warn** | defer, **and warn** |
 
-0/1/2 mean what they mean in holt's own exit-code table (§2.4), so a hook and a
+0/1/2 mean what they mean in scruff's own exit-code table (§2.4), so a hook and a
 wrapper script speak one language. `3` is the only addition, and it is
 deliberately not 0/1/2 so that the ways a script dies by accident — `1` from
 `set -e`, `126` from a lost `+x` bit, `127` from a typo — can never be mistaken
 for an opinion. **Every failure mode defers**: a broken hook costs you the
-override, never the operation, because holt is in the path of every pane open
+override, never the operation, because scruff is in the path of every pane open
 and a stale store path must not be able to close that door. It costs you the
 override *loudly* — a policy that silently stopped applying is worse than one
 that never existed, because the operator still believes it is in force.
@@ -790,37 +795,37 @@ three lines of shell without either having to become the other:
 
 - **stdin** — a JSON object, for predicates. (Action seams inherit stdin; they
   may be interactive.)
-- **environment** — `HOLT_HOOK`, plus `HOLT_<FIELD>` for every §5.2 variable:
-  `HOLT_PATH`, `HOLT_MAIN`, `HOLT_REPO`, `HOLT_NAME`, `HOLT_BRANCH`,
-  `HOLT_PARENT`, `HOLT_CWD`. Three collisions to know about, all the same
-  shape — holt's own environment got to the name first, and a hook leaks its
+- **environment** — `SCRUFF_HOOK`, plus `SCRUFF_<FIELD>` for every §5.2 variable:
+  `SCRUFF_PATH`, `SCRUFF_MAIN`, `SCRUFF_REPO`, `SCRUFF_NAME`, `SCRUFF_BRANCH`,
+  `SCRUFF_PARENT`, `SCRUFF_CWD`. Three collisions to know about, all the same
+  shape — scruff's own environment got to the name first, and a hook leaks its
   environment into every pane it spawns, so a field spelled as one of these
-  hands holt back its own input: `HOLT_BASE` is the lane base *directory*, so
-  the repo's default branch is **`HOLT_BASE_BRANCH`**; `HOLT_STATE` is the
-  state *directory* (§9.1) and `HOLT_AGENT` is the one-invocation client
-  override (§5.3), so the lane's are **`HOLT_LANE_STATE`** and
-  **`HOLT_LANE_AGENT`**.
+  hands scruff back its own input: `SCRUFF_BASE` is the lane base *directory*, so
+  the repo's default branch is **`SCRUFF_BASE_BRANCH`**; `SCRUFF_STATE` is the
+  state *directory* (§9.1) and `SCRUFF_AGENT` is the one-invocation client
+  override (§5.3), so the lane's are **`SCRUFF_LANE_STATE`** and
+  **`SCRUFF_LANE_AGENT`**.
 
 `focus` is `resume`'s narrower sibling and the seam a desktop wants most: the
-lane is already running, and the question is only which window to raise. holt
+lane is already running, and the question is only which window to raise. scruff
 cannot answer that — the join from a lane to a window belongs to whatever opened
 it — so the built-in is `resume`, and a consumer that knows its own windows
 overrides exactly this step. A `focus` hook that **defers** (exit 3) means "no
-window of mine holds that lane", and holt falls back to resume, which opens one:
+window of mine holds that lane", and scruff falls back to resume, which opens one:
 a detached lane is running, not gone. Its usual caller is not a human — trill
-runs `holt focus <name>` when a lane's banner is clicked — which is why the
+runs `scruff focus <name>` when a lane's banner is clicked — which is why the
 no-hook path still has to land somewhere useful.
 
 The two action seams that open a session — `resume` and `open` — carry three
-more, because a hook that spawns a pane has to reproduce a decision holt already
-made: `HOLT_CHAT` (the cwd the conversation lives in, which for a spawned lane
-is NOT `HOLT_PATH` — getting that wrong is how a resumed child lane opens an
-empty session), `HOLT_LANE_STATE`, and **`HOLT_COMMAND`** — the exact client
-invocation holt was about to exec, already resolved to continue-the-newest or
+more, because a hook that spawns a pane has to reproduce a decision scruff already
+made: `SCRUFF_CHAT` (the cwd the conversation lives in, which for a spawned lane
+is NOT `SCRUFF_PATH` — getting that wrong is how a resumed child lane opens an
+empty session), `SCRUFF_LANE_STATE`, and **`SCRUFF_COMMAND`** — the exact client
+invocation scruff was about to exec, already resolved to continue-the-newest or
 open-the-picker per §5.3. A hook that re-derives it instead lands its new pane
-on the picker holt just spared the user.
+on the picker scruff just spared the user.
 
-`HOLT_COMMAND` is a command STRING, **shell-quoted per argument**, and a hook
+`SCRUFF_COMMAND` is a command STRING, **shell-quoted per argument**, and a hook
 runs it through a shell rather than word-splitting it. That was invisible while
 every invocation was one or two bare words; `new`/`spawn --prompt` put a whole
 task in there ({{.Prompt}}, §5.2), and a brief spans lines and holds quotes and
@@ -832,45 +837,45 @@ hook naming its own rule, so a reap stays attributable in `--json` (`via:
 away). Prose on stdout is not an error; the exit code already answered.
 
 Action seams get the terminal, but their **stdout is redirected to stderr**.
-Both are the same tty for an interactive hook, so a TUI still draws — and holt's
+Both are the same tty for an interactive hook, so a TUI still draws — and scruff's
 stdout carries data under a contract other programs parse (§2.3), which a hook
 must not be able to break.
 
 ```toml
-# ~/.config/holt/config.toml
+# ~/.config/scruff/config.toml
 [hooks]
-resume   = "/nix/store/…-holt-on-resume"                  # a bare program
-landed   = ["/nix/store/…-holt-landed", "--release-train"] # or an argv
+resume   = "/nix/store/…-scruff-on-resume"                  # a bare program
+landed   = ["/nix/store/…-scruff-landed", "--release-train"] # or an argv
 ```
 
 #### Shipped seams
 
 | Seam | Kind | Answers | Built-in |
 |---|---|---|---|
-| `agent` | predicate | which client a new lane opens in | the `agent` key, then `HOLT_AGENT`, then claude |
+| `agent` | predicate | which client a new lane opens in | the `agent` key, then `SCRUFF_AGENT`, then claude |
 | `landed` | predicate | has this branch's work reached the default branch? | the §3 ladder |
 | `preserve` | predicate | does this dirty tree need a wip commit before removal? | yes, unless it's untracked scratch on a landed branch |
 | `resume` | action | reopen this lane's session | chdir + exec the client — continuing the newest conversation there, or its picker for a shared parent (§5.3) |
 | `open` | action | open a session in a freshly-created lane | chdir + exec the client |
-| `focus` | action | put the window this lane is already running in in front | `resume` — the only go-to holt has without a window layer |
+| `focus` | action | put the window this lane is already running in in front | `resume` — the only go-to scruff has without a window layer |
 
 Two things are **not** seams and will not become them, because they are about
-holt not sawing off the branch it is sitting on rather than about policy: the
-checkout holt is being **run from** is never swept, and a **stray** is never
+scruff not sawing off the branch it is sitting on rather than about policy: the
+checkout scruff is being **run from** is never swept, and a **stray** is never
 swept, only reported.
 
 **`reapable` is deliberately absent.** It is the obvious next seam and it was
-built, tested and pulled back out: reapability reaches through *three* of holt's
+built, tested and pulled back out: reapability reaches through *three* of scruff's
 inherited opinions at once — occupancy, dirtiness, landedness — and a seam over
 the lot of them is a bigger commitment than the five above, because a `yes` on a
 dirty tree is the one answer that destroys work. It waits for the architecture
 those three settle into. Overriding `landed` already moves the rung that matters
-most; the rest stays holt's until the shape is known.
+most; the rest stays scruff's until the shape is known.
 
 #### Still hardcoded — the roadmap
 
 The seams above are the ones with a consumer waiting. These are the rest of
-holt's inherited opinions, in the order they are worth prising out:
+scruff's inherited opinions, in the order they are worth prising out:
 
 | Fact | Where | Shape |
 |---|---|---|
@@ -886,7 +891,7 @@ holt's inherited opinions, in the order they are worth prising out:
 | the two-word random name | `new.go` | a `name` seam |
 
 The test for whether one belongs here: would a *reasonable* machine answer it
-differently? "Never delete a branch that isn't landed" is holt's product and
+differently? "Never delete a branch that isn't landed" is scruff's product and
 stays a floor. "Landed means merged into `main`" is a guess, and guesses get
 seams.
 
@@ -904,21 +909,21 @@ files as a matrix. 100% read-only. `--json`, exit `0`/`2`/`1`. Ships a Claude Co
 plugin that wires `clash check` as a **blocking `PreToolUse` hook on
 `Write|Edit|MultiEdit`**.
 
-### 7.2 Verdict: build a slim version inside holt; don't adopt Clash
+### 7.2 Verdict: build a slim version inside scruff; don't adopt Clash
 
 The *idea* is correct and worth having. The *dependency* isn't, for four reasons:
 
 1. **It's one git primitive.** `git merge-tree --write-tree A B` (git ≥ 2.38) does
    the whole thing and exits non-zero on conflict. That's ~200 lines of Go
    including the matrix rendering. Taking a second Rust binary, a second config
-   file, and a second Claude plugin for that flatly contradicts holt's own "single
+   file, and a second Claude plugin for that flatly contradicts scruff's own "single
    binary, no runtime dependencies" pitch.
-2. **It's structurally blind to exactly the lanes that matter to holt.** Clash
-   enumerates `git worktree list` — so it sees live checkouts only. holt's
+2. **It's structurally blind to exactly the lanes that matter to scruff.** Clash
+   enumerates `git worktree list` — so it sees live checkouts only. scruff's
    **parked** branches have no checkout on disk at all, and those are precisely
    the ones you've forgotten about and that have been rotting against `main` for a
-   week. holt has a registry; it can merge-test a parked branch that Clash cannot
-   see. That's not a bug in Clash, it's a capability holt has and Clash can't get.
+   week. scruff has a registry; it can merge-test a parked branch that Clash cannot
+   see. That's not a bug in Clash, it's a capability scruff has and Clash can't get.
 3. **The blocking-hook integration is the wrong shape.** A `PreToolUse` prompt on
    every `Write|Edit` is a high-frequency interruption for a low-frequency event —
    and Clash's own README notes that Claude Code doesn't render
@@ -931,17 +936,17 @@ The *idea* is correct and worth having. The *dependency* isn't, for four reasons
 MIT license means there is nothing to negotiate about implementing the same
 approach — and the approach is one paragraph of public documentation, not IP.
 
-### 7.3 What holt builds instead
+### 7.3 What scruff builds instead
 
 ```
-holt overlap [--json] [--committed-only] [--pair A B]
+scruff overlap [--json] [--committed-only] [--pair A B]
 ```
 
 - Pairwise `git merge-tree --write-tree` across **every registry lane,
   including parked branches**, using each pair's own merge base.
 - **Uncommitted work counts.** Clash's `has_active_changes` is a bare dirty
   boolean — it doesn't merge-test what the agents are currently typing, which in
-  agent lanes is *most of the interesting content*. holt builds a throwaway
+  agent lanes is *most of the interesting content*. scruff builds a throwaway
   tree per lane with `GIT_INDEX_FILE=$tmp git add -A && git write-tree` (the
   real index is untouched) and merge-tests those. That's the difference between
   "these branches will conflict eventually" and "your two running agents are
@@ -949,7 +954,7 @@ holt overlap [--json] [--committed-only] [--pair A B]
   stat for speed.
 - Output: conflicting file list per pair, plus the matrix. Exit 4 on conflicts
   found (a finding, not an error).
-- **Passive surfaces, not blocking ones.** An `overlap` column in `holt list` and
+- **Passive surfaces, not blocking ones.** An `overlap` column in `scruff list` and
   a token in the haus statusline. Optionally a *non-blocking* advisory hook
   that prints to the transcript. A blocking `PreToolUse` gate is available but is
   strictly opt-in and never the documented default.
@@ -974,7 +979,7 @@ review flow is merge-then-test, which puts unverified code on `main` before anyo
 has felt it. `batch` inverts that.
 
 ```
-holt batch [--verify "CMD"] [--json] [--land] [--exclude PR…]
+scruff batch [--verify "CMD"] [--json] [--land] [--exclude PR…]
 ```
 
 Pipeline:
@@ -987,7 +992,7 @@ Pipeline:
    in a deterministic order (PR number ascending — reproducible, so the cache key
    means something), recording each conflicting pair as it's hit rather than
    aborting.
-4. **Verify**: run the user-supplied command in the integration worktree. holt has
+4. **Verify**: run the user-supplied command in the integration worktree. scruff has
    no opinion about what it is. Nonzero ⇒ the set is red.
 5. **Bisect the queue.** This is the feature. When verify fails on the full set,
    binary-search the *merge set* — not the commits — to name the culprit PR, or
@@ -1017,7 +1022,7 @@ removed on completion, including on failure (behind `--keep` for debugging).
 | **Submodules** | not initialised in a new worktree — `git worktree add` doesn't recurse | detect `.gitmodules`; `bootstrap.submodules = "recursive" \| "none"`; default `none` with a `doctor` warning, because recursing can be minutes |
 | **LFS** | pointers, not files, unless a smudge runs | detect `.gitattributes` filter=lfs; offer `git lfs pull` as a bootstrap step; warn loudly rather than silently handing over pointer files |
 | **Sparse-checkout** | not inherited from the main checkout | copy the main checkout's sparse patterns into the new worktree by default (`--no-inherit-sparse` to opt out) — inheriting is nearly always what's meant |
-| **Disk accounting** | none | `holt list --disk` / `doctor` reports per-lane and per-repo usage (`du`-equivalent, walked in Go); flag when reflink fell back to copy and the tree is >1 GB |
+| **Disk accounting** | none | `scruff list --disk` / `doctor` reports per-lane and per-repo usage (`du`-equivalent, walked in Go); flag when reflink fell back to copy and the tree is >1 GB |
 | **`python3` dependency** | `hook_field` shells out to python3 to parse hook JSON | gone — Go has `encoding/json` |
 | **Registry race** | whole-table temp-file rewrite | per-row files + `flock` (§2.1) |
 | **Windows** | not attempted | out of scope for 0.1; state it. Path handling should not gratuitously preclude it. |
@@ -1035,26 +1040,26 @@ evidence nobody is there — it vouches for absence. A **lease** is the opposite
 it is written only by clients that opted in, so "no lease" means "nobody told
 me", never "nobody is here". A lease can therefore save a checkout from `reap`
 and can never condemn one. Reading an unleased checkout as free would reap the
-worktree of anyone who simply `cd`'d in without telling holt — invariant 2,
+worktree of anyone who simply `cd`'d in without telling scruff — invariant 2,
 broken by the tool whose entire purpose is invariant 2.
 
 `Report.Known()` is true only when *some* provider vouched for absence, and
 unknown still resolves to **keep**, exactly as when `lsof` was the only answer.
 
-**The lease.** `$HOLT_STATE/live/<sha256(path)[:12]>`, containing `pid<TAB>path`.
-`$HOLT_STATE` is `$XDG_STATE_HOME/holt` (default `~/.local/state/holt`) — pointedly
+**The lease.** `$SCRUFF_STATE/live/<sha256(path)[:12]>`, containing `pid<TAB>path`.
+`$SCRUFF_STATE` is `$XDG_STATE_HOME/scruff` (default `~/.local/state/scruff`) — pointedly
 *not* `$BASE`, which is globbed for checkouts, and pointedly not where the
 registry lives, because no state-dir knob may be able to relocate the file
 cutover day has to read (§10).
 
-**The ask markers.** `$HOLT_STATE/asks/<key>`, one empty file per banner
-`holt hook notify` has up, named for the key trill knows it by with the slashes
-flattened to dots (`holt/<repo>/<lane>` → `holt.<repo>.<lane>`). It is a cache
+**The ask markers.** `$SCRUFF_STATE/asks/<key>`, one empty file per banner
+`scruff hook notify` has up, named for the key trill knows it by with the slashes
+flattened to dots (`scruff/<repo>/<lane>` → `scruff.<repo>.<lane>`). It is a cache
 and only a cache: it exists so that the resume events — which fire on every
 tool call in every pane — can answer "is anything waiting?" with one directory
 read instead of a registry load and a launch of trill's binary. Nothing may
 treat it as the truth about what is on screen, because anything can take a
-banner down without telling holt.
+banner down without telling scruff.
 
 Two shapes of marker never get the tool call that would clear them — a lane
 blocked on you when its pane closed, and a pane outside every lane whose
@@ -1066,20 +1071,20 @@ empty again and the cheap answer becomes permanently the expensive one.
 ⚠️ **A desktop may read this directory** to find out whether any lane is
 waiting before doing something costlier of its own; hausfold/haus does exactly
 that. The path, the flattening and "empty means nothing is waiting" are
-therefore a contract with more than holt in it, and changing the naming breaks
+therefore a contract with more than scruff in it, and changing the naming breaks
 a reader that cannot be seen from here.
 
-A **relative** `$HOLT_STATE` is refused — holt warns and uses the default. This
+A **relative** `$SCRUFF_STATE` is refused — scruff warns and uses the default. This
 state is machine-global, so resolving it against the process cwd scatters the
-lease and the ledger into whatever directory holt was run from, routinely a git
+lease and the ledger into whatever directory scruff was run from, routinely a git
 checkout, where they surface as an untracked dir and can be swept into a `wip:`
-commit by holt's own park path. Nobody has ever meant that; an operator who
+commit by scruff's own park path. Nobody has ever meant that; an operator who
 wants state elsewhere says so absolutely.
 
 ```
-holt heartbeat [path]            take or refresh; held by the CALLING process
-holt heartbeat [path] --pid N    held by pid N instead (0 = no watchable process)
-holt heartbeat [path] --release  drop it
+scruff heartbeat [path]            take or refresh; held by the CALLING process
+scruff heartbeat [path] --pid N    held by pid N instead (0 = no watchable process)
+scruff heartbeat [path] --release  drop it
 ```
 
 A named pid settles liveness outright, in both directions: the kernel is a
@@ -1089,11 +1094,11 @@ never has to prove it is still there. The 90 s TTL exists only for `--pid 0` —
 a holder on the far side of a container or a socket, where freshness is the only
 evidence on offer. Dead leases are unlinked on sight.
 
-The default pid is the **calling** process, not holt's: an embedder exec's holt,
-holt exits immediately, and a lease watching an exited process is a lease that
+The default pid is the **calling** process, not scruff's: an embedder exec's scruff,
+scruff exits immediately, and a lease watching an exited process is a lease that
 was never taken.
 
-**`HOLT_OCCUPANCY=lease`** is the one deployment entitled to let leases answer
+**`SCRUFF_OCCUPANCY=lease`** is the one deployment entitled to let leases answer
 for absence too — an orchestrator that owns every session it serves, where a
 lane nobody leased genuinely is a lane nobody is in. Opt-in by explicit env
 var, never inferred from (say) the absence of `lsof`.
@@ -1115,12 +1120,12 @@ provider set is already the right shape to receive it.
 ### Keeps
 
 - `modules/den/` keeps the **statusline** (it's rice-specific presentation) — it
-  just consumes `holt list --json` instead of parsing TSV by hand.
-- The `WorktreeCreate`/`WorktreeRemove` hook wiring, retargeted to `holt hook
-  create` / `holt hook remove`.
+  just consumes `scruff list --json` instead of parsing TSV by hand.
+- The `WorktreeCreate`/`WorktreeRemove` hook wiring, retargeted to `scruff hook
+  create` / `scruff hook remove`.
 - `bench` keeps `try`, `try-batch`, `ship`, `release`. `try-batch` becomes a thin
-  wrapper over `holt batch --verify "bench try"` — bench supplies the nix
-  knowledge, holt supplies the queue mechanics and the bisect.
+  wrapper over `scruff batch --verify "bench try"` — bench supplies the nix
+  knowledge, scruff supplies the queue mechanics and the bisect.
 - The zellij keybinds, pounce's "Spawn Agent" command, the `⌘A` agent-spawn seam.
 
 ### Deletes
@@ -1128,7 +1133,7 @@ provider set is already the right shape to receive it.
 - `modules/den/wt.sh` (1295 lines) in its entirety. **Done** — deleted in
   haus#245, along with its test suite and the nix package that put it on
   `PATH`.
-- `test/wt.bats` moves *out* of haus and into holt (it's holt's acceptance
+- `test/wt.bats` moves *out* of haus and into scruff (it's scruff's acceptance
   suite now; haus keeps only integration smoke tests for the hook wiring).
 - The hand-maintained shell-side client list.
 
@@ -1139,23 +1144,23 @@ the bash predecessor was a hand-maintained shell-side copy of the same set —
 its own comment admitted a fourth client meant editing both, because a shell
 script can't read Nix.
 
-Fix: **Nix generates adapter TOML into a directory holt reads.**
+Fix: **Nix generates adapter TOML into a directory scruff reads.**
 
 ```nix
-# modules/den/holt.nix
-environment.etc."holt/adapters".source = pkgs.runCommand "holt-adapters" { } ''
+# modules/den/scruff.nix
+environment.etc."scruff/adapters".source = pkgs.runCommand "scruff-adapters" { } ''
   mkdir -p $out
   ${lib.concatMapStrings (c: "cp ${adapterFor c} $out/${c}.toml\n") agentClients}
 '';
 ```
 
-with `HOLT_ADAPTER_PATH` including `/etc/holt/adapters`. `agents.nix` stays the
+with `SCRUFF_ADAPTER_PATH` including `/etc/scruff/adapters`. `agents.nix` stays the
 single source; the shell copy disappears; a fourth client is one list entry.
 
 This also generalises: any Nix user gets declarative adapters for free, which is a
-genuinely nice line in holt's README and costs nothing to support (it's just
+genuinely nice line in scruff's README and costs nothing to support (it's just
 another directory on the adapter path — see §5.1, extended to
-`$HOLT_ADAPTER_PATH` entries between user and built-in).
+`$SCRUFF_ADAPTER_PATH` entries between user and built-in).
 
 ### Cutover safety on Julien's machine
 
@@ -1163,19 +1168,19 @@ At the time this section was written, the bash predecessor was load-bearing:
 two Claude Code hooks, the statusline refresher, pounce's Spawn Agent command,
 and `bench`. The plan was:
 
-1. **holt reads the existing `registry.tsv` unchanged.** No format migration on
+1. **scruff reads the existing `registry.tsv` unchanged.** No format migration on
    cutover day (§2.1). This is the hard requirement.
 2. The hook switch is **one haus option** —
-   `haus.agents.worktreeBackend = "wt" | "holt"` — so the revert is
+   `haus.agents.worktreeBackend = "wt" | "scruff"` — so the revert is
    `haus rollback`, not a code change.
-3. Run both for a week: `holt` installed, option still on the bash predecessor,
-   and a `holt list --json` diff check in `bench status`. Flip when they agree.
-4. Only after the flip does `holt migrate` (registry v1) become available, and it
+3. Run both for a week: `scruff` installed, option still on the bash predecessor,
+   and a `scruff list --json` diff check in `bench status`. Flip when they agree.
+4. Only after the flip does `scruff migrate` (registry v1) become available, and it
    backs up the TSV first.
 
 **What actually happened:** the cutover skipped the dual-run option entirely —
 every caller (the terminal room's `⌘A`, pounce's Spawn Agent, the Claude Code hooks) was
-repointed straight at `holt` in haus#201, with the bash predecessor left
+repointed straight at `scruff` in haus#201, with the bash predecessor left
 on `PATH` as an unused rollback. That rollback was never needed and the bash
 predecessor has since been deleted outright (haus#245); there is no
 `worktreeBackend` option and no fallback to revert to.
@@ -1186,14 +1191,14 @@ predecessor has since been deleted outright (haus#245); there is no
 
 The passoff describes a 1092-line bash predecessor. It's **1295** now (and,
 since retired, frozen at that count). These changes were all general-purpose
-and belong in holt 0.1, not just in haus:
+and belong in scruff 0.1, not just in haus:
 
 | Change | PR | Impact on this spec |
 |---|---|---|
 | `reship` + `+N` post-merge-ahead marker | #189 | New lifecycle state: *landed-but-moved-on*. Must be in the state machine (§0), the `--json` shape (`post_merge_ahead`, §2.2), and the merge-strategy table (§3). This is a genuinely novel state no competitor models. |
 | Client-agnostic bar / tab badge / agent-spawn bind | #170 | Confirms the agent-adapter seam (§5.3) is the right cut. |
 | One client list in `modules/lib/agents.nix` | #171 | Directly motivates §10's "Nix generates adapter TOML". |
-| Column sizing to pane / widest agent id | #168, 3a0d6d1 | Presentation belongs in the *consumer*; holt's job is `--json` + a good default renderer. |
+| Column sizing to pane / widest agent id | #168, 3a0d6d1 | Presentation belongs in the *consumer*; scruff's job is `--json` + a good default renderer. |
 | Worktree in a repo with **no commits yet** | #166 | `git worktree add --orphan`. A real edge case with a real fix — port it, and keep the test. |
 | Codex + OpenCode support | #162 | Ditto §5.3. |
 | Registry field 6 (`agent`), v0 rows = claude | #162 | The migration case that §2.1 must preserve forever. |
@@ -1204,10 +1209,10 @@ and belong in holt 0.1, not just in haus:
 
 | | Scope | Done when |
 |---|---|---|
-| **0.1** | Everything in §2 (contracts), §3 (landed, incl. patch-equivalence), §4 (slug identity), §5 (adapters), §10 (cutover). Commands: `list`, `new`, `child`, `spawn`, `resume`, `park`, `unpark`, `reap`, `reship`, `hook create/remove`, `doctor`. | The ported acceptance suite passes unmodified against `holt`; every haus caller is repointed at it (done, haus#201/#245) with no bash predecessor left to fall back to. |
-| **0.2** | §6 bootstrap (reflink, ports, secrets, trust), §7 `overlap`. | `holt doctor --write` produces a usable `.holt.toml` on a stranger's Node repo; `overlap` sees parked branches. |
+| **0.1** | Everything in §2 (contracts), §3 (landed, incl. patch-equivalence), §4 (slug identity), §5 (adapters), §10 (cutover). Commands: `list`, `new`, `child`, `spawn`, `resume`, `park`, `unpark`, `reap`, `reship`, `hook create/remove`, `doctor`. | The ported acceptance suite passes unmodified against `scruff`; every haus caller is repointed at it (done, haus#201/#245) with no bash predecessor left to fall back to. |
+| **0.2** | §6 bootstrap (reflink, ports, secrets, trust), §7 `overlap`. | `scruff doctor --write` produces a usable `.scruff.toml` on a stranger's Node repo; `overlap` sees parked branches. |
 | **0.3** | §8 `batch` with queue bisection; `bench try-batch` becomes a wrapper. | It names a culprit *pair* on a real red queue. |
-| **0.4** | §14 SDKs: `holt watch --json`, then TS, then Python/Swift, plus §14.5's `holt docs agent` + adapter `instructions_file` + `bootstrap.agent_instructions`. holt stays a binary — SDKs shell out. | A third party ships an agent UI whose only worktree logic is `holt` — and whose spawned agent knows `holt child`/`holt park` without a hand-written CLAUDE.md stanza. |
+| **0.4** | §14 SDKs: `scruff watch --json`, then TS, then Python/Swift, plus §14.5's `scruff docs agent` + adapter `instructions_file` + `bootstrap.agent_instructions`. scruff stays a binary — SDKs shell out. | A third party ships an agent UI whose only worktree logic is `scruff` — and whose spawned agent knows `scruff child`/`scruff park` without a hand-written CLAUDE.md stanza. |
 | later | Runtime backends, GUI-embeddable library split, §14.3 step 5 (remote transport). | — |
 
 ---
@@ -1221,13 +1226,13 @@ positioning against first-party worktree support — see §0's "moat, stated pla
 
 ## 14. Embedding: SDKs, and why the registry does not go on a URL
 
-The thesis (§0) is that holt is a *substrate* — something other people's UIs and
+The thesis (§0) is that scruff is a *substrate* — something other people's UIs and
 orchestrators are built on. That means SDKs in TS, Python, Swift and whatever
 else, and it settles a question that looks unrelated: whether the registry can
 live at a URL instead of a file.
 
-**It cannot, and it shouldn't.** The question was "can `$HOLT_REGISTRY` be an
-https:// address", and the answer is that a URL should address *holt*, not the
+**It cannot, and it shouldn't.** The question was "can `$SCRUFF_REGISTRY` be an
+https:// address", and the answer is that a URL should address *scruff*, not the
 registry file. Object storage holds a blob. It cannot run an occupancy provider,
 cannot emit a lifecycle event, and cannot enforce a single one of the three
 invariants. SDKs written against a shared blob would each reimplement park,
@@ -1238,7 +1243,7 @@ four copies of its bugs. The blob path also fails on its own terms:
 |---|---|
 | **Machine-local rows** | `path`/`main`/`parent` are absolute paths on one machine. Machine B's `pruneRegistry` runs `branchAlive` against a `main` that does not exist locally, gets false, and deletes machine A's rows. Invariant 1, violated silently. |
 | **No `flock` over HTTP** | Mutation is read-modify-write. Remote needs compare-and-swap (`If-Match`, `ifGenerationMatch`, non-fast-forward reject); a plain `PUT` loses an update every time two panes close at once — precisely the race the Go rewrite exists to kill (§2.1). |
-| **Hot path** | The statusline shells `holt list --json` on every bar refresh and both hooks touch it on pane open/close. A network RTT per redraw is not a cost, it's a defect. |
+| **Hot path** | The statusline shells `scruff list --json` on every bar refresh and both hooks touch it on pane open/close. A network RTT per redraw is not a cost, it's a defect. |
 | **Offline** | Invariant 2 says uncertainty resolves to *keep*. Pane close must not fail because wifi dropped. |
 
 Note also that a remote registry wants the **v1 one-object-per-row layout**
@@ -1246,25 +1251,25 @@ Note also that a remote registry wants the **v1 one-object-per-row layout**
 retires whole-table lost-update entirely. Building it on the TSV would mean
 inventing a distributed lock for a format that is already scheduled for
 replacement. So remote is a post-v1 question, gated behind the same
-`holt migrate`.
+`scruff migrate`.
 
 ### 14.1 The shape SDKs actually take
 
-**holt stays a binary.** SDKs shell out; there is no daemon, no port, no auth,
+**scruff stays a binary.** SDKs shell out; there is no daemon, no port, no auth,
 no supervisor, and no socket semantics to pin before a single consumer exists.
-Adding `holt serve` later is purely additive, because the protocol is the same
+Adding `scruff serve` later is purely additive, because the protocol is the same
 either way.
 
 ```
-holt-core (Go)        invariants, git, registry. Knows nothing about lsof or zellij.
+scruff-core (Go)        invariants, git, registry. Knows nothing about lsof or zellij.
   providers           occupancy: lsof | leases | /proc     forge: gh | glab
                       adapter: claude | codex | opencode | pi
   transports          exec + --json  ·  watch/NDJSON  ·  (later) unix socket · HTTP
 SDKs (ts/py/swift)    thin. Speak the wire schema. Hold a lease. That is all.
 ```
 
-A connection string selects a **transport**, not a file format — `holt("<path
-or url>")` means "exec the local binary" or "speak to a holt over HTTP", with
+A connection string selects a **transport**, not a file format — `scruff("<path
+or url>")` means "exec the local binary" or "speak to a scruff over HTTP", with
 one schema behind both, so an SDK written against local works remote unchanged.
 
 The frozen contract is therefore **§2.2's `--json` envelope**, not the registry
@@ -1276,19 +1281,19 @@ let a generator flatten them.
 
 ### 14.2 Callbacks invert into leases
 
-The obvious SDK shape has holt calling back into the host program —
+The obvious SDK shape has scruff calling back into the host program —
 `isStillActiveInPane: () => boolean`, consulted mid-sweep. That needs
 bidirectional RPC in every language, and it makes the sweep's correctness depend
 on a stranger's event loop being responsive.
 
-Invert it. The client *reports*; holt consumes. That is exactly §9.1's lease,
+Invert it. The client *reports*; scruff consumes. That is exactly §9.1's lease,
 and it dissolves the problem: a lease is a file, every language can write one,
 and a lease naming a live pid is self-maintaining. It also generalises past the
 zellij case that `lsof` was built around — an embedder's "session" is a
 connection, not a cwd, and only the embedder can see it.
 
 The callback shape does have a legitimate home, though: as a §6.5 **seam**, an
-`occupied` hook holt execs, which is a program rather than an in-process
+`occupied` hook scruff execs, which is a program rather than an in-process
 closure and therefore works identically from every language. See §9.1 — a hook
 is one more provider, and it inherits the presence/absence asymmetry along with
 everything else. Leases are for a client reporting on *itself*, per session, at
@@ -1296,7 +1301,7 @@ connection speed; a hook is for a machine that can answer for *everyone* at once
 and wants to replace `lsof` outright. An SDK wants both, for different things.
 
 `onOpen` and friends do **not** require a daemon either. They require a stream:
-`holt watch --json` emitting NDJSON on stdout is a lifecycle feed any language
+`scruff watch --json` emitting NDJSON on stdout is a lifecycle feed any language
 can consume over a subprocess pipe. That promotes `watch` from a §12 "later"
 item to the thing the SDKs are built on.
 
@@ -1304,8 +1309,8 @@ item to the thing the SDKs are built on.
 
 1. **Occupancy provider seam + lease/heartbeat** (§9.1) — *shipped*. Unblocks the
    SDKs and closes the container/Linux portability hole at the same time.
-2. **`holt watch --json`** — *shipped*. fsnotify on the registry, NDJSON out on
-   stdout: a `hello` header (`holt`, `schema`, `capabilities`), then `sync` for
+2. **`scruff watch --json`** — *shipped*. fsnotify on the registry, NDJSON out on
+   stdout: a `hello` header (`scruff`, `schema`, `capabilities`), then `sync` for
    every lane already alive, `ready`, then `created` / `parked` / `resumed` /
    `reaped` / `changed` as things change. This is `onOpen`.
    `created`/`resumed`/`reaped` are registry mutations, caught instantly.
@@ -1326,9 +1331,9 @@ item to the thing the SDKs are built on.
    `resumeInteractive` for a terminal app that wants to hand off the screen.
    Let it find what the schema is missing before three more languages pin
    the gaps.
-4. `holt docs agent` + the adapter `instructions_file` field + the
+4. `scruff docs agent` + the adapter `instructions_file` field + the
    `bootstrap.agent_instructions` step (§14.5) — ship alongside the TS SDK, so
-   "an embedder's only worktree logic is holt" (§12's 0.4 exit bar) is true of
+   "an embedder's only worktree logic is scruff" (§12's 0.4 exit bar) is true of
    the *agent's* knowledge too, not just the UI's.
 5. Python, Swift, Go, Rust — mechanical once TS has proven the wire schema.
    *shipped* (`sdk/python`, `sdk/swift`, `sdk/go`, `sdk/rust`). Go is the one
@@ -1356,7 +1361,7 @@ nothing LOCAL — registry or filesystem — fires when a PR merges. Three shape
 were on the table for that one —
 
 - **(a) registry-derived only.** A consumer that cares about landedness polls
-  `holt --json` itself, at whatever cadence it can afford.
+  `scruff --json` itself, at whatever cadence it can afford.
 - **(b) a forge poll on a TTL, folded into the same stream.**
 - **(c) both, with an event `kind` distinguishing which produced it.**
 
@@ -1381,31 +1386,31 @@ early (§14.1) is not needing a v2 of it for a long time, and the fields that
 save that are far cheaper to ship now, unused, than to retrofit once three
 languages have generated types against their absence.
 
-### 14.5 Teaching the agent holt exists — embedders with no CLAUDE.md
+### 14.5 Teaching the agent scruff exists — embedders with no CLAUDE.md
 
-§14.1–14.3 make holt *reachable* from any language. They say nothing about
+§14.1–14.3 make scruff *reachable* from any language. They say nothing about
 whether the **agent** an embedder spawns knows to use it. On Julien's machine
 that's solved by accident, not by design: a global `~/.claude/CLAUDE.md`,
 Nix-rendered, gets injected into every Claude Code session regardless of repo,
-and happens to carry a hand-written `holt child`/`holt park` stanza. A
+and happens to carry a hand-written `scruff child`/`scruff park` stanza. A
 third-party TUI built on the TS SDK has no such file, no Nix, no
 global-instructions injection point at all — and an agent that doesn't know
-`holt child` exists will run `git worktree add`, and one that doesn't know
-`holt park` exists will run `git stash`, landing exactly on the
+`scruff child` exists will run `git worktree add`, and one that doesn't know
+`scruff park` exists will run `git stash`, landing exactly on the
 shared-stash-stack footgun the README already spends a whole section warning
 about. A substrate whose whole pitch is owning worktree-lifecycle invariants
 can't leave "does the agent know the invariants exist" as an exercise for
 every embedder.
 
 **The instructions are not per-lane data.** They don't need §5.2's template
-variables — "use `holt child`, not `git worktree add`" is the same sentence on
+variables — "use `scruff child`, not `git worktree add`" is the same sentence on
 every repo, every lane, every machine. That means they aren't a lifecycle hook
 (§6.1) an embedder has to wire themselves; they're closer to a §6.3 built-in
 bootstrap step, and the text itself can be a single Markdown asset compiled
 into the binary (`go:embed`), not a network fetch or a template render.
 
 ```
-holt docs agent [--format=md|json]   # print the canonical instruction block
+scruff docs agent [--format=md|json]   # print the canonical instruction block
 ```
 
 `--format=json` returns `{"version": "...", "body": "..."}` so an embedder can
@@ -1430,24 +1435,24 @@ instructions_file = "CLAUDE.md"      # codex/opencode/pi/amp: "AGENTS.md"
 
 ```toml
 [bootstrap]
-agent_instructions = true   # append `holt docs agent`'s body into instructions_file
+agent_instructions = true   # append `scruff docs agent`'s body into instructions_file
 ```
 
-Idempotent means holt looks for a marker —
-`<!-- holt:agent-instructions v3 -->` … `<!-- /holt:agent-instructions -->` —
+Idempotent means scruff looks for a marker —
+`<!-- scruff:agent-instructions v3 -->` … `<!-- /scruff:agent-instructions -->` —
 in the target file and rewrites only that span, leaving whatever the embedder
 already wrote above and below it untouched. Same discipline as the trust-file
-seeding in the README's "Workspace trust is inherited, never invented": holt
+seeding in the README's "Workspace trust is inherited, never invented": scruff
 propagates a decision, it never invents or overwrites one. A repo with no
 instructions file yet gets one created containing just the marked block.
 
-`holt doctor` gets one more finding: an agent adapter with
+`scruff doctor` gets one more finding: an agent adapter with
 `instructions_file` set but no marker present in that file for the repo being
-inspected — "this agent won't know about `holt`; `holt doctor --write` to add
+inspected — "this agent won't know about `scruff`; `scruff doctor --write` to add
 it."
 
-**TS SDK surface is a single call:** `holt.agentInstructions()` execs
-`holt docs agent --format=json` and returns the typed envelope — no new
+**TS SDK surface is a single call:** `scruff.agentInstructions()` execs
+`scruff docs agent --format=json` and returns the typed envelope — no new
 transport, no new invariant, consistent with §14.1's "SDKs are thin."
 
 None of this is mandatory: an embedder can ignore it and hand-write their own

@@ -1,7 +1,7 @@
-//! Wire types for holt's frozen public contracts — SPEC.md §2.2 (`--json`) and
+//! Wire types for scruff's frozen public contracts — SPEC.md §2.2 (`--json`) and
 //! §14.3 step 2 (`watch --json`). Hand-ported from the Go source of truth
 //! (`internal/commands/json.go`, `internal/commands/watch.go`) rather than
-//! generated, because holt has no `go generate` step yet for this — see the
+//! generated, because scruff has no `go generate` step yet for this — see the
 //! SDK README for the drift risk that implies. `#[serde(rename = "...")]`
 //! and field names are the actual contract; keep them byte-identical to
 //! json.go's, not just shaped the same.
@@ -14,8 +14,8 @@
 
 use serde::{Deserialize, Serialize};
 
-/// holt's exit-code contract (SPEC.md §2.4). `REFUSED` vs `USAGE` is the one
-/// that matters to a caller: "holt declined to destroy something" vs "you
+/// scruff's exit-code contract (SPEC.md §2.4). `REFUSED` vs `USAGE` is the one
+/// that matters to a caller: "scruff declined to destroy something" vs "you
 /// asked wrong".
 pub mod exit_code {
     pub const OK: i32 = 0;
@@ -55,7 +55,7 @@ pub mod landed_via {
     pub const MERGE_TREE_EMPTY: &str = "merge-tree-empty";
 }
 
-/// How (and how confidently) holt determined a branch's landed-ness. `via`
+/// How (and how confidently) scruff determined a branch's landed-ness. `via`
 /// is `None` when `verdict` didn't need one (e.g. `"no"`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Landed {
@@ -68,7 +68,7 @@ pub struct Landed {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PostMergeAhead {
     pub commits: u64,
-    /// PR number, or `0` when there isn't one — holt doesn't null this field
+    /// PR number, or `0` when there isn't one — scruff doesn't null this field
     /// (`internal/commands/json.go`'s `jsonPostMerge`), unlike the envelope-
     /// level `pr`. Treat `0` as "none" here, not as PR #0.
     pub pr: u64,
@@ -80,7 +80,7 @@ pub struct PostMergeAhead {
 ///
 /// `occupied` and `dirty` are `Option<bool>` on purpose: `None` means "not
 /// determined" (no lsof, no forge, cache miss), which is categorically
-/// different from `false`. Every consumer bug in holt's bash-era statusline
+/// different from `false`. Every consumer bug in scruff's bash-era statusline
 /// came from collapsing that `None` into `false` — do not do that here
 /// either.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -103,22 +103,22 @@ pub struct Lane {
     pub last_commit: String,
 }
 
-/// The `holt --json` / `holt list --json` envelope — byte-identical between
+/// The `scruff --json` / `scruff list --json` envelope — byte-identical between
 /// the two spellings (SPEC.md §2.2).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Envelope {
-    pub holt: String,
+    pub scruff: String,
     pub schema: u32,
     pub lanes: Vec<Lane>,
     pub warnings: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------
-// `holt watch --json` — SPEC.md §14.3 step 2, §14.4.
+// `scruff watch --json` — SPEC.md §14.3 step 2, §14.4.
 
 /// Known values of [`WatchLine::kind`]. Closed set, same discipline as
 /// [`lane_state`]: additions are minor, removals major. An unknown kind is
-/// noise to ignore, not an error to fail on — that's what lets holt add
+/// noise to ignore, not an error to fail on — that's what lets scruff add
 /// `landed` / `source: "forge"` later without breaking a build pinned to
 /// schema 1 (SPEC.md §14.4).
 pub mod watch_kind {
@@ -138,7 +138,7 @@ pub mod watch_kind {
     pub const WARNING: &str = "warning";
 }
 
-/// One line of `holt watch --json`. A single flat struct rather than a
+/// One line of `scruff watch --json`. A single flat struct rather than a
 /// tagged union because that is exactly its wire shape — `kind` says which
 /// of the other fields are populated, mirroring `encoding/json`'s normal
 /// "one struct, some fields empty" idiom rather than forcing a match on
@@ -150,19 +150,19 @@ pub struct WatchLine {
     pub kind: String,
     /// Monotonic across the WHOLE stream, hello included — lets a consumer
     /// fanning this out over its own transport (e.g. websockets) detect a
-    /// dropped line without holt knowing anything about that transport.
+    /// dropped line without scruff knowing anything about that transport.
     pub seq: u64,
 
     // Hello-only fields.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub holt: Option<String>,
+    pub scruff: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schema: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<Vec<String>>,
 
     // Event fields (everything but hello).
-    /// RFC3339 UTC: when THIS holt process observed the change, not
+    /// RFC3339 UTC: when THIS scruff process observed the change, not
     /// necessarily when it happened at the source. Absent on hello.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ts: Option<String>,
@@ -187,12 +187,12 @@ impl WatchLine {
         self.kind == watch_kind::HELLO
     }
 
-    /// Narrows a line from [`crate::HoltClient::watch`] to a [`WatchEvent`],
+    /// Narrows a line from [`crate::ScruffClient::watch`] to a [`WatchEvent`],
     /// returning `None` for the one line that isn't an event — the `hello`
     /// header. The Rust spelling of the TS SDK's
     /// `isWatchHello(line) ? … : line as WatchEvent`, for callers of the
     /// full stream who want the narrower type
-    /// [`crate::HoltClient::watch_lane`] hands out.
+    /// [`crate::ScruffClient::watch_lane`] hands out.
     pub fn into_event(self) -> Option<WatchEvent> {
         if self.is_hello() {
             return None;
@@ -209,9 +209,9 @@ impl WatchLine {
 }
 
 /// Every line of the stream EXCEPT the `hello` header: the header-only
-/// fields (`holt`, `schema`, `capabilities`) are gone rather than left
+/// fields (`scruff`, `schema`, `capabilities`) are gone rather than left
 /// `None`, so a value of this type cannot be a version header.
-/// [`crate::HoltClient::watch_lane`] yields these — a stream already scoped
+/// [`crate::ScruffClient::watch_lane`] yields these — a stream already scoped
 /// to one lane never carries a `hello`, and a caller shouldn't have to
 /// re-prove that before reading `lane`. Same split the TS/Python SDKs get
 /// from `WatchLine = WatchHello | WatchEvent`, and Swift from its
@@ -228,7 +228,7 @@ pub struct WatchEvent {
     /// expected on a stream this narrow. See [`WatchLine::seq`].
     pub seq: u64,
 
-    /// RFC3339 UTC: when THIS holt process observed the change, not
+    /// RFC3339 UTC: when THIS scruff process observed the change, not
     /// necessarily when it happened at the source.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ts: Option<String>,
