@@ -115,12 +115,31 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 
 		if e.reapBranch(entry.Main, entry.Branch) {
 			_ = e.Reg.Delete(entry.Path)
+			// The lane is gone, so a fin still asking you to go to it is asking
+			// about somewhere that no longer exists — its `Go to lane` action
+			// would run `holt focus` against a name nothing can match. Being
+			// reaped IS this lane's answer, so take the fin down and drop the
+			// marker, which is one of the two shapes nothing else would ever
+			// clear (notify.go's section header has both).
+			//
+			// The marker is the gate on the trill launch, not an afterthought
+			// to it: it reports whether there WAS a fin, and the ordinary reap
+			// is of a lane that ended its turn cleanly and has nothing on the
+			// ledge. A sweep of forty lanes launches nothing.
+			if key := askKey(laneID(entry.Main, entry.Name()), nil); clearAskOutstanding(key) {
+				if bin := trillBinary(); bin != "" {
+					_ = runTrill(bin, []string{"resolve", key})
+				}
+			}
 			res.Reaped = append(res.Reaped, entry.Name()+" ("+filepath.Base(entry.Main)+")")
 		} else {
 			e.noteRelanded(&res, entry)
 		}
 	}
 	e.pruneRegistry()
+	// Housekeeping for the same reason pruneRegistry is here: a sweep is the
+	// only thing that runs regularly and is allowed to throw state away.
+	pruneStaleAsks()
 	return res
 }
 

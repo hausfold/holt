@@ -183,11 +183,23 @@ func (e *Env) laneFor(payload map[string]any) (name, lane string) {
 	if rows, err := e.Reg.Load(); err == nil {
 		for _, row := range rows {
 			if cwd == row.Path || strings.HasPrefix(cwd, row.Path+string(filepath.Separator)) {
-				return row.Name, filepath.Base(row.Main) + "/" + row.Name
+				return row.Name, laneID(row.Main, row.Name)
 			}
 		}
 	}
 	return filepath.Base(cwd), ""
+}
+
+// laneID is how every fin, banner action and `holt focus` argument spells one
+// lane: qualified by the main checkout's basename, because `holt child` puts
+// one lane name in two repos. One function, because the reap path builds it
+// from a registry row and the hook path from a payload's cwd, and the two must
+// agree byte for byte or a fin outlives the lane it named.
+func laneID(main, name string) string {
+	if main == "" || name == "" {
+		return ""
+	}
+	return filepath.Base(main) + "/" + name
 }
 
 // trillBinary resolves the trill CLI without assuming anything about the
@@ -260,10 +272,30 @@ func askKey(lane string, payload map[string]any) string {
 // ordinary tool call reads one directory and stops.
 //
 // It is a CACHE, not a record. Anything can take a fin down without telling
-// holt — the ✕, a pill, an eviction, a relaunch — so a marker may outlive its
-// fin. The cost of a stale one is a single no-op `trill resolve` (idempotent
-// by design) the next time that lane runs a tool, after which the marker is
-// gone. Nothing here may ever be treated as the truth about what is on screen.
+// holt — the ✕, a pill, an eviction, a relaunch, a desktop that clears a lane's
+// fin when you go and look at it — so a marker may outlive its fin. The cost of
+// a stale one is a single no-op `trill resolve` (idempotent by design) the next
+// time that lane runs a tool, after which the marker is gone. Nothing here may
+// ever be treated as the truth about what is on screen.
+//
+// ── who cleans up when that "next tool call" never comes ────────────────────
+// The sentence above quietly assumed every marker gets one. Two shapes never
+// do, and both leak forever:
+//
+//   * a lane blocked on you when its pane was closed. It is answered by being
+//     REAPED, not by running another tool, so its marker outlives the lane, the
+//     branch and the checkout.
+//   * a pane outside every lane, keyed by session id. When that session ends
+//     there is nothing left that could ever match the key again.
+//
+// Left alone they accumulate one per abandoned question — 53 of them on the
+// machine this was found on — and the dir is then never empty, which turns the
+// whole gate into "yes, something is waiting" on every tool call in every pane
+// for the life of the machine: exactly the registry read and Trill.app launch
+// it exists to avoid. So the sweep that already runs on every listing prunes
+// them, from both ends: reapSweep clears a lane's marker the moment it reaps
+// that lane, and pruneStaleAsks drops anything older than askMarkerMaxAge,
+// which is the only answer available for the session-keyed half.
 
 func asksDir() string { return filepath.Join(stateDir(), "asks") }
 
@@ -294,7 +326,17 @@ func markAskOutstanding(key string) {
 
 // clearAskOutstanding drops one key's marker and reports whether there was one
 // — which is also the answer to "was this lane the one waiting?".
+//
+// The empty key is not a key. `askMarker("")` is the asks DIRECTORY, so
+// without this line an unnamed lane would delete the whole dir the moment it
+// happened to be empty — and a consumer reading it (see the section header)
+// would get an ENOENT where it expects "nothing is waiting". The two hook
+// callers check before calling; the sweep's does not, because this is where
+// the check belongs.
 func clearAskOutstanding(key string) bool {
+	if key == "" {
+		return false
+	}
 	return os.Remove(askMarker(key)) == nil
 }
 
@@ -308,4 +350,38 @@ func anyAskOutstanding() bool {
 	defer dir.Close()
 	names, err := dir.Readdirnames(1)
 	return err == nil && len(names) > 0
+}
+
+// askMarkerMaxAge is how long a marker may sit unanswered before the sweep
+// assumes nothing will ever answer it.
+//
+// A day, and the direction of the error is what picks it: pruning early costs
+// one fin that stays on trill's ledge until its `done` replaces it at the end
+// of the turn (same key, so it does), while pruning late costs every pane on
+// the machine the expensive path. A question a whole day old is not one the
+// resolve path is still racing to take down.
+const askMarkerMaxAge = 24 * time.Hour
+
+// pruneStaleAsks drops markers nothing is going to clear. See the section
+// header: this is the backstop for the session-keyed half, and for any lane
+// whose fin outlived the sweep that reaped it.
+//
+// Best-effort throughout. It runs inside a sweep whose job is elsewhere, and a
+// marker dir that cannot be read is exactly the "no fin is up" answer the gate
+// already gives. Entries are unlinked one by one and the directory itself is
+// never touched — something else on the machine may be watching it.
+func pruneStaleAsks() {
+	dir := asksDir()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-askMarkerMaxAge)
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil || info.ModTime().After(cutoff) {
+			continue
+		}
+		_ = os.Remove(filepath.Join(dir, entry.Name()))
+	}
 }

@@ -1,10 +1,12 @@
 package commands
 
 import (
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hausfold/holt/internal/registry"
 )
@@ -217,5 +219,78 @@ func TestAskMarkerStaysInsideTheStateDir(t *testing.T) {
 		if got := filepath.Dir(askMarker(key)); got != asksDir() {
 			t.Fatalf("key %q escaped to %q", key, got)
 		}
+	}
+}
+
+// The leak the gate above could not survive: two shapes of marker never get
+// the "next tool call" that clears them — a lane reaped while it was blocked,
+// and a pane outside every lane whose session has ended. One each per
+// abandoned question, and the dir is then never empty again, which makes the
+// cheap answer permanently the expensive one.
+func TestStaleAskMarkersArePruned(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("HOLT_STATE", "")
+
+	markAskOutstanding("holt/alpha/sparkle")
+	markAskOutstanding("holt/session/7f3c")
+	old := time.Now().Add(-askMarkerMaxAge - time.Hour)
+	if err := os.Chtimes(askMarker("holt/session/7f3c"), old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	pruneStaleAsks()
+
+	if _, err := os.Stat(askMarker("holt/session/7f3c")); !os.IsNotExist(err) {
+		t.Fatal("a marker nothing will ever clear must not survive the sweep")
+	}
+	// And the live half is untouched: a lane blocked on you five minutes ago is
+	// exactly what the gate is for.
+	if !anyAskOutstanding() {
+		t.Fatal("a fresh marker must survive the sweep")
+	}
+}
+
+// A marker at the age boundary is kept, because the direction of the error
+// matters: pruning early costs one fin that its own `done` replaces at the end
+// of the turn, pruning late costs every pane the expensive path.
+func TestAskMarkerPruneKeepsAnythingYoungerThanTheCutoff(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("HOLT_STATE", "")
+
+	markAskOutstanding("holt/alpha/sparkle")
+	young := time.Now().Add(-askMarkerMaxAge + time.Hour)
+	if err := os.Chtimes(askMarker("holt/alpha/sparkle"), young, young); err != nil {
+		t.Fatal(err)
+	}
+
+	pruneStaleAsks()
+
+	if !anyAskOutstanding() {
+		t.Fatal("a marker inside the cutoff must survive")
+	}
+}
+
+// A missing state dir is the ordinary case on a machine that has never had a
+// fin, and the prune runs inside a sweep whose job is elsewhere.
+func TestAskMarkerPruneSurvivesAMissingDir(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("HOLT_STATE", "")
+	pruneStaleAsks()
+}
+
+// The reap path spells a lane the same way the hook path does. If these two
+// ever disagree, a reaped lane's fin outlives it in silence — nothing else on
+// the machine can name that key.
+func TestLaneIDMatchesTheHookPathsSpelling(t *testing.T) {
+	if got := laneID("/Users/x/code/hausfold.co", "ci-main-branch"); got != "hausfold.co/ci-main-branch" {
+		t.Fatalf("laneID = %q", got)
+	}
+	if got := askKey(laneID("/Users/x/code/haus", "sparkle"), nil); got != "holt/haus/sparkle" {
+		t.Fatalf("askKey = %q", got)
+	}
+	// A row that is missing either half names no lane, and must not become
+	// `holt//sparkle` — a key that would clear nothing and mark nothing.
+	if laneID("", "sparkle") != "" || laneID("/Users/x/code/haus", "") != "" {
+		t.Fatal("half a row is not a lane")
 	}
 }
