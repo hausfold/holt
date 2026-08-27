@@ -273,25 +273,32 @@ three trusted publishers have to be re-entered before the tag.
 
 ## 6. Phase 4 — the family and the web
 
-Independent of each other; run them as parallel lanes via `holt child`.
+Independent of each other; run them as parallel lanes via `scruff child`.
 
 | repo | what moves |
 |---|---|
-| **workshop** | `AGENTS.md` (the family table, the lane section, the release rules), `docs/` (incl. `agent-surface.md`), `test/`, `script/`, and `bench`'s `FAMILY` entry + release path. **⚠️ `FAMILY` entries ARE directory names** (`local_src` → `$ROOT/$1`), so flipping the entry means renaming `~/code/workshop/holt` → `scruff` on disk — see the warning below |
+| **workshop** | `AGENTS.md` (the family table, the lane section, the release rules), `docs/` (incl. `agent-surface.md`), `test/`, `script/`, and `bench`'s `FAMILY` entry + release path. **⚠️ `FAMILY` entries ARE directory names** (`local_src` → `$ROOT/$1`), so flipping the entry meant renaming `~/code/workshop/holt` → `scruff` on disk — done 2026-08-27 in workshop#477, which also deleted the transitional `repo_dir` arm workshop#475 had added to tolerate both spellings |
 | **hausfold.co** | `content/docs/haus/rooms/ai.mdx` (59), `reference/options.mdx` (28), `internals/contributing.mdx`, `agent-rebuilds.mdx`; `src/app/page.tsx` (the family index entry + `data-accent`), `src/lib/shared.ts:37`. **⚠️ The CSS accent token `--a-holt` is defined in `public/hausfold.css` and consumed in `src/app/global.css:966` as `--nb-token-link` — rename it in both or a doc-link colour silently falls back.** No page slug contains `holt`, so **no redirects are needed** |
 | **trill** | `ARCHITECTURE.md`, `AGENTS.md`, `CLAUDE.md`, `.gitignore` comment, and two doc-comments in `Trill/Platform/SystemIntegration.swift` (one of which states the `$HOME/.cache` registry fact — keep it accurate per decision 2) |
 | **homebrew-tap / perch / pounce / nebelung** | prose only, 12 refs total |
 | **~/.config/nix** | the host file: `Bash(holt:*)` in the permission list (added under `| unique`, so nothing ever removes it — add `Bash(scruff:*)` and a one-release `del` for the old one), the two `holt hook create|remove` commands (assignment, self-healing), the `holt session` palette command, the namer-adapter paths, and the `/handoff` prose. Then `nix flake update` for the renamed input — **never hand-merge `flake.lock`** |
 
-**⚠️ Renaming the workshop checkout is a worktree-repair operation, not a `mv`.**
-`bench`'s `FAMILY` entry is a directory name, so `bench release scruff <v>` only
-works once `~/code/workshop/holt` is `~/code/workshop/scruff` — and every lane of
-this repo holds an ABSOLUTE gitdir pointing into the old path
-(`<main>/.git/worktrees/<n>`), as does each of those worktrees' `gitdir` file
-pointing back. Moving the main checkout with lanes open strands all of them. Do
-it the same way §8.2 does the base: close the panes, `mv`, then `git worktree
-repair` from the renamed checkout — or simply reap every lane first and rename an
-empty-handed repo. It is the one Phase 4 step that can lose access to work.
+**✅ The workshop checkout was renamed on 2026-08-27** (workshop#477). It went
+the empty-handed way: every lane of this repo was reaped first, so the `mv` had
+no worktrees to strand and `git worktree repair` was a no-op.
+
+**The hazard it avoided still applies to §8.2's base move.** `bench`'s `FAMILY`
+entry is a directory name, so `bench release scruff <v>` only works against
+`~/code/workshop/scruff` — and every lane holds an ABSOLUTE gitdir pointing into
+the main checkout (`<main>/.git/worktrees/<n>`), as does each of those worktrees'
+`gitdir` file pointing back. Moving a checkout with lanes open strands all of
+them. Reap every lane first and rename an empty-handed repo, or close the panes,
+`mv`, then `git worktree repair` from the renamed checkout. It is the one step in
+this plan that can lose access to work.
+
+**One thing the `mv` does NOT move**, and deliberately: lane checkouts still live
+under `~/.cache/claude-worktrees/holt/`. That path is scruff's own naming, it is
+decision 2's, and it waits for 1.1.0.
 
 **⚠️ `ops` is different — do not sed it.** `ops/scoreboard/data/*.json` are dated
 snapshots and `PRESENCE.md` is a historical register; rewriting them falsifies
@@ -389,7 +396,7 @@ this rename.
 
 ## 8.5 Where the cutover stands, and whose step is next
 
-Updated 2026-08-27, after Phase 3 merged (scruff#72). The phases above say what
+Updated 2026-08-27, after Phase 5 merged (workshop#477). The phases above say what
 each step IS; this says which are done and who holds the next one. Keep it
 current — a plan that can't say where it stopped gets re-derived from scratch by
 whoever picks it up.
@@ -400,10 +407,10 @@ whoever picks it up.
 | 2 | haus flips (§4) | — | ✅ shipped, rebuilt on this machine |
 | 3 | the repo/module/package/`--json` rename (§5) | — | ✅ merged, scruff#72. GitHub repos renamed; both old names left unclaimed |
 | 4 | **OIDC trusted publishers re-entered** on npm, PyPI, crates | **the user** | ⏳ **blocks the tag** — new package names have no entry to edit (`docs/releasing.md`) |
-| 5 | the family and the web (§6) | an agent lane | ⏳ workshop, hausfold.co, trill, ops, four prose repos — one PR each |
-| 6 | haus's `flake.nix` input URL → `github:hausfold/scruff` | an agent lane | ⏳ resolves through GitHub's redirect meanwhile, so it rides with #5's rebuild |
+| 5 | the family and the web (§6) | — | ✅ all merged 2026-08-27 — workshop#475 + #477 (incl. the checkout `mv`), hausfold.co#171, trill#47, ops#12, .github#25, perch#117, pounce#110, nebelung#51, homebrew-tap#20. snug was not in §6's table and took its own: snug#5 |
+| 6 | haus's `flake.nix` input URL → `github:hausfold/scruff` | — | ✅ merged, haus#551 — no longer leaning on GitHub's redirect |
 | 7 | the host file (`~/.config/nix/hosts/mbp/default.nix`) | **the user** | ⏳ `Bash(holt:*)` needs a `del` (added under `\| unique`, so nothing removes it), plus the two `holt hook create\|remove` commands, the `holt session` palette entry and the namer-adapter paths — then `haus rebuild` |
-| 8 | `bench release scruff 1.0.0` | **the user** | ⏳ gated on 4 and 5. ⚠️ resolves the repo by DIRECTORY name — `~/code/workshop/holt` must be renamed first, and that is a `git worktree repair` job (§6) |
+| 8 | `bench release scruff 1.0.0` | **the user** | ⏳ **gated on 4 alone now** — 5 is done, and the DIRECTORY name it resolves by is `~/code/workshop/scruff` as of workshop#477 |
 | 9 | deprecate the old packages in place (§7) | **the user** | ⏳ after the 1.0.0 publish. Never yank |
 | 10 | `scruff 1.1.0` — the base move and the end of compat (§8) | an agent lane | ⏳ not before a week of green rebuilds |
 
@@ -433,7 +440,7 @@ whoever picks it up.
 
 ## 10. Do it with the tool
 
-Every phase after P1 is one lane per repo, spawned with `holt child <repo>` —
-which is holt's own dogfooding rule and the only way the statusline can see the
-child PRs while this is in flight. The last thing this tool does under its
-old name is open the lanes that rename it.
+Every phase after P1 is one lane per repo, spawned with `scruff child <repo>` —
+which is scruff's own dogfooding rule and the only way the statusline can see
+the child PRs while this is in flight. The last thing this tool did under its
+old name was open the lanes that renamed it.
