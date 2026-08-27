@@ -129,7 +129,7 @@ public struct HoltLane: Codable, Hashable, Sendable {
     public let branch: String
     public let path: String
     public let parent: String
-    /// The client this lane opens (`claude` | `codex` | `opencode`, or
+    /// The client this lane opens (`claude` | `codex` | `opencode` | `pi`, or
     /// whatever adapters are configured) — never the lane's own identity.
     public let agent: String
     public let state: LaneState

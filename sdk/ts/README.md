@@ -55,7 +55,7 @@ for await (const event of holt.watchLane(dir)) {
 
 **Interactive (a real terminal TUI).** `newInteractive` / `resumeInteractive`
 inherit the calling process's stdio, so holt execs the configured agent
-client (`claude`, `codex`, `opencode`) and takes over the real terminal —
+client (`claude`, `codex`, `opencode`, `pi`) and takes over the real terminal —
 control returns to you when that session ends.
 
 ```ts

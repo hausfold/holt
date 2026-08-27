@@ -30,9 +30,10 @@ import (
 // a FLAG: `claude "- update the README"` dies with `error: unknown option '-
 // update the README'` before the pane has drawn anything, and the same is true
 // of any prompt starting with a dash. So every client's argv here ends its
-// option parsing before the prompt — `--` for the two positional-prompt clients
-// (commander and clap both honour it), and `--prompt=<text>` for opencode, whose
-// yargs would read a dashed VALUE after a separate `--prompt` as another flag.
+// option parsing before the prompt — `--` for the three positional-prompt
+// clients (commander, clap and pi's own parser all honour it), and
+// `--prompt=<text>` for opencode, whose yargs would read a dashed VALUE after a
+// separate `--prompt` as another flag.
 // Never go back to appending the prompt bare.
 
 // agentSpec is what holt needs to know about a client. The 0.2 adapter loader
@@ -93,6 +94,27 @@ func specFor(id string) (agentSpec, bool) {
 			resume: []string{"opencode", "--continue"},
 			last:   []string{"opencode", "--continue"},
 		}, true
+	case "pi":
+		return agentSpec{
+			id: "pi",
+			// pi attaches a local file by naming it `@path` in the message
+			// itself rather than through a flag, and its usage line is
+			// `pi [options] [--] [@files...] [messages...]` — so the attachment
+			// goes AFTER the `--` and before the prompt, in that order.
+			start: func(image, prompt string) []string {
+				if image != "" {
+					return []string{"pi", "--", "@" + image, prompt}
+				}
+				return []string{"pi", "--", prompt}
+			},
+			open: []string{"pi"},
+			// `pi -r` opens the session picker for the current project, and
+			// `pi -c` continues the newest session there — the same two rungs
+			// codex has, spelled shorter.
+			resume:    []string{"pi", "--resume"},
+			last:      []string{"pi", "--continue"},
+			imageFlag: true,
+		}, true
 	}
 	return agentSpec{}, false
 }
@@ -114,7 +136,7 @@ func resumeArgv(spec agentSpec, own, pick bool) []string {
 func resolveAgent(id string) (agentSpec, error) {
 	spec, ok := specFor(id)
 	if !ok {
-		return spec, exitcode.Usagef("unknown agent %q (expected claude, codex, or opencode)", id)
+		return spec, exitcode.Usagef("unknown agent %q (expected claude, codex, opencode, or pi)", id)
 	}
 	if _, err := exec.LookPath(id); err != nil {
 		return spec, exitcode.Usagef("%s is unavailable — install it, then try again", id)
@@ -239,8 +261,9 @@ func startArgv(spec agentSpec, image, prompt string) []string {
 //   - Every failure is silent and harmless. A missing/unreadable/unparseable
 //     `~/.claude.json` costs one trust prompt, which is exactly the status quo;
 //     nothing here is worth failing a spawn over.
-//   - It is a no-op for every other client. Codex and OpenCode have no
-//     equivalent, and holt must not invent one.
+//   - It is a no-op for every client with no such prompt. Codex and OpenCode
+//     have none, and holt must not invent one. pi does, and gets its own
+//     propagation below — a different file, a different shape, the same rule.
 //
 // The write is read-modify-write on a file Claude Code also owns and rewrites
 // wholesale, with no lock either side — so a Claude instance writing in the same
@@ -250,9 +273,15 @@ func startArgv(spec agentSpec, image, prompt string) []string {
 // keys once (Go maps have no order); numbers are decoded as json.Number so the
 // re-encode can't turn `1778838900185` into `1.778838900185e+12`.
 func trustWorktree(agentID, main, dir string) {
-	if agentID != "claude" {
-		return
+	switch agentID {
+	case "claude":
+		trustWorktreeClaude(main, dir)
+	case "pi":
+		trustWorktreePi(main, dir)
 	}
+}
+
+func trustWorktreeClaude(main, dir string) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = os.Getenv("HOME")
@@ -309,6 +338,85 @@ func trustWorktree(agentID, main, dir string) {
 		return
 	}
 	_ = os.Rename(tmp.Name(), path)
+}
+
+// trustWorktreePi is the same favour for pi, whose trust model is shaped
+// differently in the one way that matters here: pi's `~/.pi/agent/trust.json`
+// is a flat path → bool map and it DOES inherit from a parent folder, so a
+// `{"~/code": true}` covers every repo underneath it. That inheritance is also
+// exactly why a lane still prompts: holt's checkouts live at
+// `~/.cache/claude-worktrees/<repo>/<name>`, outside whatever tree the user
+// trusted, so no ancestor of the new directory has a decision saved.
+//
+// So the lookup walks the MAIN checkout's ancestors for the nearest saved
+// decision — the same question pi itself would ask of the main checkout — and
+// copies it onto the worktree only when the answer is yes. A saved `false`
+// nearer the repo than a `true` further up means the user said no, and no is
+// propagated by writing nothing at all: the lane prompts, which is what an
+// untrusted repo should do.
+//
+// Same three narrowings as the Claude path, and the same blast radius: every
+// failure here costs one trust prompt. The file is small and pi's own
+// (`/trust` writes it), so it is re-encoded whole with two-space indent.
+func trustWorktreePi(main, dir string) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = os.Getenv("HOME")
+	}
+	path := filepath.Join(home, ".pi", "agent", "trust.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	var doc map[string]bool
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return
+	}
+	if !piTrusted(doc, main) {
+		return
+	}
+	if doc[dir] {
+		return // already there; don't rewrite the file for nothing
+	}
+	doc[dir] = true
+
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(doc); err != nil {
+		return
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".trust.json.holt-*")
+	if err != nil {
+		return
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(buf.Bytes()); err != nil {
+		tmp.Close()
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		return
+	}
+	_ = os.Rename(tmp.Name(), path)
+}
+
+// piTrusted answers pi's own question for a path: the NEAREST saved decision on
+// that folder or an ancestor wins, so a `false` on the repo beats a `true` on
+// the directory above it. Walking stops at the filesystem root, which
+// filepath.Dir reports by returning its argument unchanged.
+func piTrusted(doc map[string]bool, path string) bool {
+	for p := filepath.Clean(path); ; {
+		if v, ok := doc[p]; ok {
+			return v
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return false
+		}
+		p = parent
+	}
 }
 
 // ── where a lane's conversation lives ────────────────────────────────────────

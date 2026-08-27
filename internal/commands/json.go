@@ -16,7 +16,7 @@ import (
 //
 // The array is `lanes`, not `worktrees`, because a parked entry has no checkout
 // on disk at all — the branch is the durable artifact. `agent` inside each lane
-// keeps its own meaning: the CLIENT (claude | codex | opencode), never the lane.
+// keeps its own meaning: the CLIENT (claude | codex | opencode | pi), never the lane.
 //
 // The nullable fields are the part that matters. `occupied`, `dirty` and `pr`
 // are pointers so that "not determined" (no lsof, no forge, cache miss) is

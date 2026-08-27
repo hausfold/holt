@@ -1445,7 +1445,7 @@ EOF
 @test "agent start: a prompt starting with a dash reaches the client as text" {
   local prompt='- update the README
 - and its footer'
-  for client in claude codex opencode; do
+  for client in claude codex opencode pi; do
     cat >"$BIN/$client" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$@"

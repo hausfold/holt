@@ -63,7 +63,7 @@ async for event in holt.watch_lane(lane_dir):
 
 **Interactive.** `new_interactive` / `resume_interactive` inherit the
 calling process's stdio, so when holt execs the configured agent client
-(`claude`, `codex`, `opencode`) it takes over the real terminal — same as
+(`claude`, `codex`, `opencode`, `pi`) it takes over the real terminal — same as
 running `holt new` by hand — and control returns to you when that session
 ends.
 

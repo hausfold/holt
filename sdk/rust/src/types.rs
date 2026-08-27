@@ -91,7 +91,7 @@ pub struct Lane {
     pub branch: String,
     pub path: String,
     pub parent: String,
-    /// The client this lane opens (`claude` | `codex` | `opencode`, or
+    /// The client this lane opens (`claude` | `codex` | `opencode` | `pi`, or
     /// whatever adapters are configured) — never the lane's own identity.
     pub agent: String,
     /// See [`lane_state`] for known values.
