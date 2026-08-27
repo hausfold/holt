@@ -396,8 +396,8 @@ this rename.
 
 ## 8.5 Where the cutover stands, and whose step is next
 
-Updated 2026-08-27, after Phase 5 merged (workshop#477). The phases above say what
-each step IS; this says which are done and who holds the next one. Keep it
+Updated 2026-08-27, after the family sweep (workshop#477) and the straggler
+pass (scruff#76). The phases above say what each step IS; this says which are done and who holds the next one. Keep it
 current — a plan that can't say where it stopped gets re-derived from scratch by
 whoever picks it up.
 
@@ -406,13 +406,22 @@ whoever picks it up.
 | 1 | scruff 0.5.0, bilingual (§3) | — | ✅ released |
 | 2 | haus flips (§4) | — | ✅ shipped, rebuilt on this machine |
 | 3 | the repo/module/package/`--json` rename (§5) | — | ✅ merged, scruff#72. GitHub repos renamed; both old names left unclaimed |
+| 3b | the old-name strings the binary still **said** | — | ⏳ scruff#76. The tart refusal asked for `HOLT_TART_BASE` (while the next line of the same message showed `SCRUFF_TART_BASE`), the ejected adapter template pointed at `~/.config/holt`, the no-`lsof` sweep warning named `HOLT_OCCUPANCY`. Output, not comments — the three places a 1.0.0 binary would still teach a stranger the dead name |
 | 4 | **OIDC trusted publishers re-entered** on npm, PyPI, crates | **the user** | ⏳ **blocks the tag** — new package names have no entry to edit (`docs/releasing.md`) |
-| 5 | the family and the web (§6) | — | ✅ all merged 2026-08-27 — workshop#475 + #477 (incl. the checkout `mv`), hausfold.co#171, trill#47, ops#12, .github#25, perch#117, pounce#110, nebelung#51, homebrew-tap#20. snug was not in §6's table and took its own: snug#5 |
+| 5 | the family and the web (§6) | — | ✅ all merged 2026-08-27 — workshop#475 + #477 (incl. the checkout `mv`), hausfold.co#171, trill#47, ops#12, .github#25, perch#117, pounce#110, nebelung#51, homebrew-tap#20. snug was not in §6's table and took its own: snug#5. **Two follow-ups open:** hausfold.co#172 (the generated options page was three haus renders behind, so #171 couldn't reach the `scruff` prose inside it) and ops#13 (a comment saying the scoreboard series changes key at the rename) |
 | 6 | haus's `flake.nix` input URL → `github:hausfold/scruff` | — | ✅ merged, haus#551 — no longer leaning on GitHub's redirect |
-| 7 | the host file (`~/.config/nix/hosts/mbp/default.nix`) | **the user** | ⏳ `Bash(holt:*)` needs a `del` (added under `\| unique`, so nothing removes it), plus the two `holt hook create\|remove` commands, the `holt session` palette entry and the namer-adapter paths — then `haus rebuild` |
+| 7 | the host file (`~/.config/nix/hosts/mbp/default.nix`) | **the user** | ⏳ **the last live `holt` on this machine.** Verified 2026-08-27: `~/.claude/settings.json` holds exactly one `holt` string — the `Bash(holt:*)` permission — and all six hooks are `scruff`, firing once each. `Bash(holt:*)` needs a `del` (added under `\| unique`, so nothing removes it), plus the two `holt hook create\|remove` commands, the `holt session` palette entry and the namer-adapter paths — then `haus rebuild` |
 | 8 | `bench release scruff 1.0.0` | **the user** | ⏳ **gated on 4 alone now** — 5 is done, and the DIRECTORY name it resolves by is `~/code/workshop/scruff` as of workshop#477 |
 | 9 | deprecate the old packages in place (§7) | **the user** | ⏳ after the 1.0.0 publish. Never yank |
 | 10 | `scruff 1.1.0` — the base move and the end of compat (§8) | an agent lane | ⏳ not before a week of green rebuilds |
+
+**The code half is done; what's left is yours.** Every repo that had a live
+`holt` reference is merged or has a PR open, and what survives a `grep -ri holt`
+across the family is deliberate in three flavours: the bilingual compat rungs
+(deleted at 1.1.0, §8.1), the frozen `holt/<repo>/<lane>` notify key (decision
+6), and dated history that must keep the old name — ops's snapshots, the Go
+proxy's three paths, `PRESENCE.md`'s register. The cutover now waits on 4, 7, 8
+and 9, and only 7 is free of an irreversible publish.
 
 ## 9. The done-list
 
