@@ -27,7 +27,18 @@ func (e *Env) Resume(want string, pick bool) error {
 	if err != nil {
 		return err
 	}
+	return e.resumeEntry(entry, pick)
+}
 
+// resumeEntry is Resume once the lane is known.
+//
+// The split exists for `focus`, not for tidiness: a deferred focus hook — the
+// window layer looked and found nothing to raise — falls through to resume, and
+// calling Resume by NAME there would send the same invocation through
+// matchLane's whole-machine discover a second time. That is ~130 git
+// subprocesses on a machine with a few dozen lanes, and it is paid on the
+// slowest path there is: the one where a banner click has to open a window.
+func (e *Env) resumeEntry(entry Entry, pick bool) error {
 	// Resolve the client BEFORE the checkout is re-registered: a five-column
 	// registry row predates the client field and is Claude forever, even if the
 	// machine's default has since changed.
