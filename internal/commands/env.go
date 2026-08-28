@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/hausfold/scruff/internal/compat"
 	"github.com/hausfold/scruff/internal/config"
 	"github.com/hausfold/scruff/internal/gitx"
 	"github.com/hausfold/scruff/internal/occupancy"
@@ -27,28 +26,48 @@ type Env struct {
 
 // baseDir resolves where worktree checkouts live.
 //
-// CLAUDE_WT_BASE is honoured ahead of SCRUFF_BASE/HOLT_BASE and the default
-// path still ends in `claude-worktrees`, both for the same reason: on cutover
-// day this tool must find the worktrees the bash `wt` already made (SPEC.md
-// §10). That rung keeps its priority through the scruff rename untouched — it
-// predates both spellings and answers to neither.
+// The env ladder is SCRUFF_BASE, then CLAUDE_WT_BASE — the plan-of-record
+// order at 1.1.0 (docs/rename.md §8.2): the old spelling's rung is gone, and
+// CLAUDE_WT_BASE survives as the last explicit rung because SPEC.md §10's bash
+// predecessor is still the reason it exists. It predates both spellings and
+// answers to neither.
 //
-// The base path itself is the ONE thing the rename moves on disk, and it moves
-// at 1.1.0, not here (docs/rename.md decision 2 and §8.2): a live lane's gitdir
-// holds an absolute path, so relocating the base is a `git worktree repair`
-// sweep, and a failure there strands work. Invariant 1 outranks a tidy path.
+// The default path prefers ~/.cache/scruff and falls back to
+// ~/.cache/claude-worktrees only when that is the one holding a
+// registry.tsv — the permanent fallback that keeps the base move (§8.2) a
+// minor rather than a major: no one who skips `scruff doctor
+// --migrate-base` is broken by it. A bare directory is not a base (the
+// migration and a fresh install both create the scruff-named one), so the
+// fallback keys on the registry, the same source of truth everything else
+// reads.
 func baseDir() string {
+	if b := os.Getenv("SCRUFF_BASE"); b != "" {
+		return b
+	}
 	if b := os.Getenv("CLAUDE_WT_BASE"); b != "" {
 		return b
 	}
-	if b := compat.Getenv("BASE"); b != "" {
-		return b
+	newBase, oldBase := defaultBaseCandidates()
+	if _, err := os.Stat(filepath.Join(newBase, "registry.tsv")); err == nil {
+		return newBase
 	}
+	if _, err := os.Stat(filepath.Join(oldBase, "registry.tsv")); err == nil {
+		return oldBase
+	}
+	return newBase
+}
+
+// defaultBaseCandidates is the two default paths the base decision is between:
+// the scruff-named base, and the legacy one the bash predecessor and every
+// 1.0.x release created. Shared with `doctor --migrate-base`, whose whole job
+// is moving the second onto the first.
+func defaultBaseCandidates() (scruff, legacy string) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = os.Getenv("HOME")
 	}
-	return filepath.Join(home, ".cache", "claude-worktrees")
+	return filepath.Join(home, ".cache", "scruff"),
+		filepath.Join(home, ".cache", "claude-worktrees")
 }
 
 // stateDir is where scruff keeps runtime state that is not a checkout.
@@ -66,7 +85,7 @@ func stateDir() string {
 // resolveStateDir is stateDir plus the reason it ignored an override, so the
 // caller that can warn (NewEnv) does, exactly once per invocation.
 //
-// A RELATIVE $SCRUFF_STATE — or its $HOLT_STATE predecessor — is refused rather
+// A RELATIVE $SCRUFF_STATE is refused rather
 // than honoured, and that refusal is load-bearing: this state is
 // machine-global, so resolving it against the
 // process cwd scatters it into whatever directory scruff happened to be run
@@ -75,40 +94,37 @@ func stateDir() string {
 // wants state somewhere else can always say where absolutely; nobody has ever
 // meant "put the machine's lease and ledger under my cwd".
 func resolveStateDir() (dir, warning string) {
-	if s, key := compat.Lookup("STATE"); s != "" {
+	if s := os.Getenv("SCRUFF_STATE"); s != "" {
 		if filepath.IsAbs(s) {
 			return s, ""
 		}
-		// Names the spelling the operator actually set: a warning about a bad
-		// value that cites a variable they never touched reads as a bug in us.
 		warning = fmt.Sprintf(
-			"%s=%q is not an absolute path — ignoring it and using %s. "+
+			"SCRUFF_STATE=%q is not an absolute path — ignoring it and using %s. "+
 				"State is machine-global; a relative path would write it under the current directory.",
-			key, s, defaultStateDir())
+			s, defaultStateDir())
 	}
 	return defaultStateDir(), warning
 }
 
-// defaultStateDir prefers the scruff-named directory and falls back to the
-// holt-named one only on a machine that already has it — see compat.Dir.
+// defaultStateDir is the scruff-named state directory, full stop. The
+// holt-named fallback ended at 1.1.0 (docs/rename.md §8.1); leases are
+// 90-second ephemera and the reap ledger restarts empty rather than carry the
+// old path's spelling forever.
 func defaultStateDir() string {
 	if s := os.Getenv("XDG_STATE_HOME"); s != "" {
-		return compat.Dir(filepath.Join(s, compat.Name), filepath.Join(s, compat.OldName))
+		return filepath.Join(s, "scruff")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = os.Getenv("HOME")
 	}
-	return compat.Dir(
-		filepath.Join(home, ".local", "state", compat.Name),
-		filepath.Join(home, ".local", "state", compat.OldName),
-	)
+	return filepath.Join(home, ".local", "state", "scruff")
 }
 
 // leasesAreSole reports whether a lease may answer for ABSENCE as well as
 // presence — see occupancy.Leases.
 //
-// SCRUFF_OCCUPANCY=lease — HOLT_OCCUPANCY still answers — is the embedder's
+// SCRUFF_OCCUPANCY=lease is the embedder's
 // switch: it declares that every session in this deployment is one this tool
 // spawned, so a lane nobody leased is a lane
 // nobody is in. On a developer machine that is false — someone can always cd
@@ -122,12 +138,12 @@ func defaultStateDir() string {
 // wants to become a config seam (`occupied`, alongside HookLanded and
 // HookPreserve) — that is the shape SPEC.md §14.2's callback lands in, and it
 // is one more occupancy.Provider when it does.
-func leasesAreSole() bool { return compat.Getenv("OCCUPANCY") == "lease" }
+func leasesAreSole() bool { return os.Getenv("SCRUFF_OCCUPANCY") == "lease" }
 
 // defaultAgent is the client a new lane opens in when nothing says
 // otherwise.
 //
-// The ladder, most explicit first: SCRUFF_AGENT (or HOLT_AGENT) is a
+// The ladder, most explicit first: SCRUFF_AGENT is a
 // one-invocation override; the `agent` hook is a program, for a machine that
 // picks per repo or per time of
 // day; the `agent` config key is the static answer, which is what almost
@@ -138,7 +154,7 @@ func leasesAreSole() bool { return compat.Getenv("OCCUPANCY") == "lease" }
 // rather than fatal — an unknown agent must not turn every `scruff new` into a
 // hard failure when a working default is one rung down.
 func (e *Env) defaultAgent() string {
-	if a := compat.Getenv("AGENT"); registry.KnownAgent(a) {
+	if a := os.Getenv("SCRUFF_AGENT"); registry.KnownAgent(a) {
 		return a
 	}
 	if e.Cfg.Defined(config.HookAgent) {

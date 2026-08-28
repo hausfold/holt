@@ -56,11 +56,11 @@ setup() {
   # path as a scratch FILE to record that they ran, and a directory of the same
   # name makes their `cat` fail in a way that reads as a hook bug.
   export XDG_STATE_HOME="$TMP/xdg-state"
-  # Both spellings: a lane hook is handed the SCRUFF_*/HOLT_* pair until 1.1.0,
-  # so scrubbing only one still lets a machine choice reach the fixture.
-  unset SCRUFF_AGENT HOLT_AGENT HAUS_AGENT_DEFAULT # machine choices must not leak in
-  unset SCRUFF_STATE HOLT_STATE SCRUFF_OCCUPANCY HOLT_OCCUPANCY # the lease dir and its sole-provider switch
-  unset SCRUFF_TRILL HOLT_TRILL                # ditto — the notify tests shim trill on PATH
+  # Scrub the env knobs: machine choices must not leak into the fixtures.
+  unset SCRUFF_BASE
+  unset SCRUFF_AGENT HAUS_AGENT_DEFAULT # machine choices must not leak in
+  unset SCRUFF_STATE SCRUFF_OCCUPANCY   # the lease dir and its sole-provider switch
+  unset SCRUFF_TRILL                    # the notify tests shim trill on PATH
   export CLAUDE_WT_BASE="$TMP/wtbase"
   REG="$CLAUDE_WT_BASE/registry.tsv"
   mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_STATE_HOME"
@@ -2783,35 +2783,137 @@ teardown() {
   done <"$WATCH_OUT"
 }
 
-# ── the rename (docs/rename.md §3) ───────────────────────────────────────────
+# ── doctor / the base move (docs/rename.md §8.2) ─────────────────────────────
 #
-# One binary, two names, until 1.1.0. These two tests are the black-box half of
-# the bilingual release: they prove the old spelling still works from OUTSIDE
-# the process, which is where every consumer that matters lives.
+# 1.1.0 deleted the compat half of the rename; what remains of it here is the
+# base move — the one scruff operation that relocates work on disk. The two
+# tests this replaces proved the binary answered to both names; those are gone
+# with internal/compat, and a stray `holt` symlink in $TMP/bin now means a
+# stale build, which is exactly what the absent binary already meant.
 
-@test "rename: the binary answers to both names, identically" {
-  local dir; dir="$(dirname "$WT")"
-  [ -e "$dir/scruff" ] || skip "no scruff binary beside $WT — run make build"
+@test "doctor: the base report names the legacy path and offers the move" {
+  unset CLAUDE_WT_BASE
+  mkdir -p "$HOME/.cache/claude-worktrees"
+  : >"$HOME/.cache/claude-worktrees/registry.tsv"
+  export REG="$HOME/.cache/claude-worktrees/registry.tsv"
 
-  run "$dir/scruff" --version
+  cd "$TMP"; wt_run doctor
   [ "$status" -eq 0 ]
-  local new="$output"
+  [[ "$output" == *"$HOME/.cache/claude-worktrees"* ]] || fail "the report didn't name the live base: $output"
+  [[ "$output" == *"LEGACY"* ]] || fail "the report didn't say the path is legacy: $output"
+  [[ "$output" == *"--migrate-base"* ]] || fail "the report didn't name the verb that moves it: $output"
 
-  run "$dir/holt" --version
-  [ "$status" -eq 0 ]
-  [ "$output" = "$new" ]
+  # An env override is a resolution worth naming too.
+  export CLAUDE_WT_BASE="$TMP/wtbase"
+  wt_run doctor
+  [[ "$output" == *"CLAUDE_WT_BASE"* ]] || fail "the report didn't name the override: $output"
 }
 
-# The deprecation notice is for a HUMAN and nobody else. Every non-interactive
-# caller of this binary is one that would be hurt by a stray line on stderr:
-# Claude Code's WorktreeCreate/Remove hooks, the bar plugins polling several
-# times a minute, and anything parsing --json. stdout is a pipe here, so this
-# asserts the gate holds.
-@test "rename: invoking the old name is silent when stderr is not a terminal" {
-  local dir; dir="$(dirname "$WT")"
-  [ -e "$dir/holt" ] || skip "no holt symlink beside $WT — run make build"
+@test "doctor --migrate-base: refuses with exit 2 while a pane stands in the base" {
+  unset CLAUDE_WT_BASE
+  local main dir
+  main="$(mkrepo alpha)"
+  mkdir -p "$HOME/.cache/claude-worktrees"
+  : >"$HOME/.cache/claude-worktrees/registry.tsv"
+  dir="$(hook_create "$main" sparkle)"
+  [ -d "$dir" ] || fail "create gave no checkout"
+  export FAKE_LSOF_CWDS="$dir" FAKE_LSOF_CMD=node
 
-  run "$dir/holt" --version
+  cd "$TMP"; wt_run doctor --migrate-base
+  [ "$status" -eq 2 ] || fail "want exit 2 (refused for safety), got $status: $output"
+  [[ "$output" == *"pid 4001 node"* ]] || fail "the refusal named no witness: $output"
+  # Invariant 2 applied to scruff's own migration: nothing moved.
+  [ -d "$HOME/.cache/claude-worktrees/alpha/sparkle" ]
+  [ ! -d "$HOME/.cache/scruff" ]
+}
+
+@test "doctor --migrate-base: refuses when occupancy is unknown — the ground does not guess" {
+  unset CLAUDE_WT_BASE
+  mkdir -p "$HOME/.cache/claude-worktrees"
+  : >"$HOME/.cache/claude-worktrees/registry.tsv"
+  export FAKE_LSOF_BROKEN=1
+
+  cd "$TMP"; wt_run doctor --migrate-base
+  [ "$status" -eq 2 ] || fail "want exit 2 (uncertainty resolves to keep), got $status: $output"
+  [[ "$output" == *"lsof"* ]] || fail "the refusal didn't name the missing evidence: $output"
+  [ -d "$HOME/.cache/claude-worktrees" ]
+  [ ! -d "$HOME/.cache/scruff" ]
+}
+
+@test "doctor --migrate-base: refuses under a base-path override — the default is the only thing it moves" {
+  # The setup exports CLAUDE_WT_BASE, so this is also the every-test default.
+  cd "$TMP"; wt_run doctor --migrate-base
+  [ "$status" -eq 2 ] || fail "want exit 2, got $status: $output"
+  [[ "$output" == *"CLAUDE_WT_BASE"* ]] || fail "the refusal didn't name the override: $output"
+}
+
+@test "doctor --migrate-base: moves the base, repairs the checkouts, leaves the old path a symlink" {
+  unset CLAUDE_WT_BASE
+  local main dir
+  main="$(mkrepo alpha)"
+  # A legacy registry must EXIST before the lane is created, or create would
+  # write a fresh one under the scruff-named default and there'd be nothing to
+  # move. REG follows, because the setup pointed it at the override.
+  mkdir -p "$HOME/.cache/claude-worktrees"
+  : >"$HOME/.cache/claude-worktrees/registry.tsv"
+  export REG="$HOME/.cache/claude-worktrees/registry.tsv"
+  dir="$(mkwt "$main" sparkle)"
+
+  cd "$TMP"; wt_run doctor --migrate-base
+  [ "$status" -eq 0 ] || fail "the move failed: $output"
+  [[ "$output" == *"base moved"* ]] || fail "$output"
+
+  # The registry is at the new base, with the new paths, and a .bak behind it.
+  local newreg; newreg="$HOME/.cache/scruff/registry.tsv"
+  [ -e "$newreg" ] || fail "no registry at the new base"
+  [ -e "$newreg.bak.relocate" ] || fail "no .bak.relocate behind the rewrite"
+  grep -q "$HOME/.cache/scruff/alpha/sparkle" "$newreg" || fail "registry paths were not rewritten: $(cat "$newreg")"
+  ! grep -q "$HOME/.cache/claude-worktrees/" "$newreg" || fail "a stale path survived the rewrite"
+
+  # The checkout moved with the tree, still a worktree of its repo, clean.
+  local moved; moved="$HOME/.cache/scruff/alpha/sparkle"
+  [ -e "$moved/.git" ] || fail "the checkout didn't move"
+  [ "$(git -C "$moved" branch --show-current)" = worktree-sparkle ]
+  # The link survived the move, in BOTH directions: the moved checkout still
+  # resolves through a per-worktree gitdir under main's .git, and main's
+  # worktree list names the moved path.
+  case "$(git -C "$moved" rev-parse --git-dir)" in
+    */.git/worktrees/*) ;;
+    *) fail "the moved checkout doesn't resolve to a per-worktree gitdir: $(git -C "$moved" rev-parse --git-dir)" ;;
+  esac
+  git -C "$main" worktree list --porcelain | grep -q "^worktree $moved$" \
+    || fail "main's worktree list doesn't know the moved checkout"
+  [ -z "$(git -C "$moved" status --porcelain)" ] || fail "work was disturbed by the move"
+
+  # The old path is a symlink to the new base, for one release.
+  [ -L "$HOME/.cache/claude-worktrees" ] || fail "the legacy path is not a symlink"
+  [ "$(readlink "$HOME/.cache/claude-worktrees")" = "$HOME/.cache/scruff" ]
+
+  # And scruff still finds the lane without any env help at all — the
+  # fallback's whole point. Then a second migrate is a no-op.
+  wt_run list
+  [[ "$output" == *"sparkle"* ]] || fail "scruff lost the lane after the move: $output"
+  wt_run doctor --migrate-base
   [ "$status" -eq 0 ]
-  [[ "$output" != *"now \`scruff\`"* ]]
+  [[ "$output" == *"nothing to move"* ]] || fail "$output"
+}
+
+@test "doctor --migrate-base: a lane whose link git can't repair degrades with exit 3, work intact" {
+  unset CLAUDE_WT_BASE
+  local main dir
+  main="$(mkrepo alpha)"
+  mkdir -p "$HOME/.cache/claude-worktrees"
+  : >"$HOME/.cache/claude-worktrees/registry.tsv"
+  export REG="$HOME/.cache/claude-worktrees/registry.tsv"
+  dir="$(mkwt "$main" broken)"
+  # Break the LINK, not the tree: deleting the checkout's .git pointer leaves
+  # the work on disk but nothing for `git worktree repair` to re-point — the
+  # shape of a link git has lost while the files survived.
+  rm "$dir/.git"
+
+  cd "$TMP"; wt_run doctor --migrate-base
+  [ "$status" -eq 3 ] || fail "want exit 3 (degraded), got $status: $output"
+  [ -e "$HOME/.cache/scruff/alpha/broken/work.txt" ] || fail "the work did not move with the tree"
+  [[ "$output" == *"work moved with the tree"* ]] || fail "the degraded path didn't say the work is safe: $output"
+  [ -L "$HOME/.cache/claude-worktrees" ] || fail "the move completed but the symlink is missing"
 }

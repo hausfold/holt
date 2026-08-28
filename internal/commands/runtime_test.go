@@ -51,21 +51,21 @@ func TestTartNaming(t *testing.T) {
 	if got := tartVM("my-lane"); got != "scruff-my-lane" {
 		t.Errorf("tartVM = %q, want scruff-my-lane — the prefix is what keeps teardown off a VM scruff didn't create", got)
 	}
-	t.Setenv("HOLT_TART_USER", "")
+	t.Setenv("SCRUFF_TART_USER", "")
 	if got := tartUser(); got != "admin" {
 		t.Errorf("tartUser = %q, want admin — every cirruslabs base image ships that account", got)
 	}
-	t.Setenv("HOLT_TART_USER", "ada")
+	t.Setenv("SCRUFF_TART_USER", "ada")
 	if got := tartUser(); got != "ada" {
 		t.Errorf("tartUser = %q, want the override", got)
 	}
 }
 
 func TestTartBaseRefusesRatherThanGuessing(t *testing.T) {
-	t.Setenv("HOLT_TART_BASE", "")
+	t.Setenv("SCRUFF_TART_BASE", "")
 	_, err := tartBase()
 	if err == nil {
-		t.Fatal("an unset HOLT_TART_BASE must refuse — the images are tens of GB and which one you want is a real choice")
+		t.Fatal("an unset SCRUFF_TART_BASE must refuse — the images are tens of GB and which one you want is a real choice")
 	}
 	if got := exitcode.Of(err); got != exitcode.Refused {
 		t.Errorf("exit code = %d, want Refused (2); err = %v", got, err)
@@ -74,7 +74,7 @@ func TestTartBaseRefusesRatherThanGuessing(t *testing.T) {
 		t.Errorf("the refusal must carry the command that fixes it, got %q", err.Error())
 	}
 
-	t.Setenv("HOLT_TART_BASE", "haus-golden")
+	t.Setenv("SCRUFF_TART_BASE", "haus-golden")
 	if got, err := tartBase(); err != nil || got != "haus-golden" {
 		t.Errorf("tartBase = %q, %v; want haus-golden, nil", got, err)
 	}

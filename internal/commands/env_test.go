@@ -27,7 +27,7 @@ func envWith(t *testing.T, body string) *Env {
 }
 
 func TestDefaultAgentPrefersConfigOverLegacyEnv(t *testing.T) {
-	t.Setenv("HOLT_AGENT", "")
+	t.Setenv("SCRUFF_AGENT", "")
 	t.Setenv("HAUS_AGENT_DEFAULT", "claude")
 
 	e := envWith(t, "agent = \"codex\"\n")
@@ -35,16 +35,16 @@ func TestDefaultAgentPrefersConfigOverLegacyEnv(t *testing.T) {
 		t.Fatalf("defaultAgent() = %q, want the config's codex", got)
 	}
 
-	t.Setenv("HOLT_AGENT", "opencode")
+	t.Setenv("SCRUFF_AGENT", "opencode")
 	if got := e.defaultAgent(); got != "opencode" {
-		t.Fatalf("defaultAgent() = %q, want the explicit HOLT_AGENT override", got)
+		t.Fatalf("defaultAgent() = %q, want the explicit SCRUFF_AGENT override", got)
 	}
 }
 
 // The `agent` hook beats the static key, because a machine that runs a program
 // to pick has more to say than one that wrote a constant.
 func TestDefaultAgentHookBeatsConfigKey(t *testing.T) {
-	t.Setenv("HOLT_AGENT", "")
+	t.Setenv("SCRUFF_AGENT", "")
 	t.Setenv("HAUS_AGENT_DEFAULT", "")
 
 	hook := writeHook(t, "agent-hook", `#!/bin/sh
@@ -60,7 +60,7 @@ exit 0
 // A hook that defers leaves every rung below it exactly as it was — this is the
 // property that makes an override safe to add to a working machine.
 func TestDefaultAgentHookDeferFallsThrough(t *testing.T) {
-	t.Setenv("HOLT_AGENT", "")
+	t.Setenv("SCRUFF_AGENT", "")
 	t.Setenv("HAUS_AGENT_DEFAULT", "")
 
 	hook := writeHook(t, "defer-hook", "#!/bin/sh\nexit 3\n")
@@ -73,7 +73,7 @@ func TestDefaultAgentHookDeferFallsThrough(t *testing.T) {
 // A hook that cannot run is a warning and a fallback, never a failure: scruff is
 // in the path of every pane open, and a stale store path must not close that door.
 func TestDefaultAgentBrokenHookWarnsAndFallsBack(t *testing.T) {
-	t.Setenv("HOLT_AGENT", "")
+	t.Setenv("SCRUFF_AGENT", "")
 	t.Setenv("HAUS_AGENT_DEFAULT", "")
 
 	e := envWith(t, "agent = \"codex\"\n\n[hooks]\nagent = \"/nonexistent/scruff-agent-hook\"\n")
@@ -101,7 +101,7 @@ func writeHook(t *testing.T, name, body string) string {
 func TestStateDirRefusesRelativeOverride(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", home)
-	t.Setenv("HOLT_STATE", "live")
+	t.Setenv("SCRUFF_STATE", "live")
 
 	dir, warning := resolveStateDir()
 	if want := filepath.Join(home, "scruff"); dir != want {
@@ -119,7 +119,7 @@ func TestNewEnvKeepsStateOutOfTheCwdAndSaysSo(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", state)
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("CLAUDE_WT_BASE", t.TempDir())
-	t.Setenv("HOLT_STATE", "live")
+	t.Setenv("SCRUFF_STATE", "live")
 
 	e, err := NewEnv()
 	if err != nil {
@@ -139,7 +139,7 @@ func TestNewEnvKeepsStateOutOfTheCwdAndSaysSo(t *testing.T) {
 
 func TestStateDirHonoursAbsoluteOverride(t *testing.T) {
 	abs := t.TempDir()
-	t.Setenv("HOLT_STATE", abs)
+	t.Setenv("SCRUFF_STATE", abs)
 
 	dir, warning := resolveStateDir()
 	if dir != abs {
@@ -150,68 +150,79 @@ func TestStateDirHonoursAbsoluteOverride(t *testing.T) {
 	}
 }
 
-// ── the rename (docs/rename.md §3) ───────────────────────────────────────────
-//
-// These die with internal/compat at 1.1.0. Until then they are the proof that
-// ONE binary answers to both names, which is the only reason haus and this repo
-// can move in either order.
+// ── the base (docs/rename.md §8.2) ───────────────────────────────────────────
 
-// Both spellings resolve, and the new one wins when both are set — the updated
-// half of the machine is the half that decides.
-func TestEnvVarsAnswerToBothNames(t *testing.T) {
+// The env ladder at 1.1.0: SCRUFF_BASE, then CLAUDE_WT_BASE. The old
+// spelling's rung is gone — setting it must do nothing, or the compat half
+// would outlive its own deletion.
+func TestBaseEnvLadder(t *testing.T) {
+	t.Setenv("HOME", t.TempDir()) // the default candidates resolve from here
+	t.Setenv("SCRUFF_BASE", "")
 	t.Setenv("CLAUDE_WT_BASE", "")
-	t.Setenv("HOLT_BASE", "/old")
-	if got := baseDir(); got != "/old" {
-		t.Errorf("HOLT_BASE alone: base = %q, want %q — an old haus must keep working", got, "/old")
-	}
-	t.Setenv("SCRUFF_BASE", "/new")
-	if got := baseDir(); got != "/new" {
-		t.Errorf("both set: base = %q, want %q — the new spelling decides", got, "/new")
+	t.Setenv("HOLT_BASE", t.TempDir()) // must be inert
+
+	newBase, _ := defaultBaseCandidates()
+
+	if got := baseDir(); got != newBase {
+		t.Errorf("no env: base = %q, want the scruff default %q", got, newBase)
 	}
 
-	t.Setenv("HOLT_AGENT", "codex")
-	e := &Env{Cfg: &config.Config{}}
-	if got := e.defaultAgent(); got != "codex" {
-		t.Errorf("HOLT_AGENT alone: agent = %q, want codex", got)
+	t.Setenv("SCRUFF_BASE", "/scruff-set")
+	if got := baseDir(); got != "/scruff-set" {
+		t.Errorf("SCRUFF_BASE set: base = %q, want /scruff-set", got)
 	}
-	t.Setenv("SCRUFF_AGENT", "opencode")
-	if got := e.defaultAgent(); got != "opencode" {
-		t.Errorf("both set: agent = %q, want opencode", got)
+
+	t.Setenv("CLAUDE_WT_BASE", "/wt-set")
+	if got := baseDir(); got != "/scruff-set" {
+		t.Errorf("both set: base = %q, want /scruff-set — the plan-of-record ladder puts SCRUFF_BASE first", got)
+	}
+
+	t.Setenv("SCRUFF_BASE", "")
+	if got := baseDir(); got != "/wt-set" {
+		t.Errorf("CLAUDE_WT_BASE alone: base = %q, want /wt-set — SPEC.md §10's rung survives", got)
 	}
 }
 
-// CLAUDE_WT_BASE keeps its priority over BOTH spellings. It predates them and
-// answers to neither — SPEC.md §10's cutover rung, untouched by this rename.
-func TestClaudeWTBaseStillOutranksBothSpellings(t *testing.T) {
-	t.Setenv("CLAUDE_WT_BASE", "/wt")
-	t.Setenv("SCRUFF_BASE", "/new")
-	t.Setenv("HOLT_BASE", "/old")
-	if got := baseDir(); got != "/wt" {
-		t.Errorf("base = %q, want %q", got, "/wt")
-	}
-}
-
-// A machine that already has ~/.local/state/holt keeps using it; a fresh one
-// starts under the name it will keep. Neither case moves a file.
-func TestStateDirFallsBackToTheOldDirOnlyWhenItExists(t *testing.T) {
+// The default prefers the scruff-named base when it HOLDS a registry; the
+// legacy path keeps serving only while it is the one holding the registry —
+// a bare directory is not a base, and a machine that never had one starts
+// under the name it keeps.
+func TestBaseDefaultFallsBackToLegacyRegistryOnly(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("XDG_STATE_HOME", home)
-	t.Setenv("SCRUFF_STATE", "")
-	t.Setenv("HOLT_STATE", "")
+	t.Setenv("HOME", home)
+	t.Setenv("SCRUFF_BASE", "")
+	t.Setenv("CLAUDE_WT_BASE", "")
+	t.Setenv("XDG_CACHE_HOME", "") // not read today; pinned so it never silently starts
 
-	if got, want := stateDir(), filepath.Join(home, "scruff"); got != want {
-		t.Errorf("fresh machine: state dir = %q, want %q", got, want)
+	scruffBase := filepath.Join(home, ".cache", "scruff")
+	legacyBase := filepath.Join(home, ".cache", "claude-worktrees")
+
+	if got := baseDir(); got != scruffBase {
+		t.Errorf("fresh machine: base = %q, want %q", got, scruffBase)
 	}
-	if err := os.MkdirAll(filepath.Join(home, "holt"), 0o755); err != nil {
+	// A bare legacy directory (no registry) is NOT a base: the bash
+	// predecessor always wrote one, so a registry-less dir is not ours.
+	if err := os.MkdirAll(legacyBase, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := stateDir(), filepath.Join(home, "holt"); got != want {
-		t.Errorf("existing holt dir: state dir = %q, want %q — state must not appear to vanish", got, want)
+	if got := baseDir(); got != scruffBase {
+		t.Errorf("legacy dir without a registry: base = %q, want %q — a bare directory is not a base", got, scruffBase)
 	}
-	if err := os.MkdirAll(filepath.Join(home, "scruff"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(legacyBase, "registry.tsv"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := stateDir(), filepath.Join(home, "scruff"); got != want {
-		t.Errorf("both dirs: state dir = %q, want %q", got, want)
+	if got := baseDir(); got != legacyBase {
+		t.Errorf("legacy registry present: base = %q, want %q — skipping the migration must not break anyone", got, legacyBase)
+	}
+	// The scruff-named registry wins the moment it exists: post-migration, or
+	// a fresh machine that wrote its own.
+	if err := os.MkdirAll(scruffBase, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(scruffBase, "registry.tsv"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := baseDir(); got != scruffBase {
+		t.Errorf("both registries: base = %q, want %q — the new base decides", got, scruffBase)
 	}
 }

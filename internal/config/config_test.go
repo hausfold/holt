@@ -130,9 +130,9 @@ func TestAskNoHookDefers(t *testing.T) {
 func TestAskDeliversPayloadOnStdinAndInEnv(t *testing.T) {
 	cfg := hook(t, `#!/bin/sh
 read -r body
-[ "$HOLT_HOOK" = "landed" ] || { echo "HOLT_HOOK=$HOLT_HOOK" >&2; exit 1; }
-[ "$HOLT_BRANCH" = "worktree-x" ] || { echo "HOLT_BRANCH=$HOLT_BRANCH" >&2; exit 1; }
-[ "$HOLT_BASE_BRANCH" = "main" ] || { echo "HOLT_BASE_BRANCH=$HOLT_BASE_BRANCH" >&2; exit 1; }
+[ "$SCRUFF_HOOK" = "landed" ] || { echo "SCRUFF_HOOK=$SCRUFF_HOOK" >&2; exit 1; }
+[ "$SCRUFF_BRANCH" = "worktree-x" ] || { echo "SCRUFF_BRANCH=$SCRUFF_BRANCH" >&2; exit 1; }
+[ "$SCRUFF_BASE_BRANCH" = "main" ] || { echo "SCRUFF_BASE_BRANCH=$SCRUFF_BASE_BRANCH" >&2; exit 1; }
 case "$body" in *'"branch":"worktree-x"'*) ;; *) echo "stdin=$body" >&2; exit 1 ;; esac
 echo '{"via": "release-train", "confidence": "certain"}'
 exit 0
@@ -156,9 +156,9 @@ func TestAskIgnoresNonJSONStdout(t *testing.T) {
 }
 
 // A hook's env must never hand a lane's lifecycle state to scruff as its state
-// DIRECTORY. It did once: `open` exported HOLT_STATE=live, the pane it spawned
-// inherited it, and every scruff run in that pane wrote its machine-global state
-// to the relative path "live" under the cwd — routinely a git checkout.
+// DIRECTORY. It did once: the open seam exported SCRUFF_STATE=live, the pane it
+// spawned inherited it, and every scruff run in that pane wrote its machine-global
+// state to the relative path "live" under the cwd — routinely a git checkout.
 func TestHookEnvRenamesStateAwayFromScruffsOwnStateDir(t *testing.T) {
 	env := hookEnv("open", map[string]string{
 		"state": "live",
@@ -171,47 +171,47 @@ func TestHookEnvRenamesStateAwayFromScruffsOwnStateDir(t *testing.T) {
 		k, v, _ := strings.Cut(kv, "=")
 		got[k] = v
 	}
-	// Both spellings, because the collision is a property of the NAME and not
-	// of the prefix: SCRUFF_STATE is the state directory exactly as HOLT_STATE
-	// was, so the rename must not quietly reintroduce the bug it fixed.
-	for _, k := range []string{"HOLT_STATE", "SCRUFF_STATE"} {
+	// The collision is a property of the NAME and not of the spelling, so the
+	// test pins the spelling the collision is documented under.
+	for _, k := range []string{"SCRUFF_STATE"} {
 		if _, ok := got[k]; ok {
 			t.Errorf("%s is the state DIRECTORY — a hook must not set it; got %q", k, got[k])
 		}
 	}
-	if got["HOLT_LANE_STATE"] != "live" {
-		t.Errorf("HOLT_LANE_STATE = %q, want %q", got["HOLT_LANE_STATE"], "live")
+	if got["SCRUFF_LANE_STATE"] != "live" {
+		t.Errorf("SCRUFF_LANE_STATE = %q, want %q", got["SCRUFF_LANE_STATE"], "live")
 	}
-	for _, k := range []string{"HOLT_AGENT", "SCRUFF_AGENT"} {
+	for _, k := range []string{"SCRUFF_AGENT"} {
 		if _, ok := got[k]; ok {
 			t.Errorf("%s is the one-invocation client override — a hook must not set it; got %q", k, got[k])
 		}
 	}
-	if got["HOLT_LANE_AGENT"] != "claude" {
-		t.Errorf("HOLT_LANE_AGENT = %q, want %q", got["HOLT_LANE_AGENT"], "claude")
+	if got["SCRUFF_LANE_AGENT"] != "claude" {
+		t.Errorf("SCRUFF_LANE_AGENT = %q, want %q", got["SCRUFF_LANE_AGENT"], "claude")
 	}
-	if got["HOLT_BASE_BRANCH"] != "main" {
-		t.Errorf("HOLT_BASE_BRANCH = %q, want %q", got["HOLT_BASE_BRANCH"], "main")
+	if got["SCRUFF_BASE_BRANCH"] != "main" {
+		t.Errorf("SCRUFF_BASE_BRANCH = %q, want %q", got["SCRUFF_BASE_BRANCH"], "main")
 	}
-	if got["HOLT_PATH"] != "/tmp/lane" {
-		t.Errorf("HOLT_PATH = %q, want %q", got["HOLT_PATH"], "/tmp/lane")
+	if got["SCRUFF_PATH"] != "/tmp/lane" {
+		t.Errorf("SCRUFF_PATH = %q, want %q", got["SCRUFF_PATH"], "/tmp/lane")
 	}
 }
 
-// Every hook variable goes out under BOTH spellings for the length of the
-// rename (docs/rename.md §3). This is the half an OLD consumer depends on:
-// haus's lane hooks read HOLT_NAME, HOLT_REPO, HOLT_PATH, HOLT_MAIN,
-// HOLT_CHAT and HOLT_COMMAND by those names, so a binary that emitted only the
-// new spelling would blank the bar on a machine whose haus hadn't been flipped.
-//
-// Delete this with internal/compat at 1.1.0.
-func TestHookEnvSpeaksBothNames(t *testing.T) {
+// Every hook variable goes out under exactly one spelling. The old-name pair
+// (docs/rename.md §3) ended at 1.1.0; this test is now the proof it ended —
+// any reappearance of HOLT_* in the hook environment fails here.
+func TestHookEnvSpeaksOneName(t *testing.T) {
 	env := hookEnv("open", map[string]string{
 		"name":  "lane",
 		"state": "live",
 		"agent": "claude",
 		"base":  "main",
 	})
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "HOLT_") {
+			t.Errorf("the hook environment still speaks the old name: %s", kv)
+		}
+	}
 	got := map[string]string{}
 	for _, kv := range env {
 		k, v, _ := strings.Cut(kv, "=")
@@ -226,10 +226,6 @@ func TestHookEnvSpeaksBothNames(t *testing.T) {
 	} {
 		if got[scruffKey] != want {
 			t.Errorf("%s = %q, want %q", scruffKey, got[scruffKey], want)
-		}
-		holtKey := "HOLT_" + strings.TrimPrefix(scruffKey, "SCRUFF_")
-		if got[holtKey] != want {
-			t.Errorf("%s = %q, want %q — an un-flipped consumer still reads this", holtKey, got[holtKey], want)
 		}
 	}
 }

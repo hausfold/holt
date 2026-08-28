@@ -29,8 +29,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-
-	"github.com/hausfold/scruff/internal/compat"
 )
 
 // Config is the resolved contents of ~/.config/scruff/config.toml.
@@ -267,17 +265,10 @@ func decode(s string) map[string]any {
 //
 // Renaming any of the three would break something that already exists.
 //
-// Every variable goes out under BOTH spellings — SCRUFF_* and HOLT_* — for the
-// length of the rename (docs/rename.md §3). This is the export half of the
-// bilingual release and the half an OLD consumer depends on: haus's lane hooks
-// read HOLT_NAME, HOLT_REPO, HOLT_PATH, HOLT_MAIN, HOLT_CHAT and HOLT_COMMAND
-// by those names, so a binary that emitted only the new spelling would blank
-// the bar on any machine whose haus hadn't been flipped yet. The three
-// collisions above apply identically to the new prefix, and the test asserts
-// SCRUFF_STATE and SCRUFF_AGENT stay absent for exactly the reason HOLT_STATE
-// and HOLT_AGENT do.
+// The three collisions above apply identically to the prefix, and the test
+// asserts SCRUFF_STATE and SCRUFF_AGENT stay absent for exactly that reason.
 func hookEnv(hook string, payload map[string]string) []string {
-	env := compat.Pair("HOOK", hook)
+	env := []string{"SCRUFF_HOOK=" + hook}
 	for k, v := range payload {
 		suffix := strings.ToUpper(k)
 		switch k {
@@ -288,27 +279,21 @@ func hookEnv(hook string, payload map[string]string) []string {
 		case "agent":
 			suffix = "LANE_AGENT"
 		}
-		env = append(env, compat.Pair(suffix, v)...)
+		env = append(env, "SCRUFF_"+suffix+"="+v)
 	}
 	return env
 }
 
 // ── loading ──────────────────────────────────────────────────────────────────
 
-// Dir is the config directory: $XDG_CONFIG_HOME/scruff, or ~/.config/scruff,
-// falling back to the holt-named directory on a machine that already has one.
+// Dir is the config directory: $XDG_CONFIG_HOME/scruff, or ~/.config/scruff.
 //
 // ~/.config on every platform, macOS included, rather than os.UserConfigDir's
 // Application Support — this is a terminal tool and its config lives where the
 // rest of a terminal user's config lives.
-//
-// The fallback is a stat, never a move (compat.Dir says why). It also carries
-// every ADAPTER for free: runtime and namer adapters resolve under this
-// directory, so a machine's ~/.config/holt/adapters keeps working untouched
-// while a fresh one writes ~/.config/scruff/adapters from the start.
 func Dir() string {
 	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
-		return compat.Dir(filepath.Join(d, compat.Name), filepath.Join(d, compat.OldName))
+		return filepath.Join(d, "scruff")
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -317,10 +302,7 @@ func Dir() string {
 	if home == "" {
 		return ""
 	}
-	return compat.Dir(
-		filepath.Join(home, ".config", compat.Name),
-		filepath.Join(home, ".config", compat.OldName),
-	)
+	return filepath.Join(home, ".config", "scruff")
 }
 
 // Load reads the machine config. A missing file is not an error — it is the

@@ -39,6 +39,11 @@ A LANE is one agent's branch, checkout and pane, from create to reaped.
                           archived repo) — recorded in scruff reaped, undoable
   scruff heartbeat [path]   hold the occupancy lease on a lane, so reap spares it
                           --pid N (0 = TTL-only) · --release to drop it
+  scruff doctor             report where the base lives, what a move costs
+  scruff doctor --migrate-base
+                          move the base to ~/.cache/scruff (§8.2): refuses with
+                          exit 2 while any lane is occupied, repairs every
+                          checkout, leaves the old path a symlink for one release
   scruff watch --json       lifecycle events on stdout, one NDJSON object per line
   scruff reship [name]      push a branch that outran its merged PR, open the follow-up
   scruff runtime up <name>  stand up a lane's runtime-isolation backend
@@ -114,6 +119,9 @@ func Run(args []string) error {
 
 	case "heartbeat":
 		return env.Heartbeat(args[1:])
+
+	case "doctor":
+		return env.Doctor(args[1:])
 
 	case "watch":
 		return env.Watch(args[1:])

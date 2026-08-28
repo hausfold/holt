@@ -193,6 +193,36 @@ func (r *Registry) Prune(keep func(Row) bool) error {
 	})
 }
 
+// HeldLock takes the registry's exclusive flock and hands back the release.
+//
+// Every normal mutation goes through mutate, which takes and releases the lock
+// itself. This is for the one caller that must hold it across a LARGER
+// operation than a row write: `doctor --migrate-base`, which relocates the
+// base directory — the registry file and its lock along with it — and must
+// not race any mutation while it does (docs/rename.md §8.2 step 2).
+func (r *Registry) HeldLock() (func(), error) {
+	return lock(r.path + ".lock")
+}
+
+// WriteAll atomically replaces the registry's contents with rows. The caller
+// must already hold the lock (HeldLock or mutate) — like mutate's write, it
+// goes through a temp file + rename so a crash can never leave a half-file.
+func (r *Registry) WriteAll(rows []Row) error {
+	tmp, err := os.CreateTemp(filepath.Dir(r.path), ".registry-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.WriteString(format(rows)); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), r.path)
+}
+
 // mutate applies fn to the registry under an exclusive lock.
 //
 // The bash version rewrote the whole table through a temp file with an advisory
@@ -210,20 +240,6 @@ func (r *Registry) mutate(fn func([]Row) []Row) error {
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	next := format(fn(parse(string(b))))
-
-	// Temp file + rename, so a crash mid-write can never leave a half-registry.
-	tmp, err := os.CreateTemp(filepath.Dir(r.path), ".registry-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.WriteString(next); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), r.path)
+	next := fn(parse(string(b)))
+	return r.WriteAll(next)
 }

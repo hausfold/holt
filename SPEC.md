@@ -81,7 +81,7 @@ means something narrower and the overload was the bug:
 | word | means, and only this |
 |---|---|
 | **worktree** | git's — the checkout on disk. A *parked* lane has none, so "worktree" cannot name the unit; §0's whole point is that the branch is the durable artifact and the directory is disposable. |
-| **agent** | the **client**: `claude`, `codex`, `opencode`, `pi`. Registry field 6, `--json` `agent`, `--agent`, `HOLT_AGENT`. Frozen (§2.1) — a lane *runs* an agent, it is not one. |
+| **agent** | the **client**: `claude`, `codex`, `opencode`, `pi`. Registry field 6, `--json` `agent`, `--agent`, `SCRUFF_AGENT`. Frozen (§2.1) — a lane *runs* an agent, it is not one. |
 | **session** | somebody else's: zellij's session, and each client's own transcript/resume session. scruff never names its own unit this. |
 
 `pane` stays available for the terminal pane a lane is (or isn't) occupied by.
@@ -640,7 +640,7 @@ for the repo. **The split on repo-local config is by execution, not by file:**
 
 The machine config's implemented top-level default is `agent = "claude"` (or
 `codex` / `opencode` / `pi`), plus the `[hooks]` table of §6.5. Agent resolution is
-`HOLT_AGENT`, then the `agent` **hook**, then this key, then the legacy
+`SCRUFF_AGENT`, then the `agent` **hook**, then this key, then the legacy
 `HAUS_AGENT_DEFAULT` environment fallback, then Claude. This keeps the
 default stable for long-running callers while retaining a one-invocation
 override for standalone use — and the hook rung exists because "which client"
