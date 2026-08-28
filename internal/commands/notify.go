@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/hausfold/scruff/internal/compat"
 )
 
 // HookNotify implements the client-side notification hooks: the session's
@@ -208,7 +206,7 @@ func laneID(main, name string) string {
 // including set to something missing, which is how a machine (or a test) says
 // "no banners" — and an empty answer means exactly that, silently.
 func trillBinary() string {
-	if p := compat.Getenv("TRILL"); p != "" {
+	if p := os.Getenv("SCRUFF_TRILL"); p != "" {
 		if isExecutable(p) {
 			return p
 		}

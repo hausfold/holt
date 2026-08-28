@@ -128,12 +128,12 @@ func TestTrillSendArgsOffersTheLaneAsAClick(t *testing.T) {
 	}
 }
 
-// HOLT_TRILL set is authoritative: pointing at nothing means "no banners",
+// SCRUFF_TRILL set is authoritative: pointing at nothing means "no banners",
 // never a fall-through to whatever else the machine has.
 func TestTrillBinaryHonorsOverride(t *testing.T) {
-	t.Setenv("HOLT_TRILL", filepath.Join(t.TempDir(), "absent"))
+	t.Setenv("SCRUFF_TRILL", filepath.Join(t.TempDir(), "absent"))
 	if got := trillBinary(); got != "" {
-		t.Fatalf("a missing HOLT_TRILL must resolve to nothing, got %q", got)
+		t.Fatalf("a missing SCRUFF_TRILL must resolve to nothing, got %q", got)
 	}
 }
 
@@ -190,7 +190,7 @@ func TestTrillSendArgsOmitsTheKeyWhenThereIsNothingToName(t *testing.T) {
 // nothing outstanding anywhere → no registry read, no trill launch.
 func TestAskMarkersGateTheResolvePath(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	t.Setenv("HOLT_STATE", "")
+	t.Setenv("SCRUFF_STATE", "")
 	if anyAskOutstanding() {
 		t.Fatal("a fresh state dir has no asks outstanding")
 	}
@@ -214,7 +214,7 @@ func TestAskMarkersGateTheResolvePath(t *testing.T) {
 // climb out of the state dir.
 func TestAskMarkerStaysInsideTheStateDir(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	t.Setenv("HOLT_STATE", "")
+	t.Setenv("SCRUFF_STATE", "")
 	for _, key := range []string{"holt/alpha/sparkle", "holt/../../etc/passwd"} {
 		if got := filepath.Dir(askMarker(key)); got != asksDir() {
 			t.Fatalf("key %q escaped to %q", key, got)
@@ -229,7 +229,7 @@ func TestAskMarkerStaysInsideTheStateDir(t *testing.T) {
 // cheap answer permanently the expensive one.
 func TestStaleAskMarkersArePruned(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	t.Setenv("HOLT_STATE", "")
+	t.Setenv("SCRUFF_STATE", "")
 
 	markAskOutstanding("holt/alpha/sparkle")
 	markAskOutstanding("holt/session/7f3c")
@@ -255,7 +255,7 @@ func TestStaleAskMarkersArePruned(t *testing.T) {
 // of the turn, pruning late costs every pane the expensive path.
 func TestAskMarkerPruneKeepsAnythingYoungerThanTheCutoff(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	t.Setenv("HOLT_STATE", "")
+	t.Setenv("SCRUFF_STATE", "")
 
 	markAskOutstanding("holt/alpha/sparkle")
 	young := time.Now().Add(-askMarkerMaxAge + time.Hour)
@@ -274,7 +274,7 @@ func TestAskMarkerPruneKeepsAnythingYoungerThanTheCutoff(t *testing.T) {
 // fin, and the prune runs inside a sweep whose job is elsewhere.
 func TestAskMarkerPruneSurvivesAMissingDir(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	t.Setenv("HOLT_STATE", "")
+	t.Setenv("SCRUFF_STATE", "")
 	pruneStaleAsks()
 }
 

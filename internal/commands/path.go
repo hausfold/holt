@@ -5,8 +5,6 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
-
-	"github.com/hausfold/scruff/internal/compat"
 )
 
 // rescuePATH makes scruff survive being invoked with no PATH at all.
@@ -26,14 +24,14 @@ import (
 //     prepending would let the real ones win every time, making the whole suite
 //     silently test the machine instead of the code.
 //
-// SCRUFF_PATH_RESCUE=0 (or HOLT_PATH_RESCUE=0) turns the rescue off. It exists because the rescue and any
+// SCRUFF_PATH_RESCUE=0 turns the rescue off. It exists because the rescue and any
 // test that asserts a client is NOT installed are in direct tension: the rescue
 // re-adds the very profile bindir the client lives in, so narrowing PATH cannot
 // hide it. The bash `wt` has no such switch, which is why the equivalent test
 // there can only be skipped. It is also the honest knob for anyone who wants
 // scruff to resolve strictly against the PATH they handed it.
 func rescuePATH() {
-	if compat.Getenv("PATH_RESCUE") == "0" {
+	if os.Getenv("SCRUFF_PATH_RESCUE") == "0" {
 		return
 	}
 	current := os.Getenv("PATH")

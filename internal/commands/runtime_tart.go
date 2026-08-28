@@ -8,7 +8,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/hausfold/scruff/internal/compat"
 	"github.com/hausfold/scruff/internal/exitcode"
 	"github.com/hausfold/scruff/internal/ui"
 )
@@ -45,7 +44,7 @@ func tartVM(name string) string { return "scruff-" + name }
 // tartUser is the guest account `enter` sshes in as. cirruslabs' macOS base
 // images all ship `admin`; anything else is a custom image, hence the override.
 func tartUser() string {
-	if u := compat.Getenv("TART_USER"); u != "" {
+	if u := os.Getenv("SCRUFF_TART_USER"); u != "" {
 		return u
 	}
 	return "admin"
@@ -57,7 +56,7 @@ func tartUser() string {
 // stack baked in is the point — so an unset variable gets the two commands
 // that fix it rather than a surprise download.
 func tartBase() (string, error) {
-	if b := compat.Getenv("TART_BASE"); b != "" {
+	if b := os.Getenv("SCRUFF_TART_BASE"); b != "" {
 		return b, nil
 	}
 	return "", exitcode.Refusedf(

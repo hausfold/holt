@@ -3,7 +3,6 @@
 # TWO skills, one derivation, one directory each:
 #
 #   ai/SKILL.md          → $out/scruff/SKILL.md    driving the lifecycle
-#                        → $out/holt/SKILL.md      the same, under the old name
 #   ai/handoff/SKILL.md  → $out/handoff/SKILL.md   filling a lane's first turn
 #
 # The second one is not a second copy of the first. `scruff` teaches an agent the
@@ -54,25 +53,6 @@ runCommand "scruff-skill"
     mkdir -p "$out/scruff"
     cp "$ai/SKILL.md" "$out/scruff/SKILL.md"
 
-    # The same skill under the OLD name, for the length of the rename
-    # (docs/rename.md §3, deleted at §8.1). It is here rather than in the
-    # consumer because the INSTALLER links `$out/<name>`: haus's
-    # tool-skills.nix names the directories it wants, so a consumer that has
-    # not flipped yet asks for `holt` and must still find a directory.
-    #
-    # `name:` has to be rewritten with the directory, or the guard below fails
-    # on the copy: a skill whose frontmatter name disagrees with its directory
-    # installs, lists, and is never loaded. Only ONE of the two is ever linked
-    # into ~/.claude/skills, so no agent sees the skill twice.
-    #
-    # Both this block and $out/holt go at 1.1.0 (§8.1), leaving one directory
-    # named scruff.
-    mkdir -p "$out/holt"
-    sed '0,/^name: scruff$/s//name: holt/' "$ai/SKILL.md" > "$out/holt/SKILL.md"
-    grep -q '^name: holt$' "$out/holt/SKILL.md" || {
-      echo "skill.nix: ai/SKILL.md has no 'name: scruff' line to rewrite" >&2
-      exit 1
-    }
     for dir in "$ai"/*/; do
       [ -f "$dir/SKILL.md" ] || continue
       name="$(basename "$dir")"

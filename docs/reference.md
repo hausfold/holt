@@ -131,18 +131,15 @@ Three failures worth telling apart:
 
 ## Environment
 
-⚠️ **Every variable here has two spellings.** This tool was `holt` until 1.0.0
-([rename.md](./rename.md)), and one binary answers to both names: `SCRUFF_*` is
-read first and `HOLT_*` is the fallback rung, exactly as `CLAUDE_WT_BASE` has
-always sat above both. Hooks are handed **both** spellings, so a consumer reading
-the old names keeps working untouched. The `HOLT_*` half is deleted at 1.1.0 —
-write the new one in anything new.
+One spelling. This tool was `holt` until 1.0.0, and the `HOLT_*` fallback
+rungs ended at 1.1.0 ([rename.md](./rename.md) §8.1) — the binary answers to
+`scruff` alone now.
 
 | | |
 |---|---|
 | `SCRUFF_AGENT` | the default client, for one invocation |
-| `SCRUFF_BASE` | where checkouts live (default `~/.cache/claude-worktrees`, moving to `~/.cache/scruff` at 1.1.0) |
-| `SCRUFF_STATE` | where machine state lives — the occupancy leases and the reap ledger (default `$XDG_STATE_HOME/scruff`, else `~/.local/state/scruff`; the `holt`-named directory is still used on a machine that already has one) |
+| `SCRUFF_BASE` | where checkouts live — default `~/.cache/scruff`, falling back to `~/.cache/claude-worktrees` only while that path holds the `registry.tsv` (see below) |
+| `SCRUFF_STATE` | where machine state lives — the occupancy leases and the reap ledger (default `$XDG_STATE_HOME/scruff`, else `~/.local/state/scruff`) |
 | `SCRUFF_OCCUPANCY` | `lease` declares that every session here is one this tool spawned, so a lane nobody leased is a lane nobody is in |
 
 `SCRUFF_STATE` **must be absolute**. A relative value is refused with a warning
@@ -151,11 +148,26 @@ the current directory would scatter the lease and the ledger into whatever
 directory scruff was run from — routinely a git checkout, where they show up as
 an untracked dir and can be swept into a `wip:` commit by `scruff park`.
 
-A hook is handed the lane as `SCRUFF_*` (and `HOLT_*`) too, and none of the
+A hook is handed the lane as `SCRUFF_*`, and none of the
 above is among them: the lane's own fields are `SCRUFF_LANE_AGENT`,
 `SCRUFF_LANE_STATE` and `SCRUFF_BASE_BRANCH`, spelled apart precisely so a hook's environment — which it
 leaks into any pane it spawns — can never feed scruff back its own input. See
 [lifecycle.md](./lifecycle.md).
+
+## The base path
+
+Checkouts live under `~/.cache/scruff/<repo>/<name>` whichever client you are.
+The env ladder is `SCRUFF_BASE`, then `CLAUDE_WT_BASE` — the last rung
+predates both of this tool's names and survives because SPEC.md §10's bash
+predecessor is still the reason it exists.
+
+A base at the legacy path (`~/.cache/claude-worktrees`) keeps working
+indefinitely — the fallback keys on that path holding the `registry.tsv`, so
+no one who skips the migration is broken. `scruff doctor --migrate-base`
+moves it: it refuses with exit 2 while anything is standing in the base,
+re-points every checkout with `git worktree repair`, rewrites the registry
+under the same lock, and leaves the old path a symlink so stale absolute
+paths still resolve ([rename.md](./rename.md) §8.2).
 
 ## Exit codes
 
