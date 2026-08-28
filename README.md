@@ -137,7 +137,7 @@ to `sdk/swift` here, never to the mirror.</sub>
 
 <sub>**pre-1.0** · Nothing here takes something it can't give back — a dirty tree is parked as a commit, and only merged, unoccupied lanes are ever reaped. That's the intent, not a warranty: keep a backup, and [tell us what breaks](https://github.com/hausfold/scruff/issues).</sub>
 
-<sub>Apache-2.0 · one of the [hausfold](https://github.com/hausfold) repos — [haus](https://github.com/hausfold/haus) rebuilds the Mac, this is what its agent panes stand on</sub>
+<sub>MIT · one of the [hausfold](https://github.com/hausfold) repos — [haus](https://github.com/hausfold/haus) rebuilds the Mac, this is what its agent panes stand on</sub>
 
 <a href="https://hausfold.co">⌂ hausfold</a>
 

@@ -212,4 +212,4 @@ or `nix develop` for a shell with Go, bats and `gh`.
 
 ## License
 
-Apache-2.0 — see [`LICENSE`](../LICENSE).
+MIT — see [`LICENSE`](../LICENSE).
