@@ -63,7 +63,7 @@
 
           meta = {
             description = "Worktree lifecycle for parallel coding agents: park, resume, PR-verified reap";
-            license = pkgs.lib.licenses.asl20;
+            license = pkgs.lib.licenses.mit;
             mainProgram = "scruff";
           };
         };

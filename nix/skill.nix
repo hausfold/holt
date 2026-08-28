@@ -38,7 +38,7 @@ runCommand "scruff-skill"
     nativeBuildInputs = [ bash ];
     meta = {
       description = "Agent skills teaching a coding agent to drive scruff and to hand work to a fresh lane";
-      license = lib.licenses.asl20;
+      license = lib.licenses.mit;
       platforms = lib.platforms.all;
     };
   }
