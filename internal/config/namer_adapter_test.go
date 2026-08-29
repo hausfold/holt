@@ -92,7 +92,7 @@ func TestLoadNamerAdapterMalformedTOML(t *testing.T) {
 
 func TestBuiltinNamerTOMLParsesAsAFileWould(t *testing.T) {
 	// SPEC.md §5.1: a built-in is exactly the file a user would write, and
-	// this one is the file `docs/reference.md` tells them to copy.
+	// this one is the file hausfold.co/docs/scruff/config tells them to copy.
 	keys, err := parseAdapterFile("builtin", []byte(BuiltinNamerTOML))
 	if err != nil {
 		t.Fatalf("the built-in must parse through the ordinary loader: %v", err)

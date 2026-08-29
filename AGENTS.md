@@ -9,9 +9,13 @@ Per-client wiring lives in that client's own file; the wiring map is
 [`.agents/README.md`](./.agents/README.md).
 
 Deep detail lives in the docs, not here — [`SPEC.md`](./SPEC.md) is the design
-of record, [`docs/lifecycle.md`](./docs/lifecycle.md) the state machine,
-[`docs/reference.md`](./docs/reference.md) config and exit codes,
-[`docs/releasing.md`](./docs/releasing.md) the six-artifact release.
+of record and [`docs/releasing.md`](./docs/releasing.md) the six-artifact
+release. **The user-facing manual is not in this repo**: the lifecycle, config,
+exit codes, the `--json` payload, the seams and the SDKs are all at
+[hausfold.co/docs/scruff](https://hausfold.co/docs/scruff/), written in
+[`hausfold/hausfold.co`](https://github.com/hausfold/hausfold.co) under
+`content/docs/scruff/`. A change here that moves a verb, a flag, an exit code or
+a `--json` key changes that tree too, in the same breath as `ai/SKILL.md`.
 
 ## What scruff is, and what it must never become
 

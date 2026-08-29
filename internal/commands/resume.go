@@ -188,7 +188,7 @@ func clientInstalled(id string) bool {
 
 // shellCommand renders an argv as a command STRING a hook can run through a
 // shell — which is what the `command` field and `SCRUFF_COMMAND` have always been
-// (lifecycle.md: "run it; don't rebuild it"), and what every opener does with it.
+// (hausfold.co/docs/scruff/seams: "run it; don't rebuild it"), and what every opener does with it.
 //
 // Each element is quoted independently. Until `--prompt`, every argv scruff handed
 // a hook was one or two bare words (`claude`, `codex resume --last`) where a
