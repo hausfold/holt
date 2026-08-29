@@ -106,10 +106,9 @@ func resolveStateDir() (dir, warning string) {
 	return defaultStateDir(), warning
 }
 
-// defaultStateDir is the scruff-named state directory, full stop. The
-// holt-named fallback ended at 1.1.0 (docs/rename.md §8.1); leases are
-// 90-second ephemera and the reap ledger restarts empty rather than carry the
-// old path's spelling forever.
+// defaultStateDir is the scruff-named state directory, full stop. There is no
+// second spelling to fall back to: leases are 90-second ephemera and the reap
+// ledger restarts empty rather than carry an older path forever.
 func defaultStateDir() string {
 	if s := os.Getenv("XDG_STATE_HOME"); s != "" {
 		return filepath.Join(s, "scruff")

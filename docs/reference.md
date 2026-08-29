@@ -131,9 +131,7 @@ Three failures worth telling apart:
 
 ## Environment
 
-One spelling. This tool was `holt` until 1.0.0, and the `HOLT_*` fallback
-rungs ended at 1.1.0 ([rename.md](./rename.md) §8.1) — the binary answers to
-`scruff` alone now.
+One spelling: every variable below is `SCRUFF_*`, and nothing else is read.
 
 | | |
 |---|---|

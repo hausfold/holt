@@ -257,7 +257,7 @@ func decode(s string) map[string]any {
 //
 // This is not hypothetical tidiness. A hook that spawns a pane leaks this whole
 // environment into the shell it starts, and into every window opened from it —
-// so before the rename, `holt` run in an agent pane resolved its
+// so a bare run inside an agent pane once resolved its
 // machine-global state to the relative path "live" under the cwd (a git
 // checkout, routinely), and read the lane's own client as an override sitting
 // ABOVE the operator's config key. A hook that wants the client scruff was about
