@@ -346,8 +346,8 @@ func trustWorktreeClaude(main, dir string) {
 // `{"/Users/you/code": true}` covers every repo underneath it. (Absolute — pi
 // writes the resolved path and nothing here expands `~`.) That inheritance is
 // also exactly why a lane still prompts: scruff's checkouts live at
-// `~/.cache/claude-worktrees/<repo>/<name>`, outside whatever tree the user
-// trusted, so no ancestor of the new directory has a decision saved.
+// `~/.cache/scruff/<repo>/<name>`, outside whatever tree the user trusted, so
+// no ancestor of the new directory has a decision saved.
 //
 // So the lookup walks the MAIN checkout's ancestors for the nearest saved
 // decision — the same question pi itself would ask of the main checkout — and
