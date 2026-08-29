@@ -37,6 +37,7 @@ type jsonLane struct {
 	Branch         string        `json:"branch"`
 	Path           string        `json:"path"`
 	Parent         string        `json:"parent"`
+	Chat           string        `json:"chat"`
 	Agent          string        `json:"agent"`
 	State          string        `json:"state"`
 	Occupied       *bool         `json:"occupied"`
@@ -125,6 +126,7 @@ func (e *Env) toJSONLane(r listRow, occ occupancy.Report) jsonLane {
 	if row, ok := e.Reg.Find(entry.Path); ok {
 		w.Parent = row.Parent
 	}
+	w.Chat = e.jsonChat(r.Agent, entry.Path)
 	// true / false / null, and the three are genuinely different answers.
 	// A lease asserts presence even when nothing on this machine can vouch
 	// for absence, so "held" outranks "unknowable" — but the reverse never

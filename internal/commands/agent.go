@@ -459,7 +459,7 @@ func projDir(cwd string) string {
 // guess on their behalf — "unknown" is the honest answer, and the caller
 // degrades to opening the picker.
 func agentHasChat(agent, cwd string) bool {
-	if agent != "claude" {
+	if !agentProbeable(agent) {
 		return false
 	}
 	fi, err := os.Stat(projDir(cwd))
@@ -487,6 +487,13 @@ func (e *Env) chatHome(agent, wt string) string {
 	if !ok || row.Parent == "" {
 		return wt
 	}
+	// A plain lane's parent IS its own main checkout — neither signature can
+	// hold, and the cross-repo test below would spend two git invocations
+	// proving it. Answered here because the listing asks this of every lane,
+	// and for a client with no cheap transcript probe that is every lane.
+	if row.Parent == row.Main {
+		return wt
+	}
 	usable := func(parent string) bool {
 		return agent != "claude" || agentHasChat(agent, parent)
 	}
@@ -503,6 +510,35 @@ func (e *Env) chatHome(agent, wt string) string {
 	}
 	return wt
 }
+
+// jsonChat is the `chat` field of `--json`: the checkout whose conversation
+// `scruff <name>` will open, and "" when scruff cannot actually tell.
+//
+// It is NOT chatHome, and the difference is the whole point. chatHome must
+// always name a directory — resume has to open something — so for a client
+// whose transcripts scruff cannot probe it FALLS BACK to the parent, which is
+// the better guess when you are about to exec a picker. A consumer reading
+// `chat` is asking the opposite question ("does this lane have a pane of its
+// own, or is it just a checkout somebody's pane edits?"), and there that
+// fallback is a lie: every codex/opencode lane spawned from another lane's
+// pane would answer "no chat of my own" and vanish from a picker that filtered
+// on it, window and all.
+//
+// So the guess is not published. "" means undetermined, consumers must read it
+// as "show it", and the field is only ever load-bearing for a client scruff can
+// genuinely probe.
+func (e *Env) jsonChat(agent, wt string) string {
+	if !agentProbeable(agent) {
+		return ""
+	}
+	return e.chatHome(agent, wt)
+}
+
+// agentProbeable reports whether "does this cwd have a conversation in it?" is
+// a question scruff can answer for this client at all. Only Claude exposes a
+// cheap cwd → transcript-directory mapping; the others keep private session
+// indexes and their own cwd-filtered pickers are the authority (§5.3).
+func agentProbeable(agent string) bool { return agent == "claude" }
 
 // agentForPath is the recorded client for a lane, resolved BEFORE a parked
 // checkout is re-registered: a five-column registry row predates the client

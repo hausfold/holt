@@ -67,6 +67,8 @@ export interface ScruffLane {
   branch: string;
   path: string;
   parent: string;
+  /** `chat` — the checkout whose conversation `scruff <name>` opens: this lane's own `path` when it holds a chat, the PARENT's path when the lane is just a checkout somebody's pane edits. Absent or empty means scruff could not tell — read that as "show it". Filter a picker on this, never on `parent`: `parent` cannot tell a `scruff child` checkout from a full lane opened inside another pane, and hiding the second hides a running agent. */
+  chat?: string;
   /** The client this lane opens (`claude` | `codex` | `opencode` | `pi`, or
    * whatever adapters are configured) — never the lane's own identity. */
   agent: string;
