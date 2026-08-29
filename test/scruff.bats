@@ -958,6 +958,39 @@ hook_notify() { # hook_notify <json> — drive the notify hook
     || fail "chat should name \$parent for both lanes: $output"
 }
 
+@test "list --json: chat is EMPTY, not a guess, for a client scruff cannot probe" {
+  # The trap `chat` exists to avoid, pointed the other way. resume must always
+  # name a directory, so for codex/opencode it falls back to the parent — a
+  # sensible guess when the next step is exec-ing a picker. PUBLISHED, that
+  # guess says "no chat of my own" about a lane opened from inside another
+  # pane, which has a window and an agent in it, and a picker filtering on the
+  # field would hide a running agent. Undetermined is the only honest answer.
+  local main sub parent child
+  main="$(mkrepo alpha)"; sub="$(mkrepo beta)"
+  parent="$(mkwt "$main" workshop)"
+  mkdir -p "$HOME/.claude/projects/$(printf '%s' "$parent" | tr './' '--')"
+  cd "$parent"; child="$("$WT" child "$sub" workshop 2>/dev/null)"
+
+  # Claude can be probed, so the spawned lane answers with the parent's path.
+  cd "$TMP"; wt_run list --json
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | grep -c "\"chat\": \"$parent\"")" -eq 2 ] || fail "$output"
+
+  # The same lane under a client whose transcripts scruff cannot see. `child`
+  # is Claude Code's own hook, so the column is rewritten in place.
+  awk -F'\t' -v OFS='\t' -v p="$child" '$4 == p { $6 = "codex" } 1' "$REG" >"$REG.new"
+  mv "$REG.new" "$REG"
+  cd "$TMP"; wt_run list --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"agent": "codex"'* ]] || fail "the client column did not change: $output"
+  [ "$(printf '%s\n' "$output" | grep -c '"chat": ""')" -eq 1 ] \
+    || fail "an unprobeable client must answer \"\", not a parent path: $output"
+
+  # …and resume still gets its guess, which is a different question.
+  wt_run resume beta/workshop
+  [[ "$output" == *"spawned from a pane in $parent"* ]] || fail "resume lost its fallback: $output"
+}
+
 @test "list: a spawned lane is drawn UNDER its parent, never dropped from the table" {
   # Its branch and its PR are its own, and closing the parent's pane does not
   # reap it — so the listing is where it has to stay visible. Nesting is the

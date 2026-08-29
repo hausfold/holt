@@ -46,7 +46,7 @@ system, the package manager or which agent is running.
 | everything, exhaustively | `scruff --help` (prints to **stderr**) |
 
 `scruff --json` returns `{scruff, schema, warnings, lanes:[…]}`. Each lane carries
-`name`, `repo`, `main`, `branch`, `path`, `parent`, `agent`, `state`,
+`name`, `repo`, `main`, `branch`, `path`, `parent`, `chat`, `agent`, `state`,
 `occupied`, `occupied_by`, `dirty`, `landed:{verdict,via,confidence}`,
 `post_merge_ahead:{commits,pr,diverged}` and `last_commit`.
 
@@ -63,6 +63,14 @@ What an agent gets wrong about that payload:
   false.** Reading `null` as falsy is how you tell a user a lane is clean when
   scruff could not tell. Every consumer bug in the predecessor's status bar came
   from exactly this.
+- **`chat`, not `parent`, says whether a lane has a pane of its own.** A lane
+  spawned by `scruff child` — or opened from inside another lane's pane — is
+  parented to that lane either way, and only the second has a window and a
+  conversation. `chat` is the checkout `scruff <name>` would resume into: equal
+  to `path` when the lane holds its own chat, the parent's path when it doesn't.
+  `""` means scruff could not tell (a client whose transcripts it cannot probe)
+  and must be read as *show it*. Filter a picker on this; never hide a lane on
+  `parent` alone, and never hide one that is listed as `live`.
 - **`occupied` says a process is standing there, not that a *pane* is.** A dev
   server or an orphaned daemon holds a lane exactly as hard as a live agent.
   `occupied_by[]` names it (`{pid, command, path, via}`, absent when free) — use

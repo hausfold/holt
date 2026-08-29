@@ -214,10 +214,17 @@ Contract points that matter:
   lane with its own chat, the parent's path for a spawned one (§5.3). It is an
   ADDITION, and the field a consumer that wants to hide lanes with no pane of
   their own must read: `parent` cannot answer that question, because a lane
-  opened with ⌘↵ from inside another lane's pane is parented to that lane
-  exactly as a `scruff child` is, and it has a pane, a panel and a chat. `""`
-  means undetermined and must be read as "show it", the safe direction — the
-  same rule `occupied` follows below.
+  opened from inside another lane's pane is parented to that lane exactly as a
+  `scruff child` is, and it has a pane, a panel and a chat. **`""` means
+  undetermined and must be read as "show it"** — the same rule `occupied`
+  follows below, and the reason `chat` is not simply `resume`'s answer:
+  resume must always name a directory, so for a client whose transcripts scruff
+  cannot probe it falls back to the parent. Published, that guess would hide
+  every codex/opencode lane spawned from another pane, window and all. So the
+  field is `""` for any client scruff cannot probe, and only ever load-bearing
+  where it can. It is derived per call, not stored: it flips from the parent's
+  path to the lane's own the first time an agent leaves a conversation in that
+  checkout, which is a real change in the lane and a `watch` event worth having.
 - `occupied`, `dirty`, `pr` are **nullable**: `null` means *not determined*
   (no `lsof`, no forge, cache miss), which is categorically different from
   `false`. Every consumer bug in the bash version's statusline came from

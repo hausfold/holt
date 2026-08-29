@@ -91,6 +91,9 @@ pub struct Lane {
     pub branch: String,
     pub path: String,
     pub parent: String,
+    /// the checkout whose conversation `scruff <name>` opens: this lane's own `path` when it holds a chat, the PARENT's path when the lane is just a checkout somebody's pane edits. Absent or empty means scruff could not tell — read that as "show it". Filter a picker on this, never on `parent`: `parent` cannot tell a `scruff child` checkout from a full lane opened inside another pane, and hiding the second hides a running agent.
+    #[serde(default)]
+    pub chat: Option<String>,
     /// The client this lane opens (`claude` | `codex` | `opencode` | `pi`, or
     /// whatever adapters are configured) — never the lane's own identity.
     pub agent: String,

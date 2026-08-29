@@ -129,6 +129,12 @@ public struct ScruffLane: Codable, Hashable, Sendable {
     public let branch: String
     public let path: String
     public let parent: String
+    /// the checkout whose conversation `scruff <name>` opens: this lane's own `path` when it holds a chat, the PARENT's path when the lane is just a checkout somebody's pane edits. Absent or empty means scruff could not tell — read that as "show it". Filter a picker on this, never on `parent`: `parent` cannot tell a `scruff child` checkout from a full lane opened inside another pane, and hiding the second hides a running agent.
+    ///
+    /// Optional so an older CLI, which does not emit the key at all, still
+    /// decodes: the synthesised initialiser reaches for `decodeIfPresent` on an
+    /// optional, and `nil` is the same "could not tell" the empty string is.
+    public let chat: String?
     /// The client this lane opens (`claude` | `codex` | `opencode` | `pi`, or
     /// whatever adapters are configured) — never the lane's own identity.
     public let agent: String
@@ -140,15 +146,16 @@ public struct ScruffLane: Codable, Hashable, Sendable {
     public let lastCommit: String
 
     enum CodingKeys: String, CodingKey {
-        case name, repo, main, branch, path, parent, agent, state, occupied, dirty, landed
+        case name, repo, main, branch, path, parent, chat, agent, state, occupied, dirty
+        case landed
         case postMergeAhead = "post_merge_ahead"
         case lastCommit = "last_commit"
     }
 
     public init(
         name: String, repo: String, main: String, branch: String, path: String, parent: String,
-        agent: String, state: LaneState, occupied: Bool?, dirty: Bool?, landed: LandedInfo,
-        postMergeAhead: PostMergeAhead, lastCommit: String
+        chat: String? = nil, agent: String, state: LaneState, occupied: Bool?, dirty: Bool?,
+        landed: LandedInfo, postMergeAhead: PostMergeAhead, lastCommit: String
     ) {
         self.name = name
         self.repo = repo
@@ -156,6 +163,7 @@ public struct ScruffLane: Codable, Hashable, Sendable {
         self.branch = branch
         self.path = path
         self.parent = parent
+        self.chat = chat
         self.agent = agent
         self.state = state
         self.occupied = occupied

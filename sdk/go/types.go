@@ -81,6 +81,8 @@ type Lane struct {
 	Branch string `json:"branch"`
 	Path   string `json:"path"`
 	Parent string `json:"parent"`
+	// Chat is the checkout whose conversation scruff <name> opens: this lane's own path when it holds a chat, the PARENT's path when the lane is just a checkout somebody's pane edits. Absent or empty means scruff could not tell — read that as "show it". Filter a picker on this, never on parent: parent cannot tell a scruff child checkout from a full lane opened inside another pane, and hiding the second hides a running agent.
+	Chat string `json:"chat"`
 	// Agent is the client this lane opens (claude | codex | opencode | pi, or
 	// whatever adapters are configured) — never the lane's own identity.
 	Agent          string         `json:"agent"`

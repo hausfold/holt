@@ -126,16 +126,7 @@ func (e *Env) toJSONLane(r listRow, occ occupancy.Report) jsonLane {
 	if row, ok := e.Reg.Find(entry.Path); ok {
 		w.Parent = row.Parent
 	}
-	// `chat` != `path` is the one honest test for "this lane has no
-	// conversation of its own" — a spawned lane resumes into the pane that made
-	// it (§5.3), so its checkout holds code and nothing else. It is what a
-	// PICKER should filter on, where `parent` is not: a lane opened with ⌘↵
-	// from inside another lane's pane is parented to that lane exactly like a
-	// `scruff child` is, and it has a window, a panel and a chat of its own.
-	// Consumers must treat it as advisory — an empty value means "not
-	// determined" (a client whose transcript store scruff cannot cheaply probe),
-	// never "no chat".
-	w.Chat = e.chatHome(r.Agent, entry.Path)
+	w.Chat = e.jsonChat(r.Agent, entry.Path)
 	// true / false / null, and the three are genuinely different answers.
 	// A lease asserts presence even when nothing on this machine can vouch
 	// for absence, so "held" outranks "unknowable" — but the reverse never

@@ -486,7 +486,7 @@ func renderTable(rows []listRow) {
 	// Only ever printed when a row earned it, so the listing stays a table on a
 	// normal day — and the day it isn't normal, the fix is one command away.
 	if spawned {
-		ui.Say("└ = spawned from the lane above it — it has no pane of its own, but it does have its own branch and PR, and closing that pane never reaps it")
+		ui.Say("└ = spawned from the lane above it (`scruff child`, or a lane opened from inside that pane) — its branch and PR are its own, and closing that pane never reaps it")
 	}
 	if relanded {
 		ui.Say("+N = commits landed AFTER that branch's PR merged — no PR covers them: scruff reship <name>")
