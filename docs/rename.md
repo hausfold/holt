@@ -440,10 +440,12 @@ whoever picks it up.
 | 10 | `scruff 1.1.0` — the base move and the end of compat (§8) | — | ✅ **released 2026-08-28**, [run 33151564859](https://github.com/hausfold/scruff/actions/runs/33151564859) — eleven jobs green from tag `v1.1.0` (`e226821`). `internal/compat` is gone, `scruff doctor --migrate-base` shipped, and the env ladder is `SCRUFF_BASE` → `CLAUDE_WT_BASE`. haus landed its half in the same round (haus#557) |
 | 11 | `scruff doctor --migrate-base` on this machine | — | ✅ **run 2026-08-29.** The base is `~/.cache/scruff`, `registry.tsv` holds no legacy path, every lane's `gitdir` back-pointer was repaired to the new checkout, and `~/.cache/claude-worktrees` is the one-release symlink step 5 specifies. `scruff doctor` now reports the default, not the legacy path |
 | 12 | the two lane-base readers §8.2's table missed | — | `haus/modules/ai/statusline-refresh.sh` and the workshop's `bench` both resolved `${CLAUDE_WT_BASE:-~/.cache/claude-worktrees}` and nothing else. Both now take `spawn-agent.sh`'s probe ladder, each with tests that fail against the old line — three in `test/statusline-refresh.bats`, four in `test/bench.bats`. They were surviving on step 11's symlink and would have gone quiet at `1.2.0` |
-| 13 | §8.6's scruff half — the fin key | — | scruff#89 open. `askKey` writes `scruff/`, `legacyAskKey` + `takeDownAsk` read both, dated to 1.3.0 |
-| 14 | §8.6's haus half — the session name and the forced window title | — | haus#563 open. `lane-open.sh` writes `scruff.`, nine readers match `scruff.*|holt.*`. Found on the way past: `find.sh`'s label column had been stripping `^scruff\.` since the rename against a writer still emitting `holt.`, so every ⌘F lane row carried its full prefix |
-| 15 | trill's `TRILL_HOLT` / `holt`-binary rungs | — | trill#49 open. Its own comment said "drop once 1.1.0 is the floor"; 1.1.0 released 2026-08-28 |
-| 16 | the site's last `holt` string | — | hausfold.co#180 open, **gated on haus#563** — it renders that PR's `site-data`. `haus.ai.namer`'s `~/.config/holt` migration ⚠️ |
+| 13 | §8.6's scruff half — the fin key | — | ✅ merged, scruff#89. `askKey` writes `scruff/`, `legacyAskKey` + `takeDownAsk` read both, dated to 1.3.0 |
+| 14 | §8.6's haus half — the session name and the forced window title | — | ✅ merged, haus#563. `lane-open.sh` writes `scruff.`, nine readers match `scruff.*|holt.*`. Found on the way past: `find.sh`'s label column had been stripping `^scruff\.` since the rename against a writer still emitting `holt.`, so every ⌘F lane row carried its full prefix |
+| 15 | trill's `TRILL_HOLT` / `holt`-binary rungs | — | ✅ merged, trill#49. Its own comment said "drop once 1.1.0 is the floor"; 1.1.0 released 2026-08-28 |
+| 16 | the site's last `holt` string | — | ✅ merged, hausfold.co#180. `haus.ai.namer`'s `~/.config/holt` migration ⚠️, gone. The drift gate reads haus's `main`, so it stayed red until step 14 landed — and then stayed red for a *second*, unrelated reason: `haus.ai.default` and `haus.bar.items.agents` had not been re-rendered since pi got its extension and Spawn Agent its ⇥ chip (haus#560, #561). One regeneration against `main` took both |
+| 17 | `bench release scruff 1.2.0` | — | ✅ **released 2026-08-29**, tag `v1.2.0` (`62ef56a3`), all jobs green. haus's `main` pins that exact commit, so the rebuild that ships the writers is the same one that ships the readers |
+| 18 | the ⌘↵ feel-test | — | ✅ **2026-08-29, on this machine after `haus rebuild`.** spawn → park → resume → reap round-trips, the new lane's session is `scruff.<repo>.<lane>`, and the read arm held: this document's own pane — a `holt.scruff.holt-rename` session born before the rebuild — kept its page, its short ⌘F label and its banner-resolve. **That was the last box.** |
 
 **The code half is done; what's left is yours.** Every repo that had a live
 `holt` reference is merged, and what survives a `grep -ri holt` across the family
@@ -455,21 +457,21 @@ step this repo owes is shipped**, through `1.1.0`, and every `1.1.0` box below
 is now ticked: the base moved on this machine, and the two readers §8.2's table
 missed took the same probe ladder their four siblings already had.
 
-**Two things are outstanding.** The ⌘↵ feel-test — spawn → park → resume →
-reap on a fresh `haus rebuild` — wants eyes on a real chord, and it is the only
-box in §9 still open. It should be run on a lane's own VM rather than this
-screen; nothing about it needs the user's own desktop. It is now downstream of
-§8.6: run it once, after the join has moved, rather than twice.
+**Nothing is outstanding. The rename is done**, 2026-08-16 through 2026-08-29:
+the org, the repo, the module path, five package registries, the config dir,
+the state dir, the base directory, the fin key, the session name and the window
+title. What answers to `holt` anywhere now is one of exactly two things — a
+statement about an artifact that can never be republished (the three Go proxy
+paths, registry schema 1's version key, the old package names on npm/PyPI/
+crates, ops's dated snapshots), or §8.6's dated read arm.
 
-The other is §8.6 itself — the `holt.<repo>.<lane>` join, which decision 6 froze
-and 2026-08-29 unfroze. It is the last `holt` on this machine that anything
-actually executes.
-
-Two things to schedule rather than do, both at `1.2.0`/`1.3.0` boundaries:
-removing the `~/.cache/claude-worktrees` symlink step 11 left behind (nothing
-reads through it any more — every consumer probes the new base first — so it is
-a deletion, not a migration), and §8.6's read arm. Neither goes before a release
-boundary: the machines they exist for are the ones that skipped a step.
+One thing to schedule rather than do, at the `1.3.0` boundary:
+both read arms — §8.6's, and the `~/.cache/claude-worktrees` symlink step 11
+left behind (nothing reads through it any more; every consumer probes the new
+base first, so it is a deletion, not a migration). Neither goes before a release
+boundary: the machines they exist for are the ones that skipped a step. §8.6's
+also wants the thing that is now hard to get — a session born before 1.2.0 —
+so what it costs to be wrong about it only goes down from here.
 
 ## 8.6 Phase 7 — `1.2.0`: the `holt.<repo>.<lane>` join
 
@@ -512,7 +514,7 @@ opening it.
 
 - [x] `grep -ri holt` across all family repos returns **only** dated/historical statements — what survives in haus is the §4 residue (HOLT_ fallback rungs, the frozen `holt.<repo>.<lane>` session names, the both-spellings jq filters), all collected at §8.1; hausfold.co's `out/` hits are stale local build output, the live site is clean
 - [x] `~/.claude/settings.json` contains no `holt` string, and a lane fires **one** notification
-- [ ] ⌘↵ → spawn → park → resume → reap round-trips on a fresh `haus rebuild` — **the last open box in this document.** Wants eyes on a real chord; a lane's own VM is the place, not this screen. Deferred until §8.6 has landed both halves, so it is run once against the join's final spelling rather than twice
+- [x] ⌘↵ → spawn → park → resume → reap round-trips on a fresh `haus rebuild` — run 2026-08-29 after `haus rebuild` took `scruff 1.2.0`, against the join's final spelling. It was deferred past §8.6 precisely so it happened once rather than twice, and it is the box the whole document was open for
 - [x] all five SDK suites pass from their own directories — CI's `sdks` and `swift-sdk` jobs, green at `v1.0.0`
 - [x] `scruff --version` reports `1.0.0` (proves `LDFLAGS` and `go.mod` agree) — the installed binary, not just a local build
 - [x] npm/PyPI/crates show the deprecation pointer on the old names — npm on all 21 versions, PyPI and crates via `hausfold-holt` 0.5.1
@@ -539,7 +541,14 @@ old name was open the lanes that renamed it.
 
 **At `1.2.0` — the join is renamed when these are also true:**
 
-- [ ] a lane that was blocked *before* the rebuild has its fin resolved by the first tool call after it — the read arm's whole reason to exist
-- [ ] `scruff hook notify` sends `--key scruff/<repo>/<lane>`, and `$SCRUFF_STATE/asks` holds `scruff.<repo>.<lane>` — pinned in `test/scruff.bats`
-- [ ] a Ghostty window born before the rebuild still sorts to `T/<repo>` and still answers `scruff focus`
-- [ ] `grep -rn 'holt' haus/modules` returns only the dated read arm and its tests
+- [x] a lane that was blocked *before* the rebuild has its fin resolved by the first tool call after it — the read arm's whole reason to exist
+- [x] `scruff hook notify` sends `--key scruff/<repo>/<lane>`, and `$SCRUFF_STATE/asks` holds `scruff.<repo>.<lane>` — pinned in `test/scruff.bats`
+- [x] a Ghostty window born before the rebuild still sorts to `T/<repo>` and still answers `scruff focus` — this document's own pane was the specimen, and it also proved the `find.sh` fix: its ⌘F row lost the prefix it had been carrying since 1.0.0
+- [x] `grep -rn 'holt' haus/modules` returns only the dated read arm and its tests
+
+---
+
+**Done 2026-08-29.** Fourteen days, six phases, five registries, nine repos and
+one string that was frozen forever until it wasn't. This document stays as the
+record — and as the thing to read before the next rename, which will want §8.6's
+trick (write one spelling, read two) rather than §0's instinct to freeze.
