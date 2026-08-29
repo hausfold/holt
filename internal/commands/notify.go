@@ -71,12 +71,6 @@ func (e *Env) HookNotify(stdin io.Reader) error {
 	} else {
 		clearAskOutstanding(key)
 	}
-	// A fin this lane put up before the rename is keyed the old way, so the
-	// one just sent did not replace it — trill joins on the key, not the lane.
-	// Take it down explicitly, whichever direction this event went in.
-	if legacy := legacyAskKey(key); legacy != "" {
-		takeDownAsk(legacy)
-	}
 	return nil
 }
 
@@ -96,14 +90,8 @@ func (e *Env) resolveAsk(payload map[string]any) {
 	if key == "" {
 		return
 	}
-	// Both spellings, and neither short-circuits the other: a lane can be
-	// holding one fin from before the rename and one from after, and a marker
-	// that isn't there costs a failed unlink rather than a trill launch.
 	// Nothing cleared at all means some OTHER lane is the one waiting.
 	takeDownAsk(key)
-	if legacy := legacyAskKey(key); legacy != "" {
-		takeDownAsk(legacy)
-	}
 }
 
 // runTrill launches the CLI, bounded and quiet: a wedged daemon must not hang
@@ -261,12 +249,6 @@ func (e *Env) askKeyFor(payload map[string]any) (key, lane string) {
 // all. haus's lane-seen.sh matches a zellij session named `scruff.<repo>.<lane>`
 // against this key with the slashes flattened; the two spellings have to agree
 // or the bar quietly stops resolving anything.
-//
-// It was `holt/` through 1.1.x, and a fin already on trill's ledge is still
-// keyed that way — the resolve path can only name a key that was used to put
-// one up. So scruff WRITES one spelling and READS both: see legacyAskKey, and
-// every caller of takeDownAsk. The read arm comes out at 1.3.0, by which point
-// no fin from before the rebuild can still be up.
 func askKey(lane string, payload map[string]any) string {
 	if lane != "" {
 		return askKeyPrefix + lane
@@ -277,22 +259,9 @@ func askKey(lane string, payload map[string]any) string {
 	return ""
 }
 
-// askKeyPrefix is the one spelling scruff writes; legacyAskKeyPrefix is the one
-// it still answers to.
-const (
-	askKeyPrefix       = "scruff/"
-	legacyAskKeyPrefix = "holt/"
-)
-
-// legacyAskKey is a key's pre-1.2.0 twin, or "" when it has none. Only the
-// prefix moved, so the twin is exact — the same lane, the same session id.
-func legacyAskKey(key string) string {
-	rest, ok := strings.CutPrefix(key, askKeyPrefix)
-	if !ok {
-		return ""
-	}
-	return legacyAskKeyPrefix + rest
-}
+// askKeyPrefix is the one spelling scruff writes, and now the only one it
+// answers to.
+const askKeyPrefix = "scruff/"
 
 // takeDownAsk clears one key's marker and, when there was one, resolves its
 // fin. It reports whether the marker was there — which is also the answer to

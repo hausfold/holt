@@ -295,47 +295,22 @@ func TestLaneIDMatchesTheHookPathsSpelling(t *testing.T) {
 	}
 }
 
-// ── the read arm ────────────────────────────────────────────────────────────
-//
-// scruff writes one spelling and answers to two, for one release. Without
-// this, every fin already on trill's ledge at the rebuild that shipped the
-// rename would sit there forever: the resolve path can only name a key that
-// was used to put one up, and nothing on the machine still says `holt/`.
-
-func TestLegacyAskKeyIsTheExactTwin(t *testing.T) {
-	if got := legacyAskKey("scruff/haus/sparkle"); got != "holt/haus/sparkle" {
-		t.Fatalf("legacyAskKey = %q", got)
-	}
-	if got := legacyAskKey("scruff/session/abc-123"); got != "holt/session/abc-123" {
-		t.Fatalf("legacyAskKey = %q", got)
-	}
-	// Only the prefix moved. A key that is already legacy has no twin, or the
-	// resolve path would chase `holt/holt/…` and clear nothing.
-	if got := legacyAskKey("holt/haus/sparkle"); got != "" {
-		t.Fatalf("a legacy key has no twin, got %q", got)
-	}
-	if got := legacyAskKey(""); got != "" {
-		t.Fatalf("the empty key has no twin, got %q", got)
-	}
-}
-
-// The resolve path takes both down, and neither short-circuits the other: one
-// lane can be holding a fin from before the rebuild and one from after.
-func TestResolveAskClearsBothSpellings(t *testing.T) {
+// The resolve path clears the marker for the lane the event came from — the
+// gate every later tool call reads, so a marker left behind turns the cheap
+// check into a registry read and a Trill.app launch for the life of the pane.
+func TestResolveAskClearsTheKey(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("SCRUFF_STATE", "")
 	t.Setenv("SCRUFF_TRILL", filepath.Join(t.TempDir(), "absent")) // no launch
 
 	e, row := notifyEnv(t)
-	key := askKey(laneID(row.Main, row.Name), nil)
-	markAskOutstanding(key)
-	markAskOutstanding(legacyAskKey(key))
+	markAskOutstanding(askKey(laneID(row.Main, row.Name), nil))
 
 	e.resolveAsk(map[string]any{
 		"hook_event_name": "PostToolUse", "cwd": row.Path, "session_id": "abc-123",
 	})
 
 	if anyAskOutstanding() {
-		t.Fatal("both spellings must come down together")
+		t.Fatal("the lane's marker must come down")
 	}
 }

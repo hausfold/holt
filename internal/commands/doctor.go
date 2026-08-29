@@ -14,8 +14,8 @@ import (
 )
 
 // The doctor is where scruff inspects its own house. Its first, and for now
-// only, patient is the base directory: §8.2 of docs/rename.md — the one step
-// in the whole cutover that moves a byte of anyone's work on disk.
+// only, patient is the base directory — the one step in the whole `holt` →
+// `scruff` cutover that moved a byte of anyone's work on disk.
 // The repo-inspection doctor of SPEC.md §6.4 is a separate, later surface; the
 // verb name is reserved here so that surface lands as `scruff doctor`, not as
 // a second spelling.
@@ -57,7 +57,7 @@ func (e *Env) baseReport() error {
 	return nil
 }
 
-// migrateBase is the base move of docs/rename.md §8.2 — the only scruff
+// migrateBase is the 1.1.0 base move — the only scruff
 // operation that relocates work on disk, so it is specified rather than
 // improvised:
 //

@@ -198,7 +198,7 @@ func TestHookEnvRenamesStateAwayFromScruffsOwnStateDir(t *testing.T) {
 }
 
 // Every hook variable goes out under exactly one spelling. The old-name pair
-// (docs/rename.md §3) ended at 1.1.0; this test is now the proof it ended —
+// shipped through 0.5.0 ended at 1.1.0; this test is now the proof it ended —
 // any reappearance of HOLT_* in the hook environment fails here.
 func TestHookEnvSpeaksOneName(t *testing.T) {
 	env := hookEnv("open", map[string]string{

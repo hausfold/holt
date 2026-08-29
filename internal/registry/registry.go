@@ -199,7 +199,7 @@ func (r *Registry) Prune(keep func(Row) bool) error {
 // itself. This is for the one caller that must hold it across a LARGER
 // operation than a row write: `doctor --migrate-base`, which relocates the
 // base directory — the registry file and its lock along with it — and must
-// not race any mutation while it does (docs/rename.md §8.2 step 2).
+// not race any mutation while it does: one lock, one write.
 func (r *Registry) HeldLock() (func(), error) {
 	return lock(r.path + ".lock")
 }

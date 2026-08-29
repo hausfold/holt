@@ -27,7 +27,7 @@ type Env struct {
 // baseDir resolves where worktree checkouts live.
 //
 // The env ladder is SCRUFF_BASE, then CLAUDE_WT_BASE — the plan-of-record
-// order at 1.1.0 (docs/rename.md §8.2): the old spelling's rung is gone, and
+// order at 1.1.0: the old spelling's rung is gone, and
 // CLAUDE_WT_BASE survives as the last explicit rung because SPEC.md §10's bash
 // predecessor is still the reason it exists. It predates both spellings and
 // answers to neither.

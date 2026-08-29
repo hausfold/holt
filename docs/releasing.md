@@ -118,7 +118,7 @@ crates.io's bootstrap has the matching trap: the token must carry the
 **`publish-new`** scope, and a crate-scoped token can't be made for a crate that
 doesn't exist yet — so mint one with the crate-scope field empty.
 The old names stay published forever — deprecate them in place, never yank
-(docs/rename.md §7).
+— a yanked version breaks every consumer on the way out.
 
 The Swift mirror is the one that can't use OIDC — pushing to *another* repository
 is outside what this workflow's `GITHUB_TOKEN` can ever be scoped to. Mint a

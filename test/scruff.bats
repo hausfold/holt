@@ -820,54 +820,6 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   [ -d "$asks" ]
 }
 
-# ── the read arm, for one release ───────────────────────────────────────────
-#
-# The fin key was `holt/<repo>/<lane>` through 1.1.x. A fin already on trill's
-# ledge at the rebuild that shipped the rename can only be named that way, so
-# scruff writes one spelling and answers to two. These pin the read arm; delete
-# them with it at 1.3.0.
-
-@test "notify: a resume event resolves a fin keyed before the rename" {
-  local main dir; main="$(mkrepo alpha)"; dir="$(hook_create "$main" sparkle)"
-  mktrill
-  local asks="$XDG_STATE_HOME/scruff/asks"
-  mkdir -p "$asks"; : >"$asks/holt.alpha.sparkle"
-
-  run hook_notify "{\"hook_event_name\":\"PostToolUse\",\"cwd\":\"$dir\"}"
-  [ "$status" -eq 0 ]
-  grep -q -- 'trill resolve holt/alpha/sparkle' "$FAKE_TRILL_LOG"
-  [ ! -e "$asks/holt.alpha.sparkle" ]
-}
-
-@test "notify: a new ask takes down the same lane's pre-rename fin" {
-  local main dir; main="$(mkrepo alpha)"; dir="$(hook_create "$main" sparkle)"
-  mktrill
-  local asks="$XDG_STATE_HOME/scruff/asks"
-  mkdir -p "$asks"; : >"$asks/holt.alpha.sparkle"
-
-  run hook_notify "{\"hook_event_name\":\"Notification\",\"cwd\":\"$dir\"}"
-  [ "$status" -eq 0 ]
-  # trill joins on the key, so the new ask did NOT replace the old one — two
-  # fins for one lane is exactly what keying exists to prevent.
-  grep -q -- '--key scruff/alpha/sparkle' "$FAKE_TRILL_LOG"
-  grep -q -- 'resolve holt/alpha/sparkle' "$FAKE_TRILL_LOG"
-  [ ! -e "$asks/holt.alpha.sparkle" ]
-  [ -e "$asks/scruff.alpha.sparkle" ]
-}
-
-@test "reap: a lane blocked before the rename still takes its fin down" {
-  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" sweepme)"
-  git -C "$main" merge -q --no-edit worktree-sweepme
-  mktrill
-  local asks="$XDG_STATE_HOME/scruff/asks"
-  mkdir -p "$asks"; : >"$asks/holt.alpha.sweepme"
-
-  cd "$TMP"; wt_run reap
-  [ "$status" -eq 0 ]
-  [ ! -e "$asks/holt.alpha.sweepme" ]
-  grep -q -- 'resolve holt/alpha/sweepme' "$FAKE_TRILL_LOG"
-}
-
 @test "reap: an ordinary reap launches no trill at all" {
   local main; main="$(mkrepo alpha)"; mkwt "$main" sweepme >/dev/null
   git -C "$main" merge -q --no-edit worktree-sweepme
@@ -2831,7 +2783,7 @@ teardown() {
   done <"$WATCH_OUT"
 }
 
-# ── doctor / the base move (docs/rename.md §8.2) ─────────────────────────────
+# ── doctor / the base move ───────────────────────────────────────────────────
 #
 # 1.1.0 deleted the compat half of the rename; what remains of it here is the
 # base move — the one scruff operation that relocates work on disk. The two
