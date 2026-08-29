@@ -372,9 +372,10 @@ cross-repo contract:
 |---|---|
 | every live lane | its `.git` file points at `<main>/.git/worktrees/<n>`, and that dir's `gitdir` file points **absolutely** back at the checkout |
 | `$BASE/registry.tsv` | the registry itself lives in the base — the move is a registry move |
-| `haus/modules/launcher/commands/spawn-agent.sh:117` | reads `${CLAUDE_WT_BASE:-$HOME/.cache/claude-worktrees}/registry.tsv` **by hardcoded path**, not by asking the binary |
-| `haus/modules/terminal/default.nix:793, 856` | two shell hooks match on the `$HOME/.cache/claude-worktrees/*` prefix (stale-cwd detection, and the auto-`cd` out of a dead lane) |
-| `haus/modules/ai/default.nix:204`, `workshop/AGENTS.md:164` | state the path as documentation an agent reads and believes |
+| `haus/modules/launcher/commands/spawn-agent.sh:127` | reads `${CLAUDE_WT_BASE:-$HOME/.cache/claude-worktrees}/registry.tsv` **by hardcoded path**, not by asking the binary |
+| `haus/modules/terminal/default.nix:807, 872` | two shell hooks match on the `$HOME/.cache/claude-worktrees/*` prefix (stale-cwd detection, and the auto-`cd` out of a dead lane) |
+| `haus/modules/ai/default.nix:225`, `workshop/AGENTS.md` | state the path as documentation an agent reads and believes |
+| ⚠️ `haus/modules/ai/statusline-refresh.sh:47`, `workshop/bench:1119` | **missed by this survey, and still legacy-only.** Both resolve `${CLAUDE_WT_BASE:-$HOME/.cache/claude-worktrees}` with no `~/.cache/scruff` rung, so both read the moved registry through step 5's symlink and find nothing at all on a machine that never had the old path. They are the two downstreams `AGENTS.md` names by hand and the two this table forgot, which is the whole reason they were not in haus#557 |
 | occupied panes | have a `cwd` *inside* the thing being moved |
 
 **The migration, as `scruff doctor --migrate-base`:**
@@ -396,9 +397,10 @@ cross-repo contract:
 **Fallback, permanently:** `baseDir()` prefers `~/.cache/scruff`, but falls back
 to `~/.cache/claude-worktrees` when that exists and holds a `registry.tsv`. That
 fallback is what keeps this a **minor** rather than a major — no one who skips
-the migration is broken by it. The env ladder becomes `SCRUFF_BASE` →
-`HOLT_BASE` → `CLAUDE_WT_BASE`; the last rung stays because SPEC §10's bash
-predecessor is still the reason it exists.
+the migration is broken by it. The env ladder is `SCRUFF_BASE` →
+`CLAUDE_WT_BASE`; the last rung stays because SPEC §10's bash predecessor is
+still the reason it exists, and `HOLT_BASE` is not a rung at all — §8.1 deleted
+it with the rest of the compat, and `env_test.go` now asserts it is inert.
 
 **Run migration and haus in one rebuild:** the haus PR that flips
 `spawn-agent.sh` and the two shell prefixes must land in the same `haus rebuild`
@@ -417,8 +419,8 @@ this rename.
 
 ## 8.5 Where the cutover stands, and whose step is next
 
-Updated 2026-08-27, after the family sweep (workshop#477) and the straggler
-pass (scruff#76). The phases above say what each step IS; this says which are done and who holds the next one. Keep it
+Updated 2026-08-28, after `1.1.0` shipped. The phases above say what each step
+IS; this says which are done and who holds the next one. Keep it
 current — a plan that can't say where it stopped gets re-derived from scratch by
 whoever picks it up.
 
@@ -428,24 +430,35 @@ whoever picks it up.
 | 2 | haus flips (§4) | — | ✅ shipped, rebuilt on this machine |
 | 3 | the repo/module/package/`--json` rename (§5) | — | ✅ merged, scruff#72. GitHub repos renamed; both old names left unclaimed |
 | 3b | the old-name strings the binary still **said** | — | ✅ merged, scruff#76. The tart refusal asked for `HOLT_TART_BASE` (while the next line of the same message showed `SCRUFF_TART_BASE`), the ejected adapter template pointed at `~/.config/holt`, the no-`lsof` sweep warning named `HOLT_OCCUPANCY`. Output, not comments — the three places a 1.0.0 binary would still teach a stranger the dead name |
-| 4 | **OIDC trusted publishers re-entered** on npm, PyPI, crates | **the user** | ✅ all three entered 2026-08-27 — PyPI as a *pending* publisher before the tag, npm and crates.io after the hand publish made their forms reachable (8a). Owner `hausfold`, repo `scruff`, workflow **`release.yml`** as a bare filename, environment blank; npm's allowed-actions is `npm publish` only. None of the three was exercised by this tag — npm and crates no-opped, PyPI published over its pending entry. The npm and crates entries first do real work at 1.1.0 |
+| 4 | **OIDC trusted publishers re-entered** on npm, PyPI, crates | **the user** | ✅ all three entered 2026-08-27 — PyPI as a *pending* publisher before the tag, npm and crates.io after the hand publish made their forms reachable (8a). Owner `hausfold`, repo `scruff`, workflow **`release.yml`** as a bare filename, environment blank; npm's allowed-actions is `npm publish` only. None of the three was exercised by the 1.0.0 tag — npm and crates no-opped, PyPI published over its pending entry. All three did real work at `v1.1.0`, green, with no hand step anywhere |
 | 5 | the family and the web (§6) | — | ✅ all merged 2026-08-27 — workshop#475 + #477 (incl. the checkout `mv`), hausfold.co#171, trill#47, ops#12, .github#25, perch#117, pounce#110, nebelung#51, homebrew-tap#20. snug was not in §6's table and took its own: snug#5. Both follow-ups are now merged: hausfold.co#172 (re-rendered the options page so #171's `scruff` prose went live) and ops#13 (the scoreboard comment) |
 | 6 | haus's `flake.nix` input URL → `github:hausfold/scruff` | — | ✅ merged, haus#551 — no longer leaning on GitHub's redirect |
-| 7 | the host file (`~/.config/nix/hosts/mbp/default.nix`) | **the user** | ✅ **rebuilt** — generation 1082, 2026-08-27 11:03 — and the hand-written namer adapter had already moved to `~/.config/scruff` (it had gone quiet; see §3.4's warning). This was the last live `holt` on this machine. Verified after the rebuild: `permissions.allow` in `~/.claude/settings.json` no longer carries `Bash(holt:*)` (the host file's `retire`/`drop` pair ran), all six hooks are `scruff` and fire once each, and the namer adapter answers from `~/.config/scruff`. The `holt` binary is still on `PATH` — that is the Phase-1 compat symlink, deliberate until 1.1.0. One tidy left over: the `retire` list and its `drop` call have now done their single job and can be deleted, which §8.1's compat sweep already collects |
+| 7 | the host file (`~/.config/nix/hosts/mbp/default.nix`) | **the user** | ✅ **rebuilt** — generation 1082, 2026-08-27 11:03 — and the hand-written namer adapter had already moved to `~/.config/scruff` (it had gone quiet; see §3.4's warning). This was the last live `holt` on this machine. Verified after the rebuild: `permissions.allow` in `~/.claude/settings.json` no longer carries `Bash(holt:*)` (the host file's `retire`/`drop` pair ran), all six hooks are `scruff` and fire once each, and the namer adapter answers from `~/.config/scruff`. The `holt` binary was still on `PATH` at that rebuild — the Phase-1 compat symlink, deliberate until 1.1.0, which deleted it. One tidy left over: the `retire` list and its `drop` call have now done their single job and can be deleted, which §8.1's compat sweep already collects |
 | 8 | `bench release scruff 1.0.0` | — | ✅ **released 2026-08-27**, [run 33095423641](https://github.com/hausfold/scruff/actions/runs/33095423641) — all 11 jobs green from tag `v1.0.0` (`38403e6`). All six artifacts verified on their registries, not from the log: npm `1.0.0` is `latest`, PyPI has both wheel and sdist, crates `1.0.0`, the GitHub release, `sdk/go/v1.0.0` (proxy-warmed by the job's own probe), and `1.0.0` on the scruff-swift mirror. `bench ship` has since rippled it into haus: this machine's `/run/current-system/sw/bin/scruff --version` says `1.0.0` at generation 1086 |
 | 8a | `1.0.0` hand-published to npm + crates | — | ✅ 2026-08-27. `@hausfold/scruff@1.0.0` (26 files, shasum `995059f…`) and `hausfold-scruff 1.0.0`. Both registries refuse to show a trusted-publisher form for a package that doesn't exist, so this is the bootstrap `docs/releasing.md` prescribes — **not** a second release. The release run's npm and crates jobs both check "already published?" and no-op, so the tag still goes green. PyPI is untouched and publishes over its pending publisher when the tag runs |
 | 9 | deprecate the old packages in place (§7) | — | ✅ 2026-08-27. npm: all 21 `@hausfold/holt` versions carry `renamed to @hausfold/scruff`. PyPI and crates.io have no deprecate flag, so both took a final `hausfold-holt` **0.5.1** whose manifest and README are the pointer — `Development Status :: 7 - Inactive` on PyPI, `deprecated` in the crates keywords. **Its code is byte-identical to 0.5.0** (`diff -rq` against `v0.5.0`: four files, all manifest or README), because 0.5.1 is what `^0.5` now resolves to and a stub would have broken every consumer on the way out. Nothing yanked |
-| 10 | `scruff 1.1.0` — the base move and the end of compat (§8) | an agent lane | 🔶 **in flight** — the compat deletion (§8.1) and `scruff doctor --migrate-base` (§8.2) are built and tested on this branch; the env ladder is now `SCRUFF_BASE` → `CLAUDE_WT_BASE`. What remains before tagging: the haus child PR (spawn-agent.sh, the two shell prefixes, the both-spellings jq filters, the generated-instructions sentence), `bench release scruff 1.1.0`, and the migration on this machine — the release still waits on the week of green rebuilds from gen 1086 (2026-08-27) |
+| 10 | `scruff 1.1.0` — the base move and the end of compat (§8) | — | ✅ **released 2026-08-28**, [run 33151564859](https://github.com/hausfold/scruff/actions/runs/33151564859) — eleven jobs green from tag `v1.1.0` (`e226821`). `internal/compat` is gone, `scruff doctor --migrate-base` shipped, and the env ladder is `SCRUFF_BASE` → `CLAUDE_WT_BASE`. haus landed its half in the same round (haus#557) |
+| 11 | `scruff doctor --migrate-base` on this machine | **the user** | ⏳ the last step. Until it runs, the base is still `~/.cache/claude-worktrees` and the binary's fallback is what keeps every lane readable |
 
 **The code half is done; what's left is yours.** Every repo that had a live
-`holt` reference is merged or has a PR open, and what survives a `grep -ri holt`
-across the family is deliberate in three flavours: the bilingual compat rungs
-(deleted at 1.1.0, §8.1), the frozen `holt/<repo>/<lane>` notify key (decision
-6), and dated history that must keep the old name — ops's snapshots, the Go
-proxy's three paths, `PRESENCE.md`'s register. **Every step of the 1.0.0 cutover is
-done.** What remains is the ⌘↵ feel-test from the done-list (eyes, not a
-terminal) and §8's 1.1.0 work — the base move and the end of compat, gated on a
-week of green rebuilds from gen 1086 (2026-08-27).
+`holt` reference is merged, and what survives a `grep -ri holt` across the family
+is deliberate in two flavours: the frozen `holt/<repo>/<lane>` notify key
+(decision 6), and dated history that must keep the old name — ops's snapshots,
+the Go proxy's three paths, `PRESENCE.md`'s register. The bilingual compat rungs
+were the third flavour and are not a flavour any more; §8.1 deleted them. **Every step this repo owes is
+shipped**, through `1.1.0`, and two of the four `1.1.0` boxes below are held open
+by other people's merges rather than by work: the last `HOLT_` a user can read
+lives in hausfold.co's generated options page, and the "path name is historical"
+sentence is deleted in haus and awaiting a merge in the workshop.
+
+What is genuinely outstanding is three things, none of them in this repo. The
+⌘↵ feel-test, which wants eyes. `scruff doctor --migrate-base`, which wants the
+user. And **two lane-base readers that §8.2's consumer table never listed** and
+haus#557 therefore never fixed: `haus/modules/ai/statusline-refresh.sh:47` and
+the workshop's `bench:1119`. Both still resolve only the legacy path, both
+survive today on the one-release symlink step 5 leaves behind, and both go quiet
+at `1.2.0` when it is removed — the statusline stops seeing lanes, and `bench
+status` calls every parked one a corpse.
 
 ## 9. The done-list
 
@@ -465,7 +478,7 @@ week of green rebuilds from gen 1086 (2026-08-27).
 
 - [ ] `scruff doctor --migrate-base` exits 2 with a lane occupied, and succeeds with none
 - [ ] every lane resumes and `git status` cleanly from `~/.cache/scruff/<repo>/<name>`
-- [ ] the bar, `spawn-agent.sh` and both shell hooks read the new base
+- [x] the bar, `spawn-agent.sh` and both shell hooks read the new base — haus#557; all four reach `~/.cache/scruff` before the legacy path. Their env handling is **not** `baseDir()`'s: the bar consults `SCRUFF_BASE` only after the default probe misses, `spawn-agent.sh` falls back on `CLAUDE_WT_BASE` instead, and the two zsh hooks OR-match both prefixes with no env var at all. The box names four consumers because §8.2's table did; the two it missed are in that table now, still unfixed
 - [ ] no `HOLT_`, `cmd/holt`, or both-spellings jq filter survives anywhere
 - [ ] the "path name is historical" sentence is **deleted**, not updated — §8.2
 
