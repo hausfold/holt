@@ -15,7 +15,7 @@ import (
 
 // The doctor is where scruff inspects its own house. Its first, and for now
 // only, patient is the base directory: §8.2 of docs/rename.md — the one step
-// in the whole holt→scruff cutover that moves a byte of anyone's work on disk.
+// in the whole cutover that moves a byte of anyone's work on disk.
 // The repo-inspection doctor of SPEC.md §6.4 is a separate, later surface; the
 // verb name is reserved here so that surface lands as `scruff doctor`, not as
 // a second spelling.

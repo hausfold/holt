@@ -9,9 +9,6 @@
 // "lane" is deliberate, and the vocabulary is closed: `worktree` is git's
 // checkout (a parked lane has none), `agent` is the CLIENT a lane runs, and
 // `session` belongs to the multiplexer and to the clients. See SPEC.md §0.
-//
-// This tool was called `holt` until 1.0.0; the old name stopped answering at
-// 1.1.0. The whole cutover is docs/rename.md.
 package main
 
 import (
