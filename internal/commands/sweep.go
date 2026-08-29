@@ -126,11 +126,7 @@ func (e *Env) reapSweep(mode sweepMode) SweepResult {
 			// to it: it reports whether there WAS a fin, and the ordinary reap
 			// is of a lane that ended its turn cleanly and has nothing on the
 			// ledge. A sweep of forty lanes launches nothing.
-			key := askKey(laneID(entry.Main, entry.Name()), nil)
-			takeDownAsk(key)
-			if legacy := legacyAskKey(key); legacy != "" {
-				takeDownAsk(legacy)
-			}
+			takeDownAsk(askKey(laneID(entry.Main, entry.Name()), nil))
 			res.Reaped = append(res.Reaped, entry.Name()+" ("+filepath.Base(entry.Main)+")")
 		} else {
 			e.noteRelanded(&res, entry)

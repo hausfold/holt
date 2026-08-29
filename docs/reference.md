@@ -165,7 +165,7 @@ no one who skips the migration is broken. `scruff doctor --migrate-base`
 moves it: it refuses with exit 2 while anything is standing in the base,
 re-points every checkout with `git worktree repair`, rewrites the registry
 under the same lock, and leaves the old path a symlink so stale absolute
-paths still resolve ([rename.md](./rename.md) §8.2).
+paths still resolve.
 
 ## Exit codes
 

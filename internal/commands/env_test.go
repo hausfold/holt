@@ -150,7 +150,7 @@ func TestStateDirHonoursAbsoluteOverride(t *testing.T) {
 	}
 }
 
-// ── the base (docs/rename.md §8.2) ───────────────────────────────────────────
+// ── the base ────────────────────────────────────────────────────────────────
 
 // The env ladder at 1.1.0: SCRUFF_BASE, then CLAUDE_WT_BASE. The old
 // spelling's rung is gone — setting it must do nothing, or the compat half

@@ -98,7 +98,7 @@ window that does not exist.
 
 | | |
 |---|---|
-| Name | **`scruff`** — the loose skin a mother cat carries a kitten by: the kitten goes limp and is never dropped, which is invariant 1 in one image. Shipped as `holt` (an otter's den) through 0.5.0 and renamed at 1.0.0 — [docs/rename.md](./docs/rename.md) is that cutover. |
+| Name | **`scruff`** — the loose skin a mother cat carries a kitten by: the kitten goes limp and is never dropped, which is invariant 1 in one image. Shipped as `holt` (an otter's den) through 0.5.0 and renamed at 1.0.0; the old packages stay published, deprecated in place, and the old GitHub names stay unclaimed so their redirects live. |
 | Why not `wt` | Already worktrunk's binary name, and Windows Terminal's. Non-negotiable rename. |
 | Language | **Go.** Subprocess orchestrator, zero CPU-bound work — Rust/Zig buy nothing. CGo-free cross-compilation dominates for prebuilt-binary distribution. `x/sys/unix` has `Clonefileat` + `FICLONE` so reflink needs no CGo. charm (`fang`, `huh`) makes `doctor` good, and styled output is `hausfold/snug` — charm's `x/ansi` under the family's own role vocabulary, without lipgloss's styling engine. Bun `--compile` measured 60 MB / 9 ms — startup fine, size not. |
 | License | **MIT.** A commercial GUI must be able to embed the substrate (that's the thesis) — MIT grants that with the fewest strings, and it's the family's standard. |
@@ -1073,12 +1073,6 @@ waiting before doing something costlier of its own; hausfold/haus does exactly
 that. The path, the flattening and "empty means nothing is waiting" are
 therefore a contract with more than scruff in it, and changing the naming breaks
 a reader that cannot be seen from here.
-
-The key was spelled `holt/<repo>/<lane>` through 1.1.x, which is why 1.2.0
-**writes one spelling and reads two**: a banner already on the ledge can only
-be resolved by the name that put it up, so the resolve and reap paths take down
-both twins. That read arm is dated — it goes at 1.3.0, by which point nothing
-from before the rebuild can still be up.
 
 A **relative** `$SCRUFF_STATE` is refused — scruff warns and uses the default. This
 state is machine-global, so resolving it against the process cwd scatters the
