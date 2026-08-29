@@ -1074,6 +1074,12 @@ that. The path, the flattening and "empty means nothing is waiting" are
 therefore a contract with more than scruff in it, and changing the naming breaks
 a reader that cannot be seen from here.
 
+The key was spelled `holt/<repo>/<lane>` through 1.1.x, which is why 1.2.0
+**writes one spelling and reads two**: a banner already on the ledge can only
+be resolved by the name that put it up, so the resolve and reap paths take down
+both twins. That read arm is dated — it goes at 1.3.0, by which point nothing
+from before the rebuild can still be up.
+
 A **relative** `$SCRUFF_STATE` is refused — scruff warns and uses the default. This
 state is machine-global, so resolving it against the process cwd scatters the
 lease and the ledger into whatever directory scruff was run from, routinely a git

@@ -714,7 +714,7 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   mktrill
   run hook_notify "{\"hook_event_name\":\"Notification\",\"cwd\":\"$dir\"}"
   [ "$status" -eq 0 ]
-  grep -q -- '--key holt/alpha/sparkle' "$FAKE_TRILL_LOG"
+  grep -q -- '--key scruff/alpha/sparkle' "$FAKE_TRILL_LOG"
 }
 
 # The other half of the ask: the session moved again, so the question its fin
@@ -727,7 +727,7 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   : >"$FAKE_TRILL_LOG"
   run hook_notify "{\"hook_event_name\":\"PostToolUse\",\"cwd\":\"$dir\"}"
   [ "$status" -eq 0 ]
-  grep -q -- 'trill resolve holt/alpha/sparkle' "$FAKE_TRILL_LOG"
+  grep -q -- 'trill resolve scruff/alpha/sparkle' "$FAKE_TRILL_LOG"
 }
 
 # PostToolUse fires on every tool call in every pane. With no fin outstanding it
@@ -765,7 +765,7 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   [ ! -s "$FAKE_TRILL_LOG" ]
   # …and the fin is still there to be resolved when sparkle itself moves.
   hook_notify "{\"hook_event_name\":\"PostToolUse\",\"cwd\":\"$a\"}"
-  grep -q -- 'trill resolve holt/alpha/sparkle' "$FAKE_TRILL_LOG"
+  grep -q -- 'trill resolve scruff/alpha/sparkle' "$FAKE_TRILL_LOG"
 }
 
 # A daemon that never took the ask leaves nothing armed: the next tool call must
@@ -807,17 +807,65 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   git -C "$main" merge -q --no-edit worktree-sweepme
   mktrill
   local asks="$XDG_STATE_HOME/scruff/asks"
-  mkdir -p "$asks"; : >"$asks/holt.alpha.sweepme"
+  mkdir -p "$asks"; : >"$asks/scruff.alpha.sweepme"
 
   cd "$TMP"; wt_run reap
   [ "$status" -eq 0 ]
   [[ "$output" == *"reaped sweepme (alpha)"* ]]
   # The marker is gone, and so is the fin: its `Go to lane` action would run
   # `scruff focus` against a lane that no longer exists.
-  [ ! -e "$asks/holt.alpha.sweepme" ]
-  grep -q -- 'resolve holt/alpha/sweepme' "$FAKE_TRILL_LOG"
+  [ ! -e "$asks/scruff.alpha.sweepme" ]
+  grep -q -- 'resolve scruff/alpha/sweepme' "$FAKE_TRILL_LOG"
   # And never the directory itself — something else on the machine watches it.
   [ -d "$asks" ]
+}
+
+# ── the read arm, for one release ───────────────────────────────────────────
+#
+# The fin key was `holt/<repo>/<lane>` through 1.1.x. A fin already on trill's
+# ledge at the rebuild that shipped the rename can only be named that way, so
+# scruff writes one spelling and answers to two. These pin the read arm; delete
+# them with it at 1.3.0.
+
+@test "notify: a resume event resolves a fin keyed before the rename" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(hook_create "$main" sparkle)"
+  mktrill
+  local asks="$XDG_STATE_HOME/scruff/asks"
+  mkdir -p "$asks"; : >"$asks/holt.alpha.sparkle"
+
+  run hook_notify "{\"hook_event_name\":\"PostToolUse\",\"cwd\":\"$dir\"}"
+  [ "$status" -eq 0 ]
+  grep -q -- 'trill resolve holt/alpha/sparkle' "$FAKE_TRILL_LOG"
+  [ ! -e "$asks/holt.alpha.sparkle" ]
+}
+
+@test "notify: a new ask takes down the same lane's pre-rename fin" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(hook_create "$main" sparkle)"
+  mktrill
+  local asks="$XDG_STATE_HOME/scruff/asks"
+  mkdir -p "$asks"; : >"$asks/holt.alpha.sparkle"
+
+  run hook_notify "{\"hook_event_name\":\"Notification\",\"cwd\":\"$dir\"}"
+  [ "$status" -eq 0 ]
+  # trill joins on the key, so the new ask did NOT replace the old one — two
+  # fins for one lane is exactly what keying exists to prevent.
+  grep -q -- '--key scruff/alpha/sparkle' "$FAKE_TRILL_LOG"
+  grep -q -- 'resolve holt/alpha/sparkle' "$FAKE_TRILL_LOG"
+  [ ! -e "$asks/holt.alpha.sparkle" ]
+  [ -e "$asks/scruff.alpha.sparkle" ]
+}
+
+@test "reap: a lane blocked before the rename still takes its fin down" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" sweepme)"
+  git -C "$main" merge -q --no-edit worktree-sweepme
+  mktrill
+  local asks="$XDG_STATE_HOME/scruff/asks"
+  mkdir -p "$asks"; : >"$asks/holt.alpha.sweepme"
+
+  cd "$TMP"; wt_run reap
+  [ "$status" -eq 0 ]
+  [ ! -e "$asks/holt.alpha.sweepme" ]
+  grep -q -- 'resolve holt/alpha/sweepme' "$FAKE_TRILL_LOG"
 }
 
 @test "reap: an ordinary reap launches no trill at all" {
@@ -835,15 +883,15 @@ hook_notify() { # hook_notify <json> — drive the notify hook
 @test "list: a marker older than a day is dropped, whatever it named" {
   local asks="$XDG_STATE_HOME/scruff/asks"
   mkdir -p "$asks"
-  : >"$asks/holt.session.7f3c"        # a pane outside every lane; its session ended
-  : >"$asks/holt.alpha.fresh"
-  touch -t 202001010000 "$asks/holt.session.7f3c"
+  : >"$asks/scruff.session.7f3c"        # a pane outside every lane; its session ended
+  : >"$asks/scruff.alpha.fresh"
+  touch -t 202001010000 "$asks/scruff.session.7f3c"
 
   cd "$TMP"; wt_run                   # the listing sweeps
   [ "$status" -eq 0 ]
-  [ ! -e "$asks/holt.session.7f3c" ]
+  [ ! -e "$asks/scruff.session.7f3c" ]
   # Today's marker is exactly what the gate is for.
-  [ -e "$asks/holt.alpha.fresh" ]
+  [ -e "$asks/scruff.alpha.fresh" ]
 }
 
 @test "reap: keeps a landed checkout that a pane is still standing in" {

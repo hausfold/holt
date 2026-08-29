@@ -141,7 +141,7 @@ func TestTrillBinaryHonorsOverride(t *testing.T) {
 // from one lane would hang two, and the ledge holds five.
 func TestTrillSendArgsKeysTheFinByLane(t *testing.T) {
 	e, row := notifyEnv(t)
-	want := "holt/" + filepath.Base(row.Main) + "/" + row.Name
+	want := "scruff/" + filepath.Base(row.Main) + "/" + row.Name
 	for _, event := range []string{"Notification", "Stop"} {
 		args, ok := e.trillSendArgs(map[string]any{
 			"hook_event_name": event, "cwd": row.Path, "session_id": "abc-123",
@@ -169,7 +169,7 @@ func TestTrillSendArgsKeysANonLanePaneBySession(t *testing.T) {
 		t.Fatal("a Notification event must produce a send")
 	}
 	i := slices.Index(args, "--key")
-	if i < 0 || i+1 >= len(args) || args[i+1] != "holt/session/abc-123" {
+	if i < 0 || i+1 >= len(args) || args[i+1] != "scruff/session/abc-123" {
 		t.Fatalf("want the session key, got %q", strings.Join(args, " "))
 	}
 }
@@ -194,18 +194,18 @@ func TestAskMarkersGateTheResolvePath(t *testing.T) {
 	if anyAskOutstanding() {
 		t.Fatal("a fresh state dir has no asks outstanding")
 	}
-	markAskOutstanding("holt/alpha/sparkle")
+	markAskOutstanding("scruff/alpha/sparkle")
 	if !anyAskOutstanding() {
 		t.Fatal("a marked ask must be outstanding")
 	}
-	if clearAskOutstanding("holt/alpha/other") {
+	if clearAskOutstanding("scruff/alpha/other") {
 		t.Fatal("clearing another lane's key must report nothing cleared")
 	}
-	if !clearAskOutstanding("holt/alpha/sparkle") {
+	if !clearAskOutstanding("scruff/alpha/sparkle") {
 		t.Fatal("clearing the marked key must report it cleared")
 	}
 	// Idempotent: a fin dismissed by hand leaves nothing behind to clear twice.
-	if clearAskOutstanding("holt/alpha/sparkle") || anyAskOutstanding() {
+	if clearAskOutstanding("scruff/alpha/sparkle") || anyAskOutstanding() {
 		t.Fatal("a cleared ask must stay cleared")
 	}
 }
@@ -215,7 +215,7 @@ func TestAskMarkersGateTheResolvePath(t *testing.T) {
 func TestAskMarkerStaysInsideTheStateDir(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("SCRUFF_STATE", "")
-	for _, key := range []string{"holt/alpha/sparkle", "holt/../../etc/passwd"} {
+	for _, key := range []string{"scruff/alpha/sparkle", "scruff/../../etc/passwd"} {
 		if got := filepath.Dir(askMarker(key)); got != asksDir() {
 			t.Fatalf("key %q escaped to %q", key, got)
 		}
@@ -231,16 +231,16 @@ func TestStaleAskMarkersArePruned(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("SCRUFF_STATE", "")
 
-	markAskOutstanding("holt/alpha/sparkle")
-	markAskOutstanding("holt/session/7f3c")
+	markAskOutstanding("scruff/alpha/sparkle")
+	markAskOutstanding("scruff/session/7f3c")
 	old := time.Now().Add(-askMarkerMaxAge - time.Hour)
-	if err := os.Chtimes(askMarker("holt/session/7f3c"), old, old); err != nil {
+	if err := os.Chtimes(askMarker("scruff/session/7f3c"), old, old); err != nil {
 		t.Fatal(err)
 	}
 
 	pruneStaleAsks()
 
-	if _, err := os.Stat(askMarker("holt/session/7f3c")); !os.IsNotExist(err) {
+	if _, err := os.Stat(askMarker("scruff/session/7f3c")); !os.IsNotExist(err) {
 		t.Fatal("a marker nothing will ever clear must not survive the sweep")
 	}
 	// And the live half is untouched: a lane blocked on you five minutes ago is
@@ -257,9 +257,9 @@ func TestAskMarkerPruneKeepsAnythingYoungerThanTheCutoff(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	t.Setenv("SCRUFF_STATE", "")
 
-	markAskOutstanding("holt/alpha/sparkle")
+	markAskOutstanding("scruff/alpha/sparkle")
 	young := time.Now().Add(-askMarkerMaxAge + time.Hour)
-	if err := os.Chtimes(askMarker("holt/alpha/sparkle"), young, young); err != nil {
+	if err := os.Chtimes(askMarker("scruff/alpha/sparkle"), young, young); err != nil {
 		t.Fatal(err)
 	}
 
@@ -285,12 +285,57 @@ func TestLaneIDMatchesTheHookPathsSpelling(t *testing.T) {
 	if got := laneID("/Users/x/code/hausfold.co", "ci-main-branch"); got != "hausfold.co/ci-main-branch" {
 		t.Fatalf("laneID = %q", got)
 	}
-	if got := askKey(laneID("/Users/x/code/haus", "sparkle"), nil); got != "holt/haus/sparkle" {
+	if got := askKey(laneID("/Users/x/code/haus", "sparkle"), nil); got != "scruff/haus/sparkle" {
 		t.Fatalf("askKey = %q", got)
 	}
 	// A row that is missing either half names no lane, and must not become
 	// `scruff//sparkle` — a key that would clear nothing and mark nothing.
 	if laneID("", "sparkle") != "" || laneID("/Users/x/code/haus", "") != "" {
 		t.Fatal("half a row is not a lane")
+	}
+}
+
+// ── the read arm ────────────────────────────────────────────────────────────
+//
+// scruff writes one spelling and answers to two, for one release. Without
+// this, every fin already on trill's ledge at the rebuild that shipped the
+// rename would sit there forever: the resolve path can only name a key that
+// was used to put one up, and nothing on the machine still says `holt/`.
+
+func TestLegacyAskKeyIsTheExactTwin(t *testing.T) {
+	if got := legacyAskKey("scruff/haus/sparkle"); got != "holt/haus/sparkle" {
+		t.Fatalf("legacyAskKey = %q", got)
+	}
+	if got := legacyAskKey("scruff/session/abc-123"); got != "holt/session/abc-123" {
+		t.Fatalf("legacyAskKey = %q", got)
+	}
+	// Only the prefix moved. A key that is already legacy has no twin, or the
+	// resolve path would chase `holt/holt/…` and clear nothing.
+	if got := legacyAskKey("holt/haus/sparkle"); got != "" {
+		t.Fatalf("a legacy key has no twin, got %q", got)
+	}
+	if got := legacyAskKey(""); got != "" {
+		t.Fatalf("the empty key has no twin, got %q", got)
+	}
+}
+
+// The resolve path takes both down, and neither short-circuits the other: one
+// lane can be holding a fin from before the rebuild and one from after.
+func TestResolveAskClearsBothSpellings(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("SCRUFF_STATE", "")
+	t.Setenv("SCRUFF_TRILL", filepath.Join(t.TempDir(), "absent")) // no launch
+
+	e, row := notifyEnv(t)
+	key := askKey(laneID(row.Main, row.Name), nil)
+	markAskOutstanding(key)
+	markAskOutstanding(legacyAskKey(key))
+
+	e.resolveAsk(map[string]any{
+		"hook_event_name": "PostToolUse", "cwd": row.Path, "session_id": "abc-123",
+	})
+
+	if anyAskOutstanding() {
+		t.Fatal("both spellings must come down together")
 	}
 }
