@@ -939,6 +939,41 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   [[ "$output" != *'"verdict": "fresh"'* ]] || fail "a cherry-picked lane read as fresh: $output"
 }
 
+@test "list --json: chat names the pane a spawned lane resumes into, not its own checkout" {
+  # `chat` is what a picker filters on to hide lanes with no pane of their own.
+  # `parent` cannot answer that: a lane opened from inside another lane's pane
+  # is parented to it exactly as a `scruff child` is, and it HAS a pane.
+  local main sub parent child
+  main="$(mkrepo alpha)"; sub="$(mkrepo beta)"
+  parent="$(mkwt "$main" workshop)"
+  mkdir -p "$HOME/.claude/projects/$(printf '%s' "$parent" | tr './' '--')"
+  cd "$parent"; child="$("$WT" child "$sub" workshop 2>/dev/null)"
+  cd "$TMP"; wt_run list --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"\"path\": \"$child\""* ]] || fail "the spawned lane is missing: $output"
+  [[ "$output" != *"\"chat\": \"$child\""* ]] \
+    || fail "the spawned lane claims a chat of its own: $output"
+  # Twice: the parent's chat is its own checkout, and the child's is the parent's.
+  [ "$(printf '%s\n' "$output" | grep -c "\"chat\": \"$parent\"")" -eq 2 ] \
+    || fail "chat should name \$parent for both lanes: $output"
+}
+
+@test "list: a spawned lane is drawn UNDER its parent, never dropped from the table" {
+  # Its branch and its PR are its own, and closing the parent's pane does not
+  # reap it — so the listing is where it has to stay visible. Nesting is the
+  # answer to the noise, not omission.
+  local main sub parent
+  main="$(mkrepo alpha)"; sub="$(mkrepo beta)"
+  parent="$(mkwt "$main" workshop)"
+  cd "$parent"; "$WT" child "$sub" workshop >/dev/null 2>&1
+  cd "$TMP"; wt_run list
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"└ workshop"* ]] || fail "the spawned lane is not marked: $output"
+  [ "$(printf '%s\n' "$output" | grep -n '^ *alpha' | cut -d: -f1)" \
+    -lt "$(printf '%s\n' "$output" | grep -n '^ *beta' | cut -d: -f1)" ] \
+    || fail "the spawned lane must follow the lane that spawned it: $output"
+}
+
 @test "reap: a fresh lane is still reapable — the new verdict is a label only" {
   # `fresh` splits what a reader is TOLD, never what the sweep does: there is
   # nothing on a never-committed branch to lose, exactly as before.

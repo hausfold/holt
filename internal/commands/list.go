@@ -57,6 +57,8 @@ type listRow struct {
 	Agent    string
 	Last     string
 	Entry    Entry
+	Parent   string
+	Depth    int
 	Ahead    int
 	AheadPR  int
 	Relanded bool
@@ -112,9 +114,84 @@ func (e *Env) rows() []listRow {
 			last = "no commits yet"
 		}
 		row.Last = last
+		if reg, ok := e.Reg.Find(entry.Path); ok {
+			row.Parent = reg.Parent
+		}
 		out = append(out, row)
 	}
+	return nest(out)
+}
+
+// nest orders the listing so a spawned lane sits directly under the lane that
+// spawned it, one indent deeper.
+//
+// The listing must never DROP such a row, however subordinate it looks: a
+// `scruff child` lane carries its own branch and its own PR, in another repo,
+// and remove-on-close does not reap it. This listing is the only place that
+// branch surfaces once the parent's pane is gone — so the answer to "it is
+// noise" is where it sits, not whether it is there.
+//
+// A child whose parent is no longer listed stays at the top level, unmarked:
+// nothing is nesting it any more, and an orphan pretending to be a child of
+// something invisible is the one shape that would hide it.
+func nest(rows []listRow) []listRow {
+	byPath := make(map[string]int, len(rows))
+	for i, r := range rows {
+		byPath[r.Entry.Path] = i
+	}
+	kids := make(map[int][]int, len(rows))
+	isChild := make([]bool, len(rows))
+	for i, r := range rows {
+		// A plain lane's parent is its OWN main checkout. Only a parent that is
+		// itself a listed lane means "spawned from a pane" — the same signature
+		// chatHome reads (agent.go).
+		if r.Parent == "" || r.Parent == r.Entry.Main {
+			continue
+		}
+		p, ok := byPath[r.Parent]
+		if !ok || p == i {
+			continue
+		}
+		kids[p] = append(kids[p], i)
+		isChild[i] = true
+	}
+
+	out := make([]listRow, 0, len(rows))
+	seen := make([]bool, len(rows))
+	var walk func(i, depth int)
+	walk = func(i, depth int) {
+		if seen[i] {
+			return // a parent cycle can only come from a corrupt registry; do not spin on it
+		}
+		seen[i] = true
+		row := rows[i]
+		row.Depth = depth
+		out = append(out, row)
+		for _, k := range kids[i] {
+			walk(k, depth+1)
+		}
+	}
+	for i := range rows {
+		if !isChild[i] {
+			walk(i, 0)
+		}
+	}
+	// Anything left is a cycle's tail — list it rather than lose it.
+	for i := range rows {
+		if !seen[i] {
+			walk(i, 0)
+		}
+	}
 	return out
+}
+
+// nameCell is the name column: a spawned lane is drawn under its parent, so
+// the indent is what says "this one has no pane of its own", not a missing row.
+func nameCell(r listRow) string {
+	if r.Depth < 1 {
+		return r.Name
+	}
+	return strings.Repeat("  ", r.Depth-1) + "└ " + r.Name
 }
 
 // agentFor is the client recorded for a lane. A registry row that predates
@@ -350,14 +427,15 @@ func (e *Env) mergedMapLookup(main, branch string) (headOID string, pr int) {
 // listing stays one line per lane however narrow the terminal is.
 func renderTable(rows []listRow) {
 	rw, nw, sw, cw := 4, 4, 6, 5
-	relanded, diverged := false, false
+	relanded, diverged, spawned := false, false, false
 	for _, r := range rows {
 		rw = max(rw, len(r.Repo))
-		nw = max(nw, len(r.Name))
+		nw = max(nw, len(nameCell(r)))
 		sw = max(sw, len(r.State)) // the +N / ~N marker makes this content-sized
 		cw = max(cw, len(r.Agent))
 		relanded = relanded || r.Relanded
 		diverged = diverged || r.Diverged
+		spawned = spawned || r.Depth > 0
 	}
 	rw = min(rw, 16)
 
@@ -396,17 +474,20 @@ func renderTable(rows []listRow) {
 		f := fmt.Sprintf("  %%-%ds %%-%ds %%-%ds %%-%ds %%s\n", rw, nw, sw, cw)
 		ui.Out(f, "repo", "name", "state", "agent", "last commit")
 		for _, r := range rows {
-			ui.Out(f, fit(r.Repo, rw), fit(r.Name, nw), r.State, r.Agent, fit(r.Last, lastw))
+			ui.Out(f, fit(r.Repo, rw), fit(nameCell(r), nw), r.State, r.Agent, fit(r.Last, lastw))
 		}
 	} else {
 		f := fmt.Sprintf("  %%-%ds %%-%ds %%-%ds %%s\n", rw, nw, sw)
 		ui.Out(f, "repo", "name", "state", "last commit")
 		for _, r := range rows {
-			ui.Out(f, fit(r.Repo, rw), fit(r.Name, nw), r.State, fit(r.Last, lastw))
+			ui.Out(f, fit(r.Repo, rw), fit(nameCell(r), nw), r.State, fit(r.Last, lastw))
 		}
 	}
 	// Only ever printed when a row earned it, so the listing stays a table on a
 	// normal day — and the day it isn't normal, the fix is one command away.
+	if spawned {
+		ui.Say("└ = spawned from the lane above it — it has no pane of its own, but it does have its own branch and PR, and closing that pane never reaps it")
+	}
 	if relanded {
 		ui.Say("+N = commits landed AFTER that branch's PR merged — no PR covers them: scruff reship <name>")
 	}

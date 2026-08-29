@@ -179,6 +179,7 @@ the implied verb. One envelope, so they can version-check without sniffing:
       "branch": "worktree-sparkle",
       "path": "/Users/j/.cache/scruff/hausfold-haus/sparkle",
       "parent": "/Users/j/code/workshop",
+      "chat": "/Users/j/.cache/scruff/hausfold-haus/sparkle",
       "agent": "claude",
       "state": "live",
       "occupied": true,
@@ -209,6 +210,14 @@ Contract points that matter:
   — see §3. Consumers must treat an unknown `via` as `no`. `fresh` (§3.5) is an
   ADDITION, and a minor one by the same rule `state` follows: a consumer that
   doesn't know it falls back to "not landed", which is the safe direction.
+- `chat` is the checkout whose conversation `scruff <name>` opens — `path` for a
+  lane with its own chat, the parent's path for a spawned one (§5.3). It is an
+  ADDITION, and the field a consumer that wants to hide lanes with no pane of
+  their own must read: `parent` cannot answer that question, because a lane
+  opened with ⌘↵ from inside another lane's pane is parented to that lane
+  exactly as a `scruff child` is, and it has a pane, a panel and a chat. `""`
+  means undetermined and must be read as "show it", the safe direction — the
+  same rule `occupied` follows below.
 - `occupied`, `dirty`, `pr` are **nullable**: `null` means *not determined*
   (no `lsof`, no forge, cache miss), which is categorically different from
   `false`. Every consumer bug in the bash version's statusline came from

@@ -487,6 +487,13 @@ func (e *Env) chatHome(agent, wt string) string {
 	if !ok || row.Parent == "" {
 		return wt
 	}
+	// A plain lane's parent IS its own main checkout — neither signature can
+	// hold, and the cross-repo test below would spend two git invocations
+	// proving it. Answered here because the listing asks this of every lane,
+	// and for a client with no cheap transcript probe that is every lane.
+	if row.Parent == row.Main {
+		return wt
+	}
 	usable := func(parent string) bool {
 		return agent != "claude" || agentHasChat(agent, parent)
 	}
