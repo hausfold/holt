@@ -34,8 +34,8 @@ jobs:
 
       # Cheap, and it catches a class of failure nothing else can see: a skill
       # with broken frontmatter installs, lists and is never loaded. Same script
-      # nix/skill.nix runs — scruff's CI has no Nix, so guards that lived only in
-      # that derivation would never fire here.
+      # nix/skill.nix runs — this job has no Nix (the `nix` job below does), so a
+      # guard living only in that derivation would never fire here.
       - name: agent skills
         run: |
           script/check-skills.sh ai scruff
@@ -93,6 +93,19 @@ jobs:
       - name: rust
         working-directory: sdk/rust
         run: cargo test --quiet
+
+  # The Nix package, which nothing above builds: `make check` uses the ambient Go
+  # toolchain and never reads flake.nix, so a go.mod change that leaves
+  # `vendorHash` stale is green here and broken for every consumer — the FOD hash
+  # only fails once someone rebuilds their machine against the merged commit.
+  # That is exactly how #94 (the snug re-pin) landed. This job is the gate.
+  nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - name: build the package
+        run: nix build .#default --print-build-logs
 
   swift-sdk:
     runs-on: macos-latest

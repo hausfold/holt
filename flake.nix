@@ -21,9 +21,13 @@
           pname = "scruff";
           inherit version;
           src = ./.;
-          # scruff picked up its first dependency (fsnotify, for `scruff watch`) —
-          # see go.mod.
-          vendorHash = "sha256-gTscipNyZtkaGkzOsEvREFtetqnSwG9HMbRUYbugkHw=";
+          # Re-derive this on EVERY go.mod/go.sum change — a dependency bump that
+          # leaves it stale builds fine under `go build` and `make check`, then
+          # fails the FOD hash for every consumer's rebuild (that is how #94's
+          # snug re-pin broke `haus rebuild` downstream). The `nix build` job in
+          # .github/workflows/check.yml is the gate; to get the new value, run
+          # `nix build .#default` and copy the "got:" hash out of the mismatch.
+          vendorHash = "sha256-SAZHnNOQZaHCG67Pcv/4a02XryXle3/O0BZmiCKhheo=";
           ldflags = [ "-X github.com/hausfold/scruff/internal/commands.Version=${version}" ];
 
           # Build ONLY the CLI. Left unset, buildGoModule walks every directory
