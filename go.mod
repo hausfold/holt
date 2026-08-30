@@ -48,13 +48,17 @@ require github.com/fsnotify/fsnotify v1.7.0
 //     SPEC.md §2.3, from its own side: Say/Warn/Fail write to stderr and Data is
 //     the only thing that reaches stdout.
 //
+// The listing is snug's too, not just the diagnostics: `snug.Table` budgets the
+// columns against the real window, which is what let `renderTable` stop
+// measuring in bytes over a width `tput cols` had guessed at.
+//
 // Pinned to a commit rather than a tag because snug has cut none yet — this one
-// is main's tip, the merge of hausfold/snug#1. Re-pin to the first tag when
-// there is one, and note that `go get snug@main` can answer with a STALE commit
-// for a while after a merge: the proxy caches the branch resolution, and asking
-// for @main minutes after #1 landed downgraded this line to the commit before
-// the fix. Ask for the SHA when it matters.
-require github.com/hausfold/snug v0.0.0-20260827100745-7a4381426288
+// is main's tip, the merge of hausfold/snug#10 (`Printer.PrintData`). Re-pin to
+// the first tag when there is one, and note that `go get snug@main` can answer
+// with a STALE commit for a while after a merge: the proxy caches the branch
+// resolution, and asking for @main minutes after #1 landed downgraded this line
+// to the commit before the fix. Ask for the SHA when it matters.
+require github.com/hausfold/snug v0.0.0-20260830094014-880528dbdcb1
 
 require (
 	github.com/charmbracelet/x/ansi v0.11.8 // indirect

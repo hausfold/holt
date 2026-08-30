@@ -47,3 +47,47 @@ func Out(format string, a ...any) { printer.Data(format, a...) }
 // IsTTY reports whether f is a terminal. Callers use it to decide between
 // exec-ing an interactive client and printing the command to run instead.
 func IsTTY(f *os.File) bool { return snug.DetectTerm(f).IsTTY }
+
+// A table is the one shape scruff draws that a format string cannot: `%-38s` is
+// a width the terminal never agreed to. snug budgets the columns against the
+// real window instead, sheds the slack by weight, and drops to stacked
+// key/value when even the minimums do not fit — so the types below are ALIASES
+// rather than wrappers. A caller names the same semantics snug documents
+// (Min, Weight, Role, Cut) without importing it, and this file stays scruff's
+// only mention of the library.
+type (
+	// Col describes one column's appetite: its label, the width below which
+	// it stops being worth showing, and its share of whatever is left over.
+	Col = snug.Col
+	// Side is which end of a value a column gives up when it has to.
+	Side = snug.Side
+	// Role is what a column IS, not what colour it wears.
+	Role = snug.Role
+)
+
+const (
+	CutRight = snug.CutRight // a name: keep the front — `bump-flake-and-…`
+	CutLeft  = snug.CutLeft  // a path: keep the tail — `…/internal/ui`
+	CutNever = snug.CutNever // a count or a marker: it is right or it is absent
+)
+
+const (
+	Body    = snug.Body    // ordinary text
+	Muted   = snug.Muted   // secondary detail — clients, timestamps
+	Subject = snug.Subject // the thing under discussion — a lane, a repo
+)
+
+// gutter is the family's table indent. It is wider than a single space on
+// purpose: two cells read as a gap between columns, three as a margin.
+const gutter = 3
+
+// Table prints a report to STDOUT, budgeted to that stream.
+//
+// stdout because a listing is what the user ran the command for, not the tool
+// talking about it (SPEC.md §2.3) — `scruff | less` carries the table whole
+// while the narration stays on fd 2. It also means the width comes from the
+// stream the table lands on: a pipe is never truncated, so a captured listing
+// keeps every name at full length for whatever reads it next.
+func Table(cols []Col, rows [][]string) {
+	printer.PrintData(snug.Table{Cols: cols, Rows: rows, Indent: gutter, Header: true})
+}

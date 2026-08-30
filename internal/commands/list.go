@@ -1,9 +1,6 @@
 package commands
 
 import (
-	"fmt"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -423,66 +420,34 @@ func (e *Env) mergedMapLookup(main, branch string) (headOID string, pr int) {
 
 // ── rendering ────────────────────────────────────────────────────────────────
 
-// renderTable sizes every column to its real content and to the pane, so the
-// listing stays one line per lane however narrow the terminal is.
+// renderTable hands the listing to snug, which budgets the columns against the
+// real window rather than a format string. What it replaced was a hand-rolled
+// layout measuring in BYTES (`len`) and cutting in runes — both wrong for a
+// branch name with an accent in it — over a width that came from `tput cols`,
+// which answers a static 80 in a 40-column pane.
 func renderTable(rows []listRow) {
-	rw, nw, sw, cw := 4, 4, 6, 5
 	relanded, diverged, spawned := false, false, false
+	cells := make([][]string, 0, len(rows))
 	for _, r := range rows {
-		rw = max(rw, len(r.Repo))
-		nw = max(nw, len(nameCell(r)))
-		sw = max(sw, len(r.State)) // the +N / ~N marker makes this content-sized
-		cw = max(cw, len(r.Agent))
+		cells = append(cells, []string{r.Repo, nameCell(r), r.State, r.Agent, r.Last})
 		relanded = relanded || r.Relanded
 		diverged = diverged || r.Diverged
 		spawned = spawned || r.Depth > 0
 	}
-	rw = min(rw, 16)
 
-	cols := terminalWidth()
+	// `name` carries the weight because it is the one cell you retype at
+	// `scruff <name>`, and `state` is the one that may never be abbreviated:
+	// it carries the +N / ~N markers, and `live+2` cut to `live+…` is a wrong
+	// fact rather than a short one. CutNever spends the column at its full
+	// width or gives up the table entirely for the stacked fallback.
+	ui.Table([]ui.Col{
+		{Head: "repo", Min: 4, Weight: 1, Role: ui.Muted, Cut: ui.CutRight},
+		{Head: "name", Min: 12, Weight: 3, Role: ui.Subject, Cut: ui.CutRight},
+		{Head: "state", Min: 5, Weight: 1, Role: ui.Body, Cut: ui.CutNever},
+		{Head: "agent", Min: 6, Weight: 1, Role: ui.Muted, Cut: ui.CutRight}, // 6 = `claude`, `codex`: an elided client name helps nobody
+		{Head: "last commit", Min: 12, Weight: 2, Role: ui.Muted, Cut: ui.CutRight},
+	}, cells)
 
-	// Cap `name` — the widest-varying column — as a function of the PANE, not a
-	// constant. A flat cap clipped a 29-char name in a 130-column pane with 40
-	// columns still unspent, and the truncated name is exactly the argument you
-	// then have to type at `scruff <name>`.
-	nwCap := cols - (2 + rw + 1 + 1 + sw + 1 + cw + 1) - 24
-	nwCap = max(nwCap, 28)
-	nw = min(nw, nwCap)
-
-	// Drop the client column first when space is tight, then let the commit take
-	// whatever is left. 2 = indent, +1 per inter-column gap.
-	showAgent := true
-	used := 2 + rw + 1 + nw + 1 + sw + 1 + cw + 1
-	if cols-used < 20 {
-		showAgent = false
-		used = 2 + rw + 1 + nw + 1 + sw + 1
-	}
-	lastw := cols - used
-	if lastw < 12 {
-		// Truly tight: the fixed columns alone leave no room for the commit.
-		// `name` is the next most compressible, so shrink it to buy the commit a
-		// legible slice rather than overflow the line.
-		fixed := 2 + rw + 1 + 1 + sw + 1
-		if showAgent {
-			fixed += cw + 1
-		}
-		nw = max(cols-fixed-12, 8)
-		lastw = 12
-	}
-
-	if showAgent {
-		f := fmt.Sprintf("  %%-%ds %%-%ds %%-%ds %%-%ds %%s\n", rw, nw, sw, cw)
-		ui.Out(f, "repo", "name", "state", "agent", "last commit")
-		for _, r := range rows {
-			ui.Out(f, fit(r.Repo, rw), fit(nameCell(r), nw), r.State, r.Agent, fit(r.Last, lastw))
-		}
-	} else {
-		f := fmt.Sprintf("  %%-%ds %%-%ds %%-%ds %%s\n", rw, nw, sw)
-		ui.Out(f, "repo", "name", "state", "last commit")
-		for _, r := range rows {
-			ui.Out(f, fit(r.Repo, rw), fit(nameCell(r), nw), r.State, fit(r.Last, lastw))
-		}
-	}
 	// Only ever printed when a row earned it, so the listing stays a table on a
 	// normal day — and the day it isn't normal, the fix is one command away.
 	if spawned {
@@ -494,33 +459,4 @@ func renderTable(rows []listRow) {
 	if diverged {
 		ui.Say("~N = the tip does not build on that branch's merged PR — a stale or sideways checkout, not new work. Its content already landed; remove the checkout instead of reshipping it.")
 	}
-}
-
-// fit trims a string to width, marking it when it overflowed.
-func fit(s string, n int) string {
-	if n < 1 {
-		n = 1
-	}
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	if n == 1 {
-		return "…"
-	}
-	return string(r[:n-1]) + "…"
-}
-
-func terminalWidth() int {
-	if c := os.Getenv("COLUMNS"); c != "" {
-		if n, err := strconv.Atoi(c); err == nil && n > 0 {
-			return n
-		}
-	}
-	if out, err := exec.Command("tput", "cols").Output(); err == nil {
-		if n, err := strconv.Atoi(strings.TrimSpace(string(out))); err == nil && n > 0 {
-			return n
-		}
-	}
-	return 80
 }

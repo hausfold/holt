@@ -6,8 +6,8 @@ github.com/clipperhouse/uax29/v2 v2.7.0 h1:+gs4oBZ2gPfVrKPthwbMzWZDaAFPGYK72F0NJ
 github.com/clipperhouse/uax29/v2 v2.7.0/go.mod h1:EFJ2TJMRUaplDxHKj1qAEhCtQPW2tJSwu5BF98AuoVM=
 github.com/fsnotify/fsnotify v1.7.0 h1:8JEhPFa5W2WU7YfeZzPNqzMP6Lwt7L2715Ggo0nosvA=
 github.com/fsnotify/fsnotify v1.7.0/go.mod h1:40Bi/Hjc2AVfZrqy+aj+yEI+/bRxZnMJyTJwOpGvigM=
-github.com/hausfold/snug v0.0.0-20260827100745-7a4381426288 h1:WVniTSlga2EOenAhZDlgv0Z7VVmW3LkJk/bO9uYydhI=
-github.com/hausfold/snug v0.0.0-20260827100745-7a4381426288/go.mod h1:+1rFOXEu0kqjLgTx0nA+EHz/TAuEZJ/bZh4v/Tx+cl4=
+github.com/hausfold/snug v0.0.0-20260830094014-880528dbdcb1 h1:7KdRn4V/aNbeDnpNpixNYwrA7m+jBcgflAYv/0MoGyQ=
+github.com/hausfold/snug v0.0.0-20260830094014-880528dbdcb1/go.mod h1:+1rFOXEu0kqjLgTx0nA+EHz/TAuEZJ/bZh4v/Tx+cl4=
 github.com/lucasb-eyer/go-colorful v1.4.0 h1:UtrWVfLdarDgc44HcS7pYloGHJUjHV/4FwW4TvVgFr4=
 github.com/lucasb-eyer/go-colorful v1.4.0/go.mod h1:R4dSotOR9KMtayYi1e77YzuveK+i7ruzyGqttikkLy0=
 github.com/mattn/go-runewidth v0.0.24 h1:cpokDiIn0MGnhdHwuWnJBITySJ20QyNGnY2kR/ay2DU=
