@@ -400,15 +400,51 @@ mk_stray() { # mk_stray <main> <name> — a worktree-<name> checkout outside WT_
 }
 
 @test "list: stays one line per worktree in a narrow pane" {
+  command -v python3 >/dev/null || skip "no python3 to fork a pty with"
   local main; main="$(mkrepo alpha)"
   mkwt "$main" a-rather-long-worktree-name >/dev/null
-  # stdout is the table; stderr is `say`'s banner, which is a fixed sentence and
-  # is allowed to be wider than the pane. Only the table has a width contract.
-  COLUMNS=48 run --separate-stderr "$WT" list
+  # A REAL pty, 48 columns wide. The listing is budgeted against the stream it
+  # lands on, so neither COLUMNS nor `tput cols` is asked any more — the former
+  # was never a promise the kernel made and the latter answers a static 80 in a
+  # 40-column pane. A pipe is deliberately NOT truncated (a captured listing
+  # keeps every name whole for whatever greps it), which is why measuring this
+  # takes a window rather than an environment variable.
+  #
+  # Both streams land on the one pty here, which is the shape a person actually
+  # sees: the banner folds to the same window as the table, so every line is
+  # under the contract, not just the rows.
+  run python3 - "$WT" <<'PYEOF'
+import fcntl, os, pty, select, struct, sys, termios
+cmd = sys.argv[1]
+pid, fd = pty.fork()
+if pid == 0:
+    # From the CHILD, before exec: the parent cannot set the size without
+    # racing the very first line scruff prints.
+    fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 48, 0, 0))
+    os.execvp(cmd, [cmd, "list"])
+out = b""
+while True:
+    r, _, _ = select.select([fd], [], [], 10)
+    if not r:
+        break
+    try:
+        d = os.read(fd, 65536)
+    except OSError:
+        break
+    if not d:
+        break
+    out += d
+os.waitpid(pid, 0)
+sys.stdout.write(out.decode("utf8", "replace"))
+PYEOF
   [ "$status" -eq 0 ]
+  local clean; clean="$(printf '%s' "$output" | sed $'s/\033\[[0-9;?]*[a-zA-Z]//g' | tr -d '\r')"
   while IFS= read -r l; do
-    [ "${#l}" -le 48 ] || fail "table line wider than COLUMNS=48: $l"
-  done <<<"$(printf '%s' "$output" | sed $'s/\033\\[[0-9;]*m//g')"
+    [ "${#l}" -le 48 ] || fail "line wider than the 48-column window: $l"
+  done <<<"$clean"
+  # And it is still a TABLE at that width, one line per lane — the stacked
+  # fallback would put the repo and the name on lines of their own.
+  echo "$clean" | grep -Eq '^\s+alpha\s+a-rather-lo.*live' || fail "no single-line row: $clean"
 }
 
 @test "list: self-heals — a parked branch already merged into main is reaped" {
