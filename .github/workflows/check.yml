@@ -94,18 +94,27 @@ jobs:
         working-directory: sdk/rust
         run: cargo test --quiet
 
-  # The Nix package, which nothing above builds: `make check` uses the ambient Go
-  # toolchain and never reads flake.nix, so a go.mod change that leaves
-  # `vendorHash` stale is green here and broken for every consumer — the FOD hash
-  # only fails once someone rebuilds their machine against the merged commit.
-  # That is exactly how #94 (the snug re-pin) landed. This job is the gate.
+  # `vendorHash`, which nothing above can see: `make check` uses the ambient Go
+  # toolchain and never reads flake.nix, so a go.mod change that leaves the hash
+  # stale is green here and broken for every consumer — the fixed-output
+  # derivation only fails once someone rebuilds their machine against the merged
+  # commit, and it takes `scruff` out of their system-path rather than failing
+  # one package. That is exactly how #94 (the snug re-pin) landed.
+  #
+  # `.goModules` is the FOD itself, so this is precisely the stale-hash gate and
+  # nothing else. Deliberately NOT `.#default`: that runs the derivation's
+  # checkPhase, and the bats suite is not hermetic under Linux's sandbox — the
+  # `doctor --migrate-base` cases reach for a real lsof and refuse without one.
+  # It passes on darwin only because that sandbox is relaxed enough to see
+  # /usr/bin/lsof. The suite itself is already gated by the `test` job above, on
+  # both OSes; building the full package here would only re-run it worse.
   nix:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@main
-      - name: build the package
-        run: nix build .#default --print-build-logs
+      - name: vendorHash matches go.mod
+        run: nix build .#default.goModules --no-link --print-build-logs
 
   swift-sdk:
     runs-on: macos-latest
