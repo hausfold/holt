@@ -113,6 +113,18 @@ Everything in this section is versioned and breaking-change-gated once 0.1 ships
 because `bench`, the haus statusline, and pounce's "Spawn Agent" command all
 pin them within a day of cutover.
 
+### 2.0 Lane-name resolution
+
+Every verb that takes a lane name (`scruff <name>`, `drop`, `focus`, `reship`,
+`runtime up|enter|down`) resolves through one matcher: `<name>` or
+`<repo>/<name>`, exact first, then by a unique prefix of either part. The
+prefix pass exists because the name a user (or an agent) types is the name the
+listing showed, and the listing's cells are budgeted to the window — a cut cell
+ends in `…`, and pasting it back must still resolve. A prefix matching several
+lanes refuses, naming every lane it matched. Nothing fuzzy beyond the prefix:
+no edit distance, no case folding, so a refusal or a hit is stable and
+predictable.
+
 ### 2.1 Registry schema
 
 Today (`$WT_BASE/registry.tsv`), one tab-separated line per lane, six fields:

@@ -516,6 +516,46 @@ PYEOF
   [[ "$output" == *"no lane named 'nope'"* ]]
 }
 
+@test "resume: a unique PREFIX of the name resolves — the listing cuts cells, so what you can see is what you type" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" frisky-vole)"
+  git -C "$main" worktree remove --force "$dir"
+  wt_run resume frisky
+  [ "$status" -eq 0 ]
+  [ -e "$dir/.git" ]
+  [[ "$output" == *"matched by prefix"* ]]
+}
+
+@test "resume: a PASTED cut cell resolves — the trailing ellipsis is unwrapped, not taken as text" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" frisky-vole)"
+  git -C "$main" worktree remove --force "$dir"
+  wt_run resume "frisky-vole…"
+  [ "$status" -eq 0 ]
+  [ -e "$dir/.git" ]
+  wt_run resume "frisky-vole..."   # the ASCII mangle a shell can hand back
+  [ "$status" -eq 0 ]
+}
+
+@test "resume: an AMBIGUOUS prefix dies naming every lane it matched" {
+  local main; main="$(mkrepo alpha)"
+  mkwt "$main" frisky-vole >/dev/null
+  mkwt "$main" frisky-vole-two >/dev/null
+  wt_run resume frisky
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"matches several lanes"* ]]
+  [[ "$output" == *"alpha/frisky-vole"* ]]
+  [[ "$output" == *"alpha/frisky-vole-two"* ]]
+  wt_run resume frisky-vole-t   # a longer prefix narrows to one and resumes
+  [ "$status" -eq 0 ]
+}
+
+@test "resume: the REPO cell may arrive cut too — a repo prefix qualifies" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" solo)"
+  git -C "$main" worktree remove --force "$dir"
+  wt_run resume "al/solo…"
+  [ "$status" -eq 0 ]
+  [ -e "$dir/.git" ]
+}
+
 # ── focus ────────────────────────────────────────────────────────────────────
 
 @test "focus: the hook is handed the lane, and its yes ends it" {
@@ -1473,6 +1513,18 @@ mkremote() { # mkremote <main> — give a repo a bare origin it can actually pus
     || fail "the branch was never pushed, so the follow-up PR would be empty"
   grep -q "pr create" "$FAKE_GH_LOG" || fail "no PR was opened: $output"
   [[ "$output" == *"follow-up PR open"* ]]
+}
+
+@test "reship: a PASTED cut cell resolves through the shared matcher" {
+  local main dir bare; main="$(mkrepo alpha)"; dir="$(mkwt "$main" outran)"
+  bare="$(mkremote "$main")"
+  export FAKE_GH_MERGED=1 FAKE_GH_OID="$(git -C "$dir" rev-parse HEAD)" FAKE_GH_PR=12
+  export FAKE_GH_BRANCH=worktree-outran
+  commit_in "$dir" post.txt "work done after the PR merged"
+  cd "$TMP"; wt_run reship "outr…"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"matched by prefix"* ]]
+  grep -q "pr create" "$FAKE_GH_LOG" || fail "no PR was opened: $output"
 }
 
 @test "reship: refuses a diverged tip instead of pushing stale content" {

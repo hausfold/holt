@@ -82,7 +82,7 @@ func (e *Env) lane(want string) (Entry, error) {
 	if entry, ok := e.registryLane(want); ok {
 		return entry, nil
 	}
-	return e.matchLane(want)
+	return e.matchLane(want, "scruff focus")
 }
 
 // registryLane is that fast path: one live, unambiguous registry row, verified

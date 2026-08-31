@@ -28,7 +28,7 @@ system, the package manager or which agent is running.
 |---|---|
 | what's open, everywhere | `scruff` |
 | …machine-readable | `scruff --json` |
-| resume a parked lane | `scruff <name>` (or `scruff <repo>/<name>`) |
+| resume a parked lane | `scruff <name>` (or `scruff <repo>/<name>`); a unique prefix of either part works — type what the listing shows even where it cut the cell |
 | a lane on this repo | `cd "$(scruff new [name])"` |
 | …and open an agent in it | `scruff new [name] --open [agent]` |
 | …opened on a task, not a blank pane | `--prompt '<task>'`, or `--prompt-file <file>` |

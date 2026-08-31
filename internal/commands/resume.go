@@ -23,7 +23,7 @@ func (e *Env) Resume(want string, pick bool) error {
 	if want == "" {
 		return e.List(false)
 	}
-	entry, err := e.matchLane(want)
+	entry, err := e.matchLane(want, "scruff")
 	if err != nil {
 		return err
 	}
