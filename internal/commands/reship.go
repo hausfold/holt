@@ -103,28 +103,13 @@ func (e *Env) reshipTarget(want string) (main, branch string, err error) {
 		return main, branch, nil
 	}
 
-	repo, name := "", want
-	if i := strings.Index(want, "/"); i >= 0 {
-		repo, name = want[:i], want[i+1:]
+	// The same resolver every other verb types lane names into — prefix
+	// resolution included — with reship's own wording on its refusals.
+	entry, err := e.matchLane(want, "scruff reship")
+	if err != nil {
+		return "", "", err
 	}
-	var matches []Entry
-	for _, entry := range e.discover() {
-		if !e.branchAlive(entry) || entry.Name() != name {
-			continue
-		}
-		if repo != "" && baseName(entry.Main) != repo {
-			continue
-		}
-		matches = append(matches, entry)
-	}
-	switch len(matches) {
-	case 0:
-		return "", "", exitcode.Usagef("no lane named '%s' — run: scruff", want)
-	case 1:
-		return matches[0].Main, matches[0].Branch, nil
-	default:
-		return "", "", exitcode.Usagef("'%s' exists in more than one repo — qualify it: scruff reship <repo>/%s", name, name)
-	}
+	return entry.Main, entry.Branch, nil
 }
 
 // reshipBody is a PR body scruff can write HONESTLY: what this PR carries, and
@@ -179,13 +164,6 @@ func countCommits(dir, rng string) int {
 		return 0
 	}
 	return n
-}
-
-func baseName(p string) string {
-	if i := strings.LastIndex(p, "/"); i >= 0 {
-		return p[i+1:]
-	}
-	return p
 }
 
 func errorText(text string, err error) error {

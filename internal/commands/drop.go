@@ -26,30 +26,66 @@ import (
 // landed work; `drop` is typed by a human at a named lane and may take
 // anything, because a person just said so and the ledger can hand it back.
 
-// matchLane resolves a lane by `name` or `<repo>/<name>`.
-func (e *Env) matchLane(want string) (Entry, error) {
+// matchLane resolves a lane by `name` or `<repo>/<name>`, exact first, then by
+// a unique PREFIX of either part — `verb` is the command prefix the error lines
+// quote (`scruff`, `scruff reship`), so each refusal suggests its own form.
+// The prefix pass exists because the consumer of this resolution is the
+// LISTING: its cells arrive cut (`test-producer-deskt…`, repo `joshua…`), and
+// what the user can see is all the user can type. Only an UNAMBIGUOUS prefix
+// resolves; several hits still die, now naming every lane they match.
+func (e *Env) matchLane(want, verb string) (Entry, error) {
 	repo, name := "", want
 	if i := strings.Index(want, "/"); i >= 0 {
 		repo, name = want[:i], want[i+1:]
 	}
-	var matches []Entry
+	repo, name = cutCell(repo), cutCell(name)
+
+	var exact, prefix []Entry
 	for _, entry := range e.discover() {
-		if !e.branchAlive(entry) || entry.Name() != name {
+		if !e.branchAlive(entry) {
 			continue
 		}
-		if repo != "" && filepath.Base(entry.Main) != repo {
-			continue
+		if repo != "" {
+			r := filepath.Base(entry.Main)
+			if r != repo && !strings.HasPrefix(r, repo) {
+				continue
+			}
 		}
-		matches = append(matches, entry)
+		switch {
+		case entry.Name() == name:
+			exact = append(exact, entry)
+		case name != "" && strings.HasPrefix(entry.Name(), name):
+			prefix = append(prefix, entry)
+		}
 	}
-	switch len(matches) {
-	case 0:
-		return Entry{}, exitcode.Usagef("no lane named '%s' — run: scruff", want)
-	case 1:
-		return matches[0], nil
+
+	qualified := func(m Entry) string { return filepath.Base(m.Main) + "/" + m.Name() }
+	switch {
+	case len(exact) == 1:
+		return exact[0], nil
+	case len(exact) > 1:
+		return Entry{}, exitcode.Usagef("'%s' exists in more than one repo — qualify it: %s <repo>/%s", name, verb, name)
+	case len(prefix) == 1:
+		ui.Say("'%s' is '%s' in %s — matched by prefix", want, prefix[0].Name(), filepath.Base(prefix[0].Main))
+		return prefix[0], nil
+	case len(prefix) > 1:
+		labels := make([]string, 0, len(prefix))
+		for _, m := range prefix {
+			labels = append(labels, qualified(m))
+		}
+		return Entry{}, exitcode.Usagef("'%s' matches several lanes — be more specific: %s", want, strings.Join(labels, ", "))
 	default:
-		return Entry{}, exitcode.Usagef("'%s' exists in more than one repo — qualify it: scruff <repo>/%s", name, name)
+		return Entry{}, exitcode.Usagef("no lane named '%s' — run: scruff", want)
 	}
+}
+
+// cutCell unwraps a cell the listing had to cut: snug marks the elision with
+// `…` (U+2026), which a shell may have handed back as `...`, and pastes often
+// carry the surrounding space. What remains is the prefix matchLane resolves by.
+func cutCell(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.TrimSuffix(s, "…")
+	return strings.TrimSuffix(s, "...")
 }
 
 // Drop retires a lane whose work will never land — `scruff drop <name>`.
@@ -63,7 +99,7 @@ func (e *Env) Drop(want string) error {
 	if want == "" {
 		return exitcode.Usagef("name the lane to drop: scruff drop <name>  (scruff, to see them)")
 	}
-	entry, err := e.matchLane(want)
+	entry, err := e.matchLane(want, "scruff drop")
 	if err != nil {
 		return err
 	}

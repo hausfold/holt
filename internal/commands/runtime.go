@@ -181,7 +181,7 @@ func (e *Env) resolveRuntime(name, backend string) (Entry, config.TemplateVars, 
 	if backend == "" {
 		return Entry{}, config.TemplateVars{}, nil, exitcode.Usagef("name a backend: scruff runtime up|enter|down %s --backend <id>", name)
 	}
-	entry, err := e.matchLane(name)
+	entry, err := e.matchLane(name, "scruff runtime")
 	if err != nil {
 		return Entry{}, config.TemplateVars{}, nil, err
 	}
