@@ -39,6 +39,8 @@ the branch only this pane has checked out; `scruff unpark` puts it back.
 nix run github:hausfold/scruff                            # try it
 nix profile install github:hausfold/scruff                # keep it
 go install github.com/hausfold/scruff/cmd/scruff@latest   # or, with Go 1.26+
+
+scruff skill install                                      # teach your agent it exists
 ```
 
 Needs `git`. `gh` and `lsof` are optional and make it sharper; without them

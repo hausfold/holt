@@ -1480,7 +1480,7 @@ instructions_file = "CLAUDE.md"      # codex/opencode/pi/amp: "AGENTS.md"
 
 ```toml
 [bootstrap]
-agent_instructions = true   # append `scruff docs agent`'s body into instructions_file
+agent_instructions = true   # append `scruff skill`'s body into instructions_file
 ```
 
 Idempotent means scruff looks for a marker —

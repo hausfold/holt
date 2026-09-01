@@ -3188,3 +3188,36 @@ teardown() {
   wt_run skill install --client emacs
   [ "$status" -eq 1 ] || fail "want exit 1, got $status: $output"
 }
+
+@test "skill install: a directory scruff cannot write into is refused per-file, not fatal" {
+  # The same answer as a symlink — someone else owns this path — and per-file
+  # for the same reason: auto-discovery walks four clients, and a read-only
+  # FIRST one must not abandon the other three.
+  mkdir -p "$TMP/readonly"
+  chmod 555 "$TMP/readonly"
+  wt_run skill install --dir "$TMP/readonly"
+  chmod 755 "$TMP/readonly"   # so BATS_TEST_TMPDIR cleanup can remove it
+  [ "$status" -eq 2 ] || fail "want exit 2 (refused), got $status: $output"
+  [[ "$output" == *"left alone"* ]] || fail "an EPERM reached the user unexplained: $output"
+}
+
+@test "skill install: an empty --dir is an unset variable, not a request to install everywhere" {
+  local unset_on_purpose=""
+  wt_run skill install --dir "$unset_on_purpose"
+  [ "$status" -eq 1 ] || fail "want exit 1, got $status: $output"
+  [ ! -e "$HOME/.claude/skills" ] || fail "it fell through to the real client directories"
+}
+
+@test "skill install: --dir and --client together name two destinations, so neither wins silently" {
+  mkdir -p "$HOME/.codex"
+  wt_run skill install --client codex --dir "$TMP/skills"
+  [ "$status" -eq 1 ] || fail "want exit 1, got $status: $output"
+  [ ! -e "$TMP/skills" ] || fail "it wrote to --dir and ignored --client"
+  [ ! -e "$HOME/.codex/skills" ] || fail "it wrote to --client and ignored --dir"
+}
+
+@test "skill: --json says the envelope is reserved, not that the flag is wrong" {
+  wt_run skill --json
+  [ "$status" -eq 1 ] || fail "want exit 1, got $status: $output"
+  [[ "$output" == *"14.5"* ]] || fail "a SPEC reader gets no hint it's reserved: $output"
+}

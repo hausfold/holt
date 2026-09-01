@@ -113,6 +113,12 @@ func (e *Env) Skill(args []string) error {
 	name := "scruff"
 	switch {
 	case len(args) == 0:
+	// SPEC.md §14.5 advertises this spelling for the `{version, body}` envelope
+	// an embedder diffs against its spliced-in copy. It is reserved, not built,
+	// and someone who read the SPEC deserves to be told which of the two it is
+	// rather than handed the generic usage line.
+	case args[0] == "--json":
+		return exitcode.Usagef("scruff skill --json is reserved for the {version, body} envelope (SPEC.md §14.5) and is not built yet — `scruff skill` prints the Markdown")
 	case len(args) == 1 && !strings.HasPrefix(args[0], "-"):
 		name = args[0]
 	default:
@@ -154,6 +160,13 @@ func (e *Env) skillInstall(args []string, docs []skillDoc) error {
 			if i+1 >= len(args) {
 				return exitcode.Usagef("--dir wants a path")
 			}
+			// An empty value is an unset shell variable, not a request. Falling
+			// through to auto-discovery there would install into all four real
+			// client directories while the caller believed it was writing to a
+			// scratch path.
+			if args[i+1] == "" {
+				return exitcode.Usagef("--dir was given an empty path")
+			}
 			dir, i = args[i+1], i+1
 		case "--client":
 			if i+1 >= len(args) {
@@ -170,6 +183,12 @@ func (e *Env) skillInstall(args []string, docs []skillDoc) error {
 		return exitcode.Usagef("cannot resolve a home directory: %v", err)
 	}
 	dirs := skillClientDirs(home)
+
+	// Two answers to "where", where only one can be honoured. Picking silently
+	// would write somewhere the caller named a different path for.
+	if dir != "" && client != "" {
+		return exitcode.Usagef("--dir and --client both name a destination — pass one")
+	}
 
 	var targets []string
 	switch {
@@ -223,11 +242,21 @@ func (e *Env) skillInstall(args []string, docs []skillDoc) error {
 				left++
 				continue
 			}
+			// A directory scruff cannot write into is the SAME answer as a
+			// symlink it must not write through — someone else owns this path —
+			// and it has to be per-file for the same reason. Returning here
+			// would abandon the three clients after this one on a machine whose
+			// FIRST client directory is read-only, and hand the user the bare
+			// EPERM this verb exists to replace with a sentence.
 			if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-				return exitcode.Usagef("cannot create %s: %v", filepath.Dir(dest), err)
+				ui.Warn("left alone %s — cannot create its directory: %v", dest, err)
+				left++
+				continue
 			}
 			if err := os.WriteFile(dest, body, 0o644); err != nil {
-				return exitcode.Usagef("cannot write %s: %v", dest, err)
+				ui.Warn("left alone %s — cannot write it: %v", dest, err)
+				left++
+				continue
 			}
 			ui.Say("wrote %s", dest)
 			wrote++
