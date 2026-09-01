@@ -119,10 +119,29 @@ func (e *Env) rows() []listRow {
 	return nest(out)
 }
 
-// nest orders the listing so a spawned lane sits directly under the lane that
-// spawned it, one indent deeper.
+// nest orders the listing so a lane in ANOTHER repo sits directly under the
+// lane that spawned it, one indent deeper.
 //
-// The listing must never DROP such a row, however subordinate it looks: a
+// Another repo is the whole test, and `parent` on its own cannot carry it.
+// That field records the cwd of the pane that spawned the lane, so a lane
+// opened from inside another lane's pane is parented to that lane exactly as a
+// `scruff child` is — SPEC.md §2.2 says so out loud, and it is why `chat`
+// exists. The two are not the same relation: a `scruff child` lane has no pane
+// of its own and its branch lives somewhere this repo's listing would never
+// show, while a same-repo lane is a SIBLING with its own window and its own
+// branch off the same main, subordinate to nothing. Filing a sibling under
+// whichever pane happened to press the key buries it under an unrelated task,
+// and in a consumer that caps its child rows it can push a genuine child out
+// of view — which is the one row that had nowhere else to be.
+//
+// Repo identity rather than `chat` because it is stored, client-agnostic and
+// stable: `chat` is "" for any client scruff cannot probe, and "" must be read
+// as "show it", so nesting on it would quietly stop nesting real children in
+// codex/opencode/pi panes. The compare is a plain string one for the same
+// reason the parent-is-my-own-main test below is: both Mains come from
+// discover(), the only thing that writes them.
+//
+// The listing must never DROP a child row, however subordinate it looks: a
 // `scruff child` lane carries its own branch and its own PR, in another repo,
 // and remove-on-close does not reap it. This listing is the only place that
 // branch surfaces once the parent's pane is gone — so the answer to "it is
@@ -139,14 +158,17 @@ func nest(rows []listRow) []listRow {
 	kids := make(map[int][]int, len(rows))
 	isChild := make([]bool, len(rows))
 	for i, r := range rows {
-		// A plain lane's parent is its OWN main checkout. Only a parent that is
-		// itself a listed lane means "spawned from a pane" — the same signature
-		// chatHome reads (agent.go).
+		// A plain lane's parent is its OWN main checkout — nobody's pane spawned
+		// it, so there is no lineage to draw.
 		if r.Parent == "" || r.Parent == r.Entry.Main {
 			continue
 		}
 		p, ok := byPath[r.Parent]
 		if !ok || p == i {
+			continue
+		}
+		// Same repo ⇒ siblings from one pane, not lineage. See above.
+		if rows[p].Entry.Main == r.Entry.Main {
 			continue
 		}
 		kids[p] = append(kids[p], i)
@@ -451,7 +473,7 @@ func renderTable(rows []listRow) {
 	// Only ever printed when a row earned it, so the listing stays a table on a
 	// normal day — and the day it isn't normal, the fix is one command away.
 	if spawned {
-		ui.Say("└ = spawned from the lane above it (`scruff child`, or a lane opened from inside that pane) — its branch and PR are its own, and closing that pane never reaps it")
+		ui.Say("└ = another repo's lane, spawned from the lane above it (`scruff child`) — its branch and PR are its own, and closing that pane never reaps it")
 	}
 	if relanded {
 		ui.Say("+N = commits landed AFTER that branch's PR merged — no PR covers them: scruff reship <name>")

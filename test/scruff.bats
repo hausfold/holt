@@ -1067,6 +1067,29 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   [[ "$output" == *"spawned from a pane in $parent"* ]] || fail "resume lost its fallback: $output"
 }
 
+@test "list: a same-repo lane from another lane's pane is a SIBLING; only the cross-repo child nests" {
+  # Both are parented to the pane that spawned them — `parent` is the cwd that
+  # made the lane, and cannot tell the two apart (SPEC.md §2.2). Only the
+  # cross-repo one is subordinate. A sibling has its own window and its own
+  # branch off the SAME main, so filing it under whoever pressed the key buries
+  # it under an unrelated task and eats the room a capped consumer keeps for
+  # real children.
+  local main sub lane sib
+  main="$(mkrepo alpha)"; sub="$(mkrepo beta)"
+  lane="$(mkwt "$main" opener)"
+  shim_agent claude
+  sib="$(cd "$lane" && "$WT" new sibling 2>/dev/null | tail -1)"
+  cd "$lane"; "$WT" child "$sub" crossed >/dev/null 2>&1
+  # The registry still RECORDS the spawning pane for both: the fix is what the
+  # listing DOES with `parent`, never what goes in it.
+  [ "$(awk -F'\t' -v p="$sib" '$4==p{print $5}' "$REG")" = "$lane" ] \
+    || fail "the sibling lost its parent record: $(cat "$REG")"
+  cd "$TMP"; wt_run list
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"└ crossed"* ]] || fail "the cross-repo child must still nest: $output"
+  [[ "$output" != *"└ sibling"* ]] || fail "a same-repo lane must not nest: $output"
+}
+
 @test "list: a spawned lane is drawn UNDER its parent, never dropped from the table" {
   # Its branch and its PR are its own, and closing the parent's pane does not
   # reap it — so the listing is where it has to stay visible. Nesting is the
