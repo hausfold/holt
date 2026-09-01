@@ -53,12 +53,21 @@ require github.com/fsnotify/fsnotify v1.7.0
 // measuring in bytes over a width `tput cols` had guessed at.
 //
 // Pinned to a commit rather than a tag because snug has cut none yet — this one
-// is main's tip, the merge of hausfold/snug#10 (`Printer.PrintData`). Re-pin to
-// the first tag when there is one, and note that `go get snug@main` can answer
-// with a STALE commit for a while after a merge: the proxy caches the branch
-// resolution, and asking for @main minutes after #1 landed downgraded this line
-// to the commit before the fix. Ask for the SHA when it matters.
-require github.com/hausfold/snug v0.0.0-20260830094014-880528dbdcb1
+// is main's tip, the merge of hausfold/snug#12. Re-pin to the first tag when
+// there is one, and note that `go get snug@main` can answer with a STALE commit
+// for a while after a merge: the proxy caches the branch resolution, and asking
+// for @main minutes after #1 landed downgraded this line to the commit before
+// the fix. Ask for the SHA when it matters.
+//
+// Which commit is not a housekeeping detail: THE MARKS ARE SNUG'S. `MarkSay`
+// was the fog emoji (U+1F32B) and is now `≋` — snug 90bd364, "the signature
+// mark is the ascii tilde, tripled — no emoji in the table". haus and bench had
+// already moved; this line was the last thing in the family still drawing fog,
+// and grepping scruff's tree for the glyph found nothing, because there is
+// nothing to find. A mark scruff prints changes HERE.
+//
+// Moving this line moves `vendorHash` in flake.nix too — see the comment there.
+require github.com/hausfold/snug v0.0.0-20260831060937-a6d221002232
 
 require (
 	github.com/charmbracelet/x/ansi v0.11.8 // indirect
