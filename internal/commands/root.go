@@ -54,6 +54,10 @@ A LANE is one agent's branch, checkout and pane, from create to reaped.
   scruff runtime down <name> --backend <id>
                           tear it down
   scruff runtime eject tart print the built-in backend as an adapter file to edit
+  scruff skill [<name>]     print an agent skill: scruff's own, or handoff
+  scruff skill install      write them all into every agent client found
+                          --client claude|codex|opencode|pi · --dir <path>
+                          never overwrites — exit 2 if anything was left alone
   scruff hook create        [hook] open a lane — JSON on stdin, path on stdout
   scruff hook remove        [hook] retire one without losing work — JSON on stdin
   scruff hook notify        [hook] client events → a trill banner for the lane:
@@ -152,6 +156,11 @@ func Run(args []string) error {
 
 	case "runtime":
 		return env.RuntimeCmd(args[1:])
+
+	// A3 of the family agent surface. Not `docs agent`, which SPEC.md §14.5
+	// reserved before this landed — see skill.go for which name won and why.
+	case "skill":
+		return env.Skill(args[1:])
 
 	// `scruff hook create` is the documented spelling. The bare `create` /
 	// `remove` verbs are kept because that is what the shipped Claude Code hook

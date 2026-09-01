@@ -43,6 +43,7 @@ system, the package manager or which agent is running.
 | stand up/enter/tear down a lane's VM or container | `scruff runtime up\|enter\|down <name> --backend <id>` |
 | **see a desktop change work without touching the user's screen** | `scruff runtime up <name> --backend tart` — built in, needs `tart` + `SCRUFF_TART_BASE`. Boots a headless macOS with the lane shared in, then drive it over `ssh admin@$(tart ip scruff-<name>)`: `screencapture -x` there returns real pixels, `osascript` sends the keystrokes. Prefer this over asking to drive the machine you are on |
 | watch lifecycle events | `scruff watch --json` (NDJSON, one object per line) |
+| put this skill into another agent client | `scruff skill install [--client codex]` — writes what the installed binary ships; exit 2 means it refused to overwrite, never that it broke |
 | everything, exhaustively | `scruff --help` (prints to **stderr**) |
 
 `scruff --json` returns `{scruff, schema, warnings, lanes:[…]}`. Each lane carries

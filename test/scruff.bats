@@ -3096,3 +3096,95 @@ teardown() {
   [[ "$output" == *"work moved with the tree"* ]] || fail "the degraded path didn't say the work is safe: $output"
   [ -L "$HOME/.cache/claude-worktrees" ] || fail "the move completed but the symlink is missing"
 }
+
+# ---------------------------------------------------------------------------
+# skill — A3 of the family agent surface (the workshop's docs/agent-surface.md).
+#
+# The whole verb exists for a machine with scruff installed and no checkout of
+# this repo, so every test here reads what the BINARY carries, never what is on
+# disk beside the suite. $HOME is the fixture's, so auto-discovery finds no
+# client unless a test builds one.
+# ---------------------------------------------------------------------------
+
+@test "skill: prints scruff's own SKILL.md, frontmatter first, on stdout" {
+  run --separate-stderr "$WT" skill
+  [ "$status" -eq 0 ] || fail "$output"
+  [ "$(printf '%s\n' "$output" | head -1)" = "---" ] || fail "no frontmatter: $output"
+  [[ "$output" == *"name: scruff"* ]] || fail "$output"
+  # Data on stdout, per SPEC 2.3 — a caller pipes this straight into a file.
+  [ -z "$stderr" ] || fail "skill wrote diagnostics to stdout's channel: $stderr"
+}
+
+@test "skill: a named skill is the sibling one, not the tool's own" {
+  wt_run skill handoff
+  [ "$status" -eq 0 ] || fail "$output"
+  [[ "$output" == *"name: handoff"* ]] || fail "$output"
+}
+
+@test "skill: an unknown name is usage, and says what scruff does ship" {
+  wt_run skill nope
+  [ "$status" -eq 1 ] || fail "want exit 1, got $status: $output"
+  [[ "$output" == *"handoff"* && "$output" == *"scruff"* ]] || fail "$output"
+}
+
+@test "skill install: writes EVERY skill, one directory per name" {
+  wt_run skill install --dir "$TMP/skills"
+  [ "$status" -eq 0 ] || fail "$output"
+  # "Every" is the contract: a tool that installs only its own skill reaches no
+  # standalone user with the second one.
+  grep -q "name: scruff" "$TMP/skills/scruff/SKILL.md" || fail "scruff's own skill is missing"
+  grep -q "name: handoff" "$TMP/skills/handoff/SKILL.md" || fail "the sibling skill is missing"
+}
+
+@test "skill install: re-running is a no-op, not a rewrite" {
+  wt_run skill install --dir "$TMP/skills"
+  [ "$status" -eq 0 ]
+  wt_run skill install --dir "$TMP/skills"
+  [ "$status" -eq 0 ] || fail "$output"
+  [[ "$output" == *"0 written, 2 already current"* ]] || fail "$output"
+}
+
+@test "skill install: a file that exists and differs is refused, never overwritten" {
+  wt_run skill install --dir "$TMP/skills"
+  [ "$status" -eq 0 ]
+  echo "someone edited this" >"$TMP/skills/handoff/SKILL.md"
+
+  wt_run skill install --dir "$TMP/skills"
+  # Exit 2 is scruff working: it declined to destroy an edit it did not make.
+  [ "$status" -eq 2 ] || fail "want exit 2 (refused), got $status: $output"
+  [ "$(cat "$TMP/skills/handoff/SKILL.md")" = "someone edited this" ] \
+    || fail "the hand edit was clobbered"
+  [[ "$output" == *"diff -"* ]] || fail "the refusal didn't say how to compare them: $output"
+}
+
+@test "skill install: a symlinked skill belongs to whatever manages it" {
+  # This is the haus machine's shape: haus.ai.skill installs each skill as one
+  # read-only directory symlink into the Nix store. Writing through it would
+  # fail with EPERM, and an EPERM is not an explanation.
+  mkdir -p "$TMP/skills" "$TMP/elsewhere"
+  ln -s "$TMP/elsewhere" "$TMP/skills/scruff"
+
+  wt_run skill install --dir "$TMP/skills"
+  [ "$status" -eq 2 ] || fail "want exit 2 (refused), got $status: $output"
+  [[ "$output" == *"symlink"* && "$output" == *"haus.ai.skill"* ]] || fail "$output"
+  [ ! -e "$TMP/elsewhere/SKILL.md" ] || fail "it wrote through the symlink"
+  # The refusal is per-file: the skill that wasn't linked still landed.
+  grep -q "name: handoff" "$TMP/skills/handoff/SKILL.md" || fail "one refusal stopped the other write"
+}
+
+@test "skill install: no client on the machine is usage, not a silent success" {
+  # $HOME is the fixture's and holds no client directory at all.
+  wt_run skill install
+  [ "$status" -eq 1 ] || fail "want exit 1, got $status: $output"
+  [[ "$output" == *"--client"* ]] || fail "$output"
+}
+
+@test "skill install: --client resolves the client's own skills directory" {
+  mkdir -p "$HOME/.codex"
+  wt_run skill install --client codex
+  [ "$status" -eq 0 ] || fail "$output"
+  grep -q "name: scruff" "$HOME/.codex/skills/scruff/SKILL.md" || fail "not where codex reads"
+
+  wt_run skill install --client emacs
+  [ "$status" -eq 1 ] || fail "want exit 1, got $status: $output"
+}

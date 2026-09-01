@@ -41,7 +41,7 @@ jobs:
           script/check-skills.sh ai scruff
 
       - name: gofmt
-        run: test -z "$(gofmt -l ./cmd ./internal)" || { gofmt -l ./cmd ./internal; exit 1; }
+        run: test -z "$(gofmt -l ./cmd ./internal ./skills.go)" || { gofmt -l ./cmd ./internal ./skills.go; exit 1; }
       - name: vet
         run: go vet ./...
 
