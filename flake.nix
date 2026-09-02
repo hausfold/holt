@@ -25,9 +25,18 @@
           # leaves it stale builds fine under `go build` and `make check`, then
           # fails the FOD hash for every consumer's rebuild (that is how #94's
           # snug re-pin broke `haus rebuild` downstream). The `nix build` job in
-          # .github/workflows/check.yml is the gate; to get the new value, run
-          # `nix build .#default` and copy the "got:" hash out of the mismatch.
-          vendorHash = "sha256-SAZHnNOQZaHCG67Pcv/4a02XryXle3/O0BZmiCKhheo=";
+          # .github/workflows/check.yml is the gate.
+          #
+          # To get the new value, set this to `nixpkgs.lib.fakeHash` FIRST, then
+          # `nix build .#default` and copy the "got:" hash. Building against the
+          # stale hash does NOT report a mismatch: an FOD whose declared hash is
+          # already in the store is reused verbatim, never rebuilt, so the old
+          # vendor dir comes back and the build dies further along on `go:
+          # inconsistent vendoring` naming both revs. That message is this hash
+          # being stale, not a go.mod problem — and it is the shape the failure
+          # takes locally, while a machine without the old path in its store
+          # sees the mismatch instead.
+          vendorHash = "sha256-uAjR8VBnBizBPJuDT/J4SMQ53lAPUAluhsHnmQCDFz8=";
           ldflags = [ "-X github.com/hausfold/scruff/internal/commands.Version=${version}" ];
 
           # Build ONLY the CLI. Left unset, buildGoModule walks every directory
