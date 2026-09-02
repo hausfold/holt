@@ -133,6 +133,15 @@ EOF
 
   chmod +x "$BIN/gh" "$BIN/lsof"
   export FAKE_GH_LOG="$TMP/gh.log"
+
+  # Last: stand somewhere harmless. bats starts every test in the checkout it
+  # was launched from — the REAL scruff repo — so a test whose fixture path came
+  # back empty runs `cd ""`, which bash accepts as a no-op, and the mutating
+  # verb on the next line lands here. That is not hypothetical: writing the
+  # `park --help` test below parked this repo's own working tree as a `wip:`
+  # commit on the branch it was being written on. Every test that needs a repo
+  # cd's into one; from $TMP the same slip finds no git repo and says so.
+  cd "$TMP" || return 1
 }
 
 # ── fixtures ─────────────────────────────────────────────────────────────────
@@ -2244,6 +2253,81 @@ EOF
   [ "$output" = "$bare" ] || fail "the two spellings disagree"
 }
 
+# ── the help flag, and every other argument a verb can't explain ─────────────
+#
+# `scruff reap --help` SWEPT. Help was spelled only at the top level, `Reap`
+# never looked at its arguments, and the flag you type to ASK A QUESTION about
+# an unfamiliar verb ran the one verb that deletes. Agents hit it repeatedly,
+# which is the tell: the bug is not the missing help text, it is that a verb
+# swallowed an argument it could not explain and did its work anyway. Both
+# halves are pinned below, and the reap half is pinned against a lane that a
+# real sweep WOULD have taken — a test on an empty registry proves nothing.
+
+@test "help: a verb's --help prints that verb and does no work" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" sweepme)"
+  git -C "$main" merge -q --no-edit worktree-sweepme     # landed: reap would take it
+
+  cd "$TMP"; wt_run reap --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"sweep every LANDED lane"* ]]
+  [[ "$output" != *"reaped sweepme"* ]] || fail "--help swept"
+  [ -e "$dir" ] || fail "the checkout --help was asked about is gone"
+  [ "$(reg_rows)" -eq 1 ]
+  git -C "$main" rev-parse --verify -q worktree-sweepme >/dev/null || fail "the branch went too"
+}
+
+@test "help: the block is that verb's lines, not the whole manual" {
+  wt_run park --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"scruff park"* ]]
+  [[ "$output" != *"scruff reap"* ]] || fail "park's help printed every other verb"
+  # -h means the same thing, and an unknown verb still gets the whole thing.
+  wt_run reaped -h
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"scruff reaped"* ]]
+}
+
+@test "reap: an argument it can't explain refuses instead of sweeping" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" sweepme)"
+  git -C "$main" merge -q --no-edit worktree-sweepme
+
+  # The next typo is one nobody has thought of yet — a flag from another tool,
+  # a lane name, `-n`. Every one of them has to stop the run.
+  cd "$TMP"; wt_run reap --dry-run
+  [ "$status" -eq 1 ] || fail "an unexplained flag must be usage, not a sweep: $status"
+  [ -e "$dir" ] || fail "reap swept on an argument it did not understand"
+  cd "$TMP"; wt_run reap sweepme
+  [ "$status" -eq 1 ]
+  [ -e "$dir" ]
+  [ "$(reg_rows)" -eq 1 ]
+
+  # And the bare verb still works — strictness must not cost the happy path.
+  cd "$TMP"; wt_run reap
+  [ "$status" -eq 0 ]
+  [ ! -e "$dir" ]
+}
+
+@test "park: --help is help, not a label it parks under" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" sparkle)"
+  echo scratch >"$dir/dirty.txt"
+
+  cd "$dir"; wt_run park --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"set the working tree aside"* ]]
+  [ -e "$dir/dirty.txt" ] || fail "the tree was parked by a help flag"
+  [[ "$(git -C "$dir" log -1 --format=%s)" != wip:* ]] || fail "a wip: commit named --help"
+}
+
+@test "dispatch: a second bare word is a typo, not a lane resumed" {
+  local main; main="$(mkrepo alpha)"; mkwt "$main" sparkle >/dev/null
+  cd "$TMP"; wt_run sparkle extra
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"second"* ]]
+  cd "$TMP"; wt_run drop sparkle extra
+  [ "$status" -eq 1 ] || fail "drop took a name it was not sure about: $status"
+  git -C "$main" rev-parse --verify -q worktree-sparkle >/dev/null || fail "the branch was dropped anyway"
+}
+
 # ── policy seams ─────────────────────────────────────────────────────────────
 #
 # Every one of these asserts the same two halves of the same contract, on a
@@ -2528,6 +2612,21 @@ open = \"$hook\""
   [ ! -e "$CLAUDE_WT_BASE/beta/nothing" ] || fail "a lane was created for a prompt that isn't there"
   run "$WT" spawn "$b" nofile --prompt-file "$TMP/does-not-exist.md"
   [ "$status" -eq 1 ]
+}
+
+@test "prompt: a literal --help in the task is the task, not a request for usage" {
+  # The other side of the help scan: it skips the value of a flag that takes
+  # one, so a brief that happens to BEGIN with a flag still opens a lane
+  # instead of printing scruff's own manual at it.
+  local b hook; b="$(mkrepo beta)"
+  hook="$(mkhook open 'printf "%s\n" "$SCRUFF_COMMAND" >"'"$TMP"'/cmd"; exit 0')"
+  setcfg "[hooks]
+open = \"$hook\""
+
+  run bash -c "'$WT' spawn '$b' quoting --prompt '--help' 2>/dev/null"
+  [ "$status" -eq 0 ] || fail "a task starting with a flag was read as help: $status"
+  [ -e "$CLAUDE_WT_BASE/beta/quoting/.git" ]
+  [[ "$(cat "$TMP/cmd")" == *"--help"* ]] || fail "the task did not reach the client: $(cat "$TMP/cmd")"
 }
 
 @test "prompt: spawn WITHOUT a prompt never fires the open hook" {
