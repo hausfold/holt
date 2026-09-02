@@ -137,6 +137,67 @@ func TestTrillBinaryHonorsOverride(t *testing.T) {
 	}
 }
 
+// bundleAt stands a fake Trill.app where trillBundles will look, and answers
+// with the path to its executable.
+func bundleAt(t *testing.T, root string) string {
+	t.Helper()
+	bin := filepath.Join(root, "Trill.app", "Contents", "MacOS", "Trill")
+	if err := os.MkdirAll(filepath.Dir(bin), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return bin
+}
+
+// stubBundles swaps the two install locations for temp dirs and empties PATH,
+// so the bundle list is reached at all and both halves of it can exist.
+func stubBundles(t *testing.T) (system, home string) {
+	t.Helper()
+	dir := t.TempDir()
+	system, home = filepath.Join(dir, "sys"), filepath.Join(dir, "home")
+	real := trillBundles
+	trillBundles = func(string) []string {
+		return []string{
+			filepath.Join(system, "Trill.app", "Contents", "MacOS", "Trill"),
+			filepath.Join(home, "Trill.app", "Contents", "MacOS", "Trill"),
+		}
+	}
+	t.Cleanup(func() { trillBundles = real })
+	// Otherwise a real `trill` on the runner's PATH answers first and the list
+	// is never reached — the case below would pass without asserting anything.
+	t.Setenv("PATH", filepath.Join(dir, "empty-bin"))
+	return system, home
+}
+
+// The pinned /Applications bundle beats a dev build in ~/Applications, and this
+// is a precedence with NO error surface: both candidates are real, working
+// Trills, so getting it backwards runs a stale daemon forever rather than
+// failing. It used to be backwards. haus's wrapper (modules/core/trill.sh)
+// carries the same order and the two must agree.
+func TestTrillBinaryPrefersSystemBundle(t *testing.T) {
+	system, home := stubBundles(t)
+	want := bundleAt(t, system)
+	bundleAt(t, home)
+
+	if got := trillBinary(); got != want {
+		t.Fatalf("want the /Applications bundle %q, got %q", want, got)
+	}
+}
+
+// ...and home is a fallback rather than a demotion: alone, it still answers.
+// That is what makes system-first the safe order — a candidate that is not on
+// disk is skipped, so a user-scoped install loses nothing.
+func TestTrillBinaryFallsBackToHomeBundle(t *testing.T) {
+	_, home := stubBundles(t)
+	want := bundleAt(t, home)
+
+	if got := trillBinary(); got != want {
+		t.Fatalf("want the ~/Applications bundle %q, got %q", want, got)
+	}
+}
+
 // A fin nothing can name again is a fin that stacks: two permission prompts
 // from one lane would hang two, and the ledge holds five.
 func TestTrillSendArgsKeysTheFinByLane(t *testing.T) {

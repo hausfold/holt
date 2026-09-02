@@ -193,11 +193,43 @@ func laneID(main, name string) string {
 	return filepath.Base(main) + "/" + name
 }
 
+// trillBundles is where a Trill.app install lands, in the order they are tried:
+// SYSTEM BEFORE HOME. That order is a judgement, and it goes this way round
+// because the two are not two spellings of the same thing — /Applications is
+// where a cask, a drag-install and haus's notifications room all put the
+// release, while ~/Applications is where trill's own scripts/dev-install.sh
+// leaves a build you were testing. Home-first let that build outrank the
+// release forever, with no error surface at all: both candidates are real,
+// signed, working Trills, so the only difference is which daemon VERSION
+// answers, and a stale one just quietly misbehaves. Measured 2026-09-02, a
+// stray ~/Applications/Trill.app hung `trill history` at exactly 8192 bytes —
+// the socket's send buffer — while the release beside it answered fine.
+// SCRUFF_TRILL is still the way to aim at a branch build, and is tried first.
+//
+// haus's wrapper (modules/core/trill.sh) carries the same order, and the two
+// have to agree: a machine where scruff picked one bundle and haus the other
+// would drive two daemons off one ledge, with no way to see it.
+//
+// A var so a test can stand both locations in a temp dir. /Applications is
+// absolute and root-owned, so a hermetic test cannot create the system half
+// any other way — and the ORDER is the whole thing under test.
+var trillBundles = func(home string) []string {
+	return []string{
+		"/Applications/Trill.app/Contents/MacOS/Trill",
+		filepath.Join(home, "Applications", "Trill.app", "Contents", "MacOS", "Trill"),
+	}
+}
+
 // trillBinary resolves the trill CLI without assuming anything about the
 // machine: Trill.app is routinely installed while `trill` is on nobody's PATH,
 // because the app binary IS the CLI. SCRUFF_TRILL is authoritative when set —
 // including set to something missing, which is how a machine (or a test) says
 // "no banners" — and an empty answer means exactly that, silently.
+//
+// The PATH lookup below finds haus's wrapper on a haus machine, which makes the
+// bundle list a fallback rather than the answer there. It is NOT dead code: a
+// launchd context that sets its own PATH has no `trill` to look up and lands in
+// the list, and hook payloads reach this function from exactly such contexts.
 func trillBinary() string {
 	if p := os.Getenv("SCRUFF_TRILL"); p != "" {
 		if isExecutable(p) {
@@ -212,10 +244,7 @@ func trillBinary() string {
 	if err != nil {
 		home = os.Getenv("HOME")
 	}
-	for _, p := range []string{
-		filepath.Join(home, "Applications", "Trill.app", "Contents", "MacOS", "Trill"),
-		"/Applications/Trill.app/Contents/MacOS/Trill",
-	} {
+	for _, p := range trillBundles(home) {
 		if isExecutable(p) {
 			return p
 		}
