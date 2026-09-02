@@ -13,48 +13,41 @@ import (
 	"github.com/hausfold/scruff/internal/ui"
 )
 
-// The doctor is where scruff inspects its own house. Its first, and for now
-// only, patient is the base directory — the one step in the whole `holt` →
-// `scruff` cutover that moved a byte of anyone's work on disk.
-// The repo-inspection doctor of SPEC.md §6.4 is a separate, later surface; the
-// verb name is reserved here so that surface lands as `scruff doctor`, not as
-// a second spelling.
+// The doctor is where scruff inspects its own house. Two surfaces share the
+// verb, and they are not the same size:
 //
-// scruff doctor                  report where the base lives and what a move costs
-// scruff doctor --migrate-base   do the move (refuses when anything is in it)
+//	scruff doctor                  diagnose this machine and this repo (diagnose.go)
+//	scruff doctor --json           the same, machine-readable
+//	scruff doctor --migrate-base   move the base to ~/.cache/scruff (below)
+//
+// SPEC.md §6.4 gives `doctor` a second half — propose a `.scruff.toml`, and
+// `--write` it. That one is 0.2 work and is REFUSED here rather than
+// half-implemented, because it needs a layer that does not exist: config.go
+// reads `~/.config/scruff/config.toml` and nothing else, so there is no
+// per-repo config for a proposal to be a proposal OF, and §6.2's `run` key
+// arrives with `scruff trust` gating it. Writing a file scruff cannot read back
+// would be the worst of both.
+//
+// The migration below is the older patient: the one step in the whole `holt` →
+// `scruff` cutover that moved a byte of anyone's work on disk.
 
 // Doctor dispatches the doctor surface.
 func (e *Env) Doctor(args []string) error {
 	if hasFlag(args, "--migrate-base") {
 		return e.migrateBase()
 	}
-	if firstBare(args) != "" || hasFlag(args, "--write") {
-		return exitcode.Usagef("usage: scruff doctor [--migrate-base]\n(no repo inspection yet — see SPEC.md §6.4; only the base report ships today)")
+	if hasFlag(args, "--write") {
+		return exitcode.Usagef(
+			"scruff doctor --write has nothing to write yet: there is no per-repo `.scruff.toml` layer to propose one for " +
+				"(SPEC.md §6.4's other half, milestoned at 0.2 beside §6 bootstrap and `scruff trust`). " +
+				"`scruff doctor` diagnoses today, and `--json` gives you the same as data")
 	}
-	return e.baseReport()
-}
-
-// baseReport tells the operator which base is live, how it resolved, and
-// whether the §8.2 move is still pending. A report, never a suggestion:
-// the migration itself is explicit.
-func (e *Env) baseReport() error {
-	ui.Say("base: %s", e.Base)
-	switch {
-	case os.Getenv("SCRUFF_BASE") != "":
-		ui.Say("  resolved from SCRUFF_BASE — the default-path decision is overridden")
-	case os.Getenv("CLAUDE_WT_BASE") != "":
-		ui.Say("  resolved from CLAUDE_WT_BASE — the default-path decision is overridden")
-	default:
-		newBase, legacy := defaultBaseCandidates()
-		switch e.Base {
-		case newBase:
-			ui.Say("  the default (~/.cache/scruff)")
-		case legacy:
-			ui.Say("  the LEGACY path (~/.cache/claude-worktrees) — it holds the registry.")
-			ui.Say("  `scruff doctor --migrate-base` moves it to %s", newBase)
-		}
+	if bare := firstBare(args); bare != "" {
+		return exitcode.Usagef(
+			"scruff doctor takes no argument (got %q) — it reports on this machine and on the repo you are standing in\n"+
+				"usage: scruff doctor [--json] [--migrate-base]", bare)
 	}
-	return nil
+	return e.Diagnose(hasFlag(args, "--json"))
 }
 
 // migrateBase is the 1.1.0 base move — the only scruff
