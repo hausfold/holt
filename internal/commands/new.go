@@ -62,7 +62,7 @@ type NewOpts struct {
 // NewCmd parses `scruff new [name] [agent] [--open [agent]] [--agent id] [--cmd …]`.
 //
 // The second POSITIONAL is still an agent id, and it still implies --open: that
-// is the spelling the rice's spawn bind and every shipped hook config use
+// is the spelling haus's spawn bind and every shipped hook config use
 // (`scruff new <name> codex`), and breaking it would break the headline keybind on
 // every machine that hasn't rebuilt yet.
 func (e *Env) NewCmd(args []string) error {
@@ -585,7 +585,7 @@ func (e *Env) mainCheckoutOf(path string, here bool) (string, error) {
 //
 // The repo's basename, EXCEPT when that would collide with the spawning pane's
 // own repo basename (the nested case: a workshop named `haus` holding a
-// rice also named `haus`) — then the full owner-repo slug, so the child
+// child repo also named `haus`) — then the full owner-repo slug, so the child
 // never lands on the parent's own checkout path.
 //
 // Buckets are COSMETIC: every command re-derives a worktree's main checkout from

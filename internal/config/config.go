@@ -5,7 +5,7 @@
 // isn't: what "landed" means, what makes a lane reapable, whether a dirty
 // tree is worth a wip commit, what "reopen this session" means on a machine
 // that runs its agents inside a multiplexer. scruff ships an opinion for each —
-// the one the haus rice grew up with — and every one of them is wrong for
+// the one haus grew up with — and every one of them is wrong for
 // somebody.
 //
 // So each is a named hook with a built-in default. A consumer that supplies

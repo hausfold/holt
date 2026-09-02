@@ -976,7 +976,7 @@ hook_notify() { # hook_notify <json> — drive the notify hook
 @test "list --json: a lane that never committed reads as fresh, not merged" {
   # The bug: a lane cut from main seconds ago is trivially an ancestor of main,
   # so the ancestry rung called it landed and every consumer that renders a
-  # verdict — the rice's paw pill among them — labelled a brand-new lane
+  # verdict — haus's paw pill among them — labelled a brand-new lane
   # `merged`. "Nothing has happened here yet" is its own state.
   local main; main="$(mkrepo alpha)"; hook_create "$main" brandnew >/dev/null
   cd "$TMP"; wt_run list --json
