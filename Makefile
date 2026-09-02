@@ -25,7 +25,7 @@ score: build
 	@bats test/scruff.bats 2>&1 | grep '^not ok' | sed 's/^not ok [0-9]* //;s/:.*//' | sort | uniq -c | sort -rn
 
 fmt:
-	gofmt -w ./cmd ./internal
+	gofmt -w ./cmd ./internal ./skills.go
 
 vet:
 	go vet ./...

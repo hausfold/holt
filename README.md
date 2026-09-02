@@ -39,6 +39,8 @@ the branch only this pane has checked out; `scruff unpark` puts it back.
 nix run github:hausfold/scruff                            # try it
 nix profile install github:hausfold/scruff                # keep it
 go install github.com/hausfold/scruff/cmd/scruff@latest   # or, with Go 1.26+
+
+scruff skill install                                      # teach your agent it exists
 ```
 
 Needs `git`. `gh` and `lsof` are optional and make it sharper; without them
@@ -89,7 +91,7 @@ leases: [hausfold.co/docs/scruff/sdks](https://hausfold.co/docs/scruff/sdks/).
 
 ## in this repo
 
-- [`ai/SKILL.md`](ai/SKILL.md) — the agent surface: drop it in and your agent drives scruff correctly first try
+- [`ai/SKILL.md`](ai/SKILL.md) — the agent surface: your agent drives scruff correctly first try. It ships *inside the binary*, so `scruff skill install` puts it in front of every agent client on the machine (a haus box already has it)
 - [`ai/handoff/SKILL.md`](ai/handoff/SKILL.md) — the companion skill: write a brief a cold session can act on, and `scruff spawn --prompt-file` it into its own lane
 - [`AGENTS.md`](./AGENTS.md) — hacking on scruff: the invariants, the frozen contracts, what `make check` doesn't cover
 - [`SPEC.md`](SPEC.md) — the design of record, and the contracts that are frozen

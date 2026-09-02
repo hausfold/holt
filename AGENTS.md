@@ -142,11 +142,21 @@ frontmatter is missing or unterminated, if `name:` disagrees with the directory,
 or if the file passes 150 lines — each of those produces a skill that installs,
 lists, and is never loaded.
 
-⚠️ **The verb's name is not settled.** This file and the family standard say
-`scruff skill`; `SPEC.md` §14.5 already reserves the same capability as `scruff docs
-agent [--format=md|json]`, with a `{version, body}` envelope. Different verb,
-different output shape, same job — resolve it before either is implemented,
-not by whichever lands first.
+**`scruff skill` is the verb** (`internal/commands/skill.go`), and what it prints
+is EMBEDDED. `skills.go` at the repo root holds the `//go:embed ai`, and that is
+the only reason a Go file lives outside `cmd/` and `internal/`: an embed pattern
+cannot escape its own package directory, and `ai/` is at the root because the
+family standard puts it there. `install` writes every skill it *discovers* —
+never just the tool's own — and never over a file that exists and differs or
+sits behind a symlink. Those are exit 2, the same "declined for safety" the rest
+of the CLI means by it, so a haus machine (where haus.ai.skill has already
+installed them as read-only store symlinks) refuses instead of failing on EPERM.
+
+`SPEC.md` §14.5 reserved this capability as `scruff docs agent
+[--format=md|json]` first. `skill` won — five tools in this family answer to it,
+and here `agent` already means a launchd agent — and §14.5 now records that and
+why. Its `{version, body}` envelope is still unbuilt and arrives as `scruff
+skill --json`. Don't add a `docs agent` alias.
 
 **Every claim in them must be runnable.** A verb, flag, exit code or `--json` key
 that changes changes `ai/SKILL.md` in the same PR — and `ai/handoff/SKILL.md`

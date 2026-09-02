@@ -1240,7 +1240,7 @@ and belong in scruff 0.1, not just in haus:
 | **0.1** | Everything in §2 (contracts), §3 (landed, incl. patch-equivalence), §4 (slug identity), §5 (adapters), §10 (cutover). Commands: `list`, `new`, `child`, `spawn`, `resume`, `park`, `unpark`, `reap`, `reship`, `hook create/remove`, `doctor`. | The ported acceptance suite passes unmodified against `scruff`; every haus caller is repointed at it (done, haus#201/#245) with no bash predecessor left to fall back to. |
 | **0.2** | §6 bootstrap (reflink, ports, secrets, trust), §7 `overlap`. | `scruff doctor --write` produces a usable `.scruff.toml` on a stranger's Node repo; `overlap` sees parked branches. |
 | **0.3** | §8 `batch` with queue bisection; `bench try-batch` becomes a wrapper. | It names a culprit *pair* on a real red queue. |
-| **0.4** | §14 SDKs: `scruff watch --json`, then TS, then Python/Swift, plus §14.5's `scruff docs agent` + adapter `instructions_file` + `bootstrap.agent_instructions`. scruff stays a binary — SDKs shell out. | A third party ships an agent UI whose only worktree logic is `scruff` — and whose spawned agent knows `scruff child`/`scruff park` without a hand-written CLAUDE.md stanza. |
+| **0.4** | §14 SDKs: `scruff watch --json`, then TS, then Python/Swift, plus §14.5's `scruff skill --json` + adapter `instructions_file` + `bootstrap.agent_instructions`. scruff stays a binary — SDKs shell out. | A third party ships an agent UI whose only worktree logic is `scruff` — and whose spawned agent knows `scruff child`/`scruff park` without a hand-written CLAUDE.md stanza. |
 | later | Runtime backends, GUI-embeddable library split, §14.3 step 5 (remote transport). | — |
 
 ---
@@ -1359,10 +1359,11 @@ item to the thing the SDKs are built on.
    `resumeInteractive` for a terminal app that wants to hand off the screen.
    Let it find what the schema is missing before three more languages pin
    the gaps.
-4. `scruff docs agent` + the adapter `instructions_file` field + the
+4. `scruff skill --json` + the adapter `instructions_file` field + the
    `bootstrap.agent_instructions` step (§14.5) — ship alongside the TS SDK, so
    "an embedder's only worktree logic is scruff" (§12's 0.4 exit bar) is true of
-   the *agent's* knowledge too, not just the UI's.
+   the *agent's* knowledge too, not just the UI's. `scruff skill` itself has
+   landed; what remains here is the envelope and the two wiring seams.
 5. Python, Swift, Go, Rust — mechanical once TS has proven the wire schema.
    *shipped* (`sdk/python`, `sdk/swift`, `sdk/go`, `sdk/rust`). Go is the one
    language where this repo's own toolchain is already present, so its SDK
@@ -1434,18 +1435,34 @@ every embedder.
 variables — "use `scruff child`, not `git worktree add`" is the same sentence on
 every repo, every lane, every machine. That means they aren't a lifecycle hook
 (§6.1) an embedder has to wire themselves; they're closer to a §6.3 built-in
-bootstrap step, and the text itself can be a single Markdown asset compiled
-into the binary (`go:embed`), not a network fetch or a template render.
+bootstrap step, and the text itself is a Markdown asset compiled into the
+binary (`go:embed`), not a network fetch or a template render.
+
+That asset is `ai/SKILL.md`, and the verb that prints it is **`scruff skill`** —
+*shipped* (`internal/commands/skill.go`, embedded by `skills.go`):
 
 ```
-scruff docs agent [--format=md|json]   # print the canonical instruction block
+scruff skill [<name>]        print an agent skill — scruff's own, or handoff
+scruff skill install         write them all into every agent client found
+scruff skill --json          {"version": …, "body": …}          (not yet)
 ```
 
-`--format=json` returns `{"version": "...", "body": "..."}` so an embedder can
-detect drift against a copy it already spliced in, rather than diffing prose.
-`version` bumps only when `body` changes — the same discipline as §2.2's
-envelope, so a pinned embedder never gets silently rewritten instructions
-under it.
+⚠️ **This section used to reserve the name `scruff docs agent
+[--format=md|json]`.** It lost, deliberately and once: `skill` is what the
+family standard (the workshop's `docs/agent-surface.md` §A3) makes every
+hausfold tool answer to, every client calls these things skills, and in this
+family `agent` already means a launchd agent. One spelling across five tools
+beats a private one in the substrate. Don't reintroduce `docs agent` as an
+alias — an alias nobody documents is surface that can never be removed,
+because you cannot know who found it.
+
+What has **not** landed is the envelope. `--json` returns
+`{"version": "...", "body": "..."}` so an embedder can detect drift against a
+copy it already spliced in, rather than diffing prose. `version` bumps only when
+`body` changes — the same discipline as §2.2's envelope, so a pinned embedder
+never gets silently rewritten instructions under it. The verb losing its old
+name costs nothing here: the envelope is orthogonal to the spelling, and hangs
+off `skill` exactly as it would have off `docs agent`.
 
 **Where it lands is a per-client fact, so it's an adapter field, not a new
 concept.** §5.3's agent adapters already carry client-specific behavior in six
@@ -1463,7 +1480,7 @@ instructions_file = "CLAUDE.md"      # codex/opencode/pi/amp: "AGENTS.md"
 
 ```toml
 [bootstrap]
-agent_instructions = true   # append `scruff docs agent`'s body into instructions_file
+agent_instructions = true   # append `scruff skill`'s body into instructions_file
 ```
 
 Idempotent means scruff looks for a marker —
@@ -1480,8 +1497,8 @@ inspected — "this agent won't know about `scruff`; `scruff doctor --write` to 
 it."
 
 **TS SDK surface is a single call:** `scruff.agentInstructions()` execs
-`scruff docs agent --format=json` and returns the typed envelope — no new
-transport, no new invariant, consistent with §14.1's "SDKs are thin."
+`scruff skill --json` and returns the typed envelope — no new transport, no new
+invariant, consistent with §14.1's "SDKs are thin."
 
 None of this is mandatory: an embedder can ignore it and hand-write their own
 stanza, the way haus does today. What it buys the ones who don't want to
