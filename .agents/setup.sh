@@ -3,7 +3,7 @@
 #
 # Cloud agent sessions (Claude Code on the web, Codex cloud, an OpenCode
 # container, CI) boot a bare Linux box with no Nix. scruff is consumed as a flake —
-# the rice takes `github:hausfold/scruff` as an input and ships the binary on PATH
+# haus takes `github:hausfold/scruff` as an input and ships the binary on PATH
 # — so without Nix a session can't evaluate `flake.nix` or regenerate
 # `flake.lock`. This installs Determinate Nix once, puts it on PATH for the rest
 # of the session, and points Nix at the agent proxy's CA.
@@ -19,7 +19,7 @@
 #   anything else — run it yourself: ./.agents/setup.sh   (idempotent, safe)
 set -euo pipefail
 
-# A real workstation is macOS, where the rice already installed Determinate Nix.
+# A real workstation is macOS, where haus already installed Determinate Nix.
 # Nothing to do — and nothing here would be welcome there.
 if [ "$(uname -s)" = "Darwin" ]; then
   exit 0
@@ -29,7 +29,7 @@ nix_bin="/nix/var/nix/profiles/default/bin"
 
 # Install Nix if it isn't here yet. Idempotent: containers are usually cached
 # after the first run, so re-runs (resume / clear / compact) skip straight
-# through. Determinate's installer matches the rice ("Determinate owns the nix
+# through. Determinate's installer matches haus ("Determinate owns the nix
 # daemon"); --init none is the container-safe, daemonless mode.
 if ! command -v nix >/dev/null 2>&1 && [ ! -x "$nix_bin/nix" ]; then
   echo "Installing Nix via the Determinate Systems installer..."

@@ -1,6 +1,6 @@
 # scruff — design spec
 
-**The worktree-lifecycle substrate.** A rewrite of the haus rice's old
+**The worktree-lifecycle substrate.** A rewrite of haus's old
 worktree tool (`haus/modules/den/wt.sh`, 1295 lines of bash) as a
 standalone, repo-agnostic, client-agnostic Go binary — a dev-focused sister to
 pounce / perch / trill, with `haus` and `bench` demoted to consumers.
@@ -404,7 +404,7 @@ lane cut from main five seconds ago answers **yes** — trivially, because it *i
 main. So the freshest possible branch carried the same `verdict: yes, via:
 ancestry, confidence: certain` as one whose PR merged an hour ago, and every
 consumer that renders a verdict rendered a brand-new lane as **merged**. The
-rice's paw pill and its statusline ⏏ are the two that were seen doing it.
+haus's paw pill and its statusline ⏏ are the two that were seen doing it.
 
 `fresh` is that state given its own word. Two offline facts, both required:
 
@@ -781,7 +781,7 @@ attributable.
 
 ### 6.5 Policy seams — the hardcoded facts, and how to disagree with them
 
-scruff grew out of one machine's rice, and it inherited that machine's answers to
+scruff grew out of one machine's desktop, and it inherited that machine's answers to
 questions that only *look* universal. "Landed" means merged into the default
 branch. "Reapable" means landed, clean and unoccupied. "Resume" means become the
 client process. Every one of those is a house rule wearing a universal name, and
@@ -1147,7 +1147,7 @@ provider set is already the right shape to receive it.
 
 ### Keeps
 
-- `modules/den/` keeps the **statusline** (it's rice-specific presentation) — it
+- `modules/den/` keeps the **statusline** (it's haus-specific presentation) — it
   just consumes `scruff list --json` instead of parsing TSV by hand.
 - The `WorktreeCreate`/`WorktreeRemove` hook wiring, retargeted to `scruff hook
   create` / `scruff hook remove`.

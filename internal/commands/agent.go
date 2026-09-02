@@ -147,7 +147,7 @@ func resolveAgent(id string) (agentSpec, error) {
 // execClient replaces this process with the client.
 //
 // A real exec, not a child: scruff IS the pane's process, so closing the client
-// closes the pane — and under the rice's binds that fires the same remove hook
+// closes the pane — and under haus's binds that fires the same remove hook
 // Claude's own exit does. A child process would leave scruff sitting in the middle,
 // and the pane would outlive the client.
 func execClient(argv []string) error {

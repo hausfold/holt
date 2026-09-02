@@ -147,7 +147,7 @@ func leasesAreSole() bool { return os.Getenv("SCRUFF_OCCUPANCY") == "lease" }
 // picks per repo or per time of
 // day; the `agent` config key is the static answer, which is what almost
 // everyone wants and costs no process; HAUS_AGENT_DEFAULT is a cutover
-// fallback for pre-config rice builds; claude is the last word.
+// fallback for pre-config haus builds; claude is the last word.
 //
 // A value that names a client scruff has never heard of is ignored at every rung
 // rather than fatal — an unknown agent must not turn every `scruff new` into a

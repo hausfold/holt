@@ -142,7 +142,7 @@ permanently on the registries that did succeed.
 
 ## Afterwards
 
-The version stamp is a commit, so scruff's HEAD moved and the rice's `flake.lock`
+The version stamp is a commit, so scruff's HEAD moved and haus's `flake.lock`
 pin of it is now stale:
 
 ```sh
