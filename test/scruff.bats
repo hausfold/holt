@@ -86,6 +86,18 @@ setup() {
   cat >"$BIN/gh" <<'EOF'
 #!/usr/bin/env bash
 printf 'gh %s\n' "$*" >>"${FAKE_GH_LOG:-/dev/null}"
+# `scruff doctor` asks two repo-less questions (internal/commands/diagnose.go):
+# the version, and whether the CLI can talk to the forge at all. FAKE_GH_UNAUTH
+# is the installed-but-logged-out case, which is a FALSE the doctor must keep
+# distinct from the null it reports when there is no gh to ask.
+case "$1" in
+  --version) printf 'gh version 2.63.2 (2026-01-01)\n'; exit 0 ;;
+esac
+case "$1 $2" in
+  "auth status")
+    [ "${FAKE_GH_UNAUTH:-0}" = 1 ] && { printf 'You are not logged into any GitHub hosts.\n' >&2; exit 1; }
+    printf '  github.com\n    Logged in to github.com account octocat (keyring)\n'; exit 0 ;;
+esac
 case "$1 $2" in
   "pr create") printf '%s\n' "${FAKE_GH_PR_URL:-https://github.com/acme/alpha/pull/9}"; exit 0 ;;
 esac
@@ -3059,6 +3071,105 @@ teardown() {
   while IFS= read -r line; do
     [[ "$line" == \{*\} ]] || fail "a stdout line wasn't a bare JSON object: $line"
   done <"$WATCH_OUT"
+}
+
+# ── doctor / diagnose ────────────────────────────────────────────────────────
+#
+# SPEC.md §6.4's diagnose half. Three properties are what these pin down, and
+# every one of them is a decision rather than an implementation detail:
+#
+#   * it EXITS 0 with findings — a finding is doctor working, not doctor failing,
+#     and a doctor that exits non-zero on a machine merely lacking `gh` is
+#     unusable under `set -e`;
+#   * it FIXES NOTHING — `scruff` the listing prunes stale rows on its way past,
+#     and doctor deliberately does not, because it is the output a stranger is
+#     asked to paste into a bug report;
+#   * "not determined" stays distinguishable from "false" in `--json`, which is
+#     the frozen envelope's rule (§2.2) applied to a new set of facts.
+
+@test "doctor: reports the machine, the repo it stands in, and the lane count" {
+  local main; main="$(mkrepo alpha)"; mkwt "$main" sparkle >/dev/null
+  cd "$main"; wt_run doctor
+  [ "$status" -eq 0 ] || fail "a report is not a failure: $status / $output"
+  [[ "$output" == *"environment"* ]] || fail "no environment section: $output"
+  [[ "$output" == *"reflink"* ]] || fail "no reflink fact: $output"
+  [[ "$output" == *"occupancy"* ]] || fail "no occupancy fact: $output"
+  [[ "$output" == *"gh 2.63.2"* ]] || fail "the forge probe didn't run: $output"
+  [[ "$output" == *"octocat"* ]] || fail "the forge probe didn't read the account: $output"
+  # The repo section is the one doctor was RUN IN, and it reports the default
+  # branch the sweep will actually measure against — here guessed from the name,
+  # because the fixture's origin has no HEAD to assert one.
+  [[ "$output" == *"acme/alpha"* ]] || fail "the repo section named no repo: $output"
+  [[ "$output" == *"guessed from the name"* ]] || fail "the default-branch resolution isn't reported: $output"
+  [[ "$output" == *"1 live"* ]] || fail "the lane count is wrong: $output"
+}
+
+@test "doctor: names a stray checkout and an orphan branch — and fixes neither" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" husk)"
+  # A husk: git's admin dir gone, the tree still on disk. checkoutState reads
+  # this as `stray`, and it is the shape `scruff <name>` rebuilds from.
+  rm -rf "$main/.git/worktrees/husk"
+  # An orphan: an agent branch with no registry row behind it.
+  git -C "$main" branch worktree-lost
+
+  cd "$TMP"; wt_run doctor
+  [ "$status" -eq 0 ] || fail "findings are not failures: $status / $output"
+  [[ "$output" == *"stray checkout"* ]] || fail "the husk wasn't named: $output"
+  [[ "$output" == *"orphan branch"* ]] || fail "the orphan branch wasn't named: $output"
+  [[ "$output" == *"lost"* ]] || fail "the orphan wasn't named: $output"
+  # Read-only, all three ways it could have "helped".
+  [ -d "$dir" ] || fail "doctor removed the husk"
+  git -C "$main" show-ref -q --verify refs/heads/worktree-lost || fail "doctor deleted the orphan branch"
+  [ "$(reg_rows)" -eq 1 ] || fail "doctor mutated the registry: $(cat "$REG")"
+  # And every REMEDY is one of scruff's own verbs. Sending a user to `git
+  # worktree remove` is invariant 2 defeated from the outside, so no line the
+  # report offers as a fix may name it — the prose above such a line is free to
+  # explain that a half-finished one is what caused the husk.
+  [[ "$output" == *"scruff husk"* ]] || fail "no remedy for the husk: $output"
+  run bash -c "printf '%s\n' \"\$0\" | grep '→' | grep -c 'git worktree' || true" "$output"
+  [ "$output" = 0 ] || fail "a remedy line pointed at raw git"
+}
+
+@test "doctor --json: the envelope header, no 'lanes' key, and false is not null" {
+  local main; main="$(mkrepo alpha)"; mkwt "$main" sparkle >/dev/null
+  export FAKE_GH_UNAUTH=1
+  cd "$main"; wt_run doctor --json
+  [ "$status" -eq 0 ] || fail "$status / $output"
+  [[ "$output" == *'"schema": 2'* ]] || fail "no schema counter: $output"
+  [[ "$output" == *'"scruff":'* ]] || fail "no version key: $output"
+  [[ "$output" == *'"warnings": []'* ]] || fail "no warnings channel: $output"
+  # `lanes` in the frozen envelope is an ARRAY OF LANE OBJECTS. Doctor's counts
+  # must not redefine that name, so they live under `summary`.
+  [[ "$output" != *'"lanes": ['* ]] || fail "doctor redefined the frozen lanes key: $output"
+  [[ "$output" == *'"summary":'* ]] || fail "no summary: $output"
+  [[ "$output" == *'"live": 1'* ]] || fail "the lane counts are wrong: $output"
+  # gh is installed and said no. That is FALSE — the case `gh auth login` fixes.
+  [[ "$output" == *'"authenticated": false'* ]] || fail "an unauthenticated gh must read false: $output"
+  [[ "$output" == *'"default_branch_via": "conventional"'* ]] || fail "$output"
+}
+
+@test "doctor --json: with no forge CLI at all, authenticated is null — not false" {
+  # The nullable rule on a new fact. "Nobody to ask" and "asked, and it said no"
+  # are different situations with different fixes, and every consumer bug in the
+  # predecessor's status bar came from flattening exactly this distinction.
+  local main; main="$(mkrepo alpha)"
+  rm -f "$BIN/gh"
+  # The rescue in path.go re-adds the profile bindir a real gh lives in, and the
+  # caller's PATH has to lose gh too — same two moves as the codex test above.
+  mkdir -p "$TMP/nogh"
+  ln -sf "$(command -v git)" "$TMP/nogh/git"
+  ln -sf "$(command -v cp)" "$TMP/nogh/cp"
+  cd "$main"
+  run env SCRUFF_PATH_RESCUE=0 PATH="$BIN:$TMP/nogh" "$WT" doctor --json
+  [ "$status" -eq 0 ] || fail "a missing gh is a finding, not a failure: $status / $output"
+  [[ "$output" == *'"authenticated": null'* ]] || fail "an absent gh must read null: $output"
+  [[ "$output" == *'"available": false'* ]] || fail "$output"
+}
+
+@test "doctor --write: refuses, and names the layer it is waiting on" {
+  cd "$TMP"; wt_run doctor --write
+  [ "$status" -eq 1 ] || fail "want exit 1 (usage), got $status: $output"
+  [[ "$output" == *".scruff.toml"* ]] || fail "the refusal didn't name what it can't write: $output"
 }
 
 # ── doctor / the base move ───────────────────────────────────────────────────

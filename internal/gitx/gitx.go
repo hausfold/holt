@@ -105,20 +105,36 @@ func CurrentBranch(dir string) string {
 // agent branch, and the agent branch reads as merged though it never reached
 // main — and gets reaped, taking the only copy of that work with it.
 func DefaultBranch(main string) string {
+	branch, _ := DefaultBranchDetail(main)
+	return branch
+}
+
+// DefaultBranchDetail is DefaultBranch plus WHICH rung answered, for `scruff
+// doctor` (SPEC.md §6.4). One implementation, deliberately: the doctor's whole
+// value here is reporting the branch the sweep will actually measure against,
+// and a second copy of this ladder is a second copy that can disagree with it.
+//
+// via is `origin-head` | `conventional` | `head` | `none`, weakest last. Only
+// the first is a fact the repo asserted about itself; `conventional` is scruff
+// guessing from a name, and `head` is scruff guessing from whatever the main
+// checkout happens to have out — the resolution most worth seeing before you
+// trust a reap, because it is the one that moves when somebody checks out a
+// side branch in the main checkout.
+func DefaultBranchDetail(main string) (branch, via string) {
 	if d, err := Run(main, "symbolic-ref", "--short", "refs/remotes/origin/HEAD"); err == nil && d != "" {
-		return strings.TrimPrefix(d, "origin/")
+		return strings.TrimPrefix(d, "origin/"), "origin-head"
 	}
 	for _, d := range []string{"main", "master", "trunk"} {
 		if OK(main, "show-ref", "-q", "--verify", "refs/heads/"+d) {
-			return d
+			return d, "conventional"
 		}
 	}
 	// No conventional default and no origin/HEAD (a fresh repo, an odd remote):
 	// HEAD is the best guess left.
 	if d, err := Run(main, "rev-parse", "--abbrev-ref", "HEAD"); err == nil {
-		return d
+		return d, "head"
 	}
-	return "HEAD"
+	return "HEAD", "none"
 }
 
 // IsAncestor reports whether ref is reachable from base — the offline,

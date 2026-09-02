@@ -41,7 +41,12 @@ A LANE is one agent's branch, checkout and pane, from create to reaped.
                           archived repo) — recorded in scruff reaped, undoable
   scruff heartbeat [path]   hold the occupancy lease on a lane, so reap spares it
                           --pid N (0 = TTL-only) · --release to drop it
-  scruff doctor             report where the base lives, what a move costs
+  scruff doctor             diagnose this machine and the repo you're standing in:
+                          the base, forge auth, occupancy, reflink, submodules /
+                          LFS / sparse-checkout, the default-branch resolution,
+                          stray checkouts, orphan branches, disk per repo
+                          --json for the same as data. It fixes nothing, and a
+                          finding still exits 0 — the findings ARE the report
   scruff doctor --migrate-base
                           move the base to ~/.cache/scruff (§8.2): refuses with
                           exit 2 while any lane is occupied, repairs every

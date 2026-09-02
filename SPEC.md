@@ -738,21 +738,61 @@ That's a 5/5 failure mode and needs a test.
 
 ### 6.4 `scruff doctor`
 
-Inspects a repo and **writes a proposed config** — the single best onboarding
-lever, because the alternative is reading a TOML reference.
+Two halves under one verb, and they are not the same size.
 
 ```
-scruff doctor            # inspect, print findings + a proposed .scruff.toml, write nothing
-scruff doctor --write    # write it
+scruff doctor            # ✅ diagnose this machine and this repo
+scruff doctor --json     # ✅ the same, as data
+scruff doctor --write    # ⏳ 0.2 — write a proposed .scruff.toml
 ```
 
-It detects: package manager and its heavy dirs; `.env*` files that are gitignored
-(candidates for `copy`/`secrets`); ports in `docker-compose.yml` / `vite.config`
-/ `package.json` scripts; direnv/mise/nix/devcontainer presence; whether the
-filesystem supports reflink; whether a forge CLI is authenticated; whether `lsof`
-or a heartbeat is available; submodules / LFS / sparse-checkout (§8); and the
-default branch resolution. It also *diagnoses* — stale registry rows, stray
-checkouts, orphan branches, disk used per repo.
+**Diagnose — shipped.** It reports the base and its resolution; git, the forge
+CLI *and whether it is authenticated*, occupancy (`lsof` / heartbeat leases),
+whether the filesystem the checkouts land on supports reflink, and the machine
+config with its hooks; then, for the repo it was run in, submodules / LFS /
+sparse-checkout (§8) and **which rung answered the default-branch question** —
+`origin-head` | `conventional` | `head`, weakest last, because the weakest rung
+moves when somebody checks out a side branch in the main checkout and that is
+the branch every landed verdict is measured against. Then the findings: stale
+registry rows, stray checkouts, orphan branches, and disk used per repo
+(`du`-equivalent, walked in Go, counting allocated blocks so a reflinked tree
+reads as the near-nothing it costs).
+
+Three decisions worth stating, because each is load-bearing:
+
+- **It exits 0, findings and all.** A finding is doctor working. Exit 3 would be
+  defensible for "a signal was unavailable" and is wrong here — the absences
+  *are* the diagnosis, so a machine merely lacking `gh` would exit non-zero on a
+  healthy run and the command would be unusable under `set -e`. `--json` carries
+  every finding as data for a caller that wants to gate on one. `--migrate-base`
+  keeps its own 2 and 3.
+- **It fixes nothing.** `scruff` the listing sweeps parked lanes as it goes;
+  doctor deliberately does not, and reports what a sweep *would* prune instead.
+  It is the output a stranger is asked to paste into a bug report, and a
+  diagnostic that repairs what it was asked to describe destroys the evidence.
+  The one exception is the reflink probe, which clones a two-byte file in a temp
+  dir under the base and removes it — nothing but trying it on that filesystem
+  answers the question, and the probe runs the same `cp -c` / `cp --reflink`
+  §6.3 will.
+- **`--json` shares the §2.2 envelope's HEADER — `scruff`, `schema`, `warnings`
+  — and carries no `lanes` key.** There, `lanes` is an array of lane objects;
+  reusing the name for doctor's counts would be a meaning change in the one
+  field the freeze is most specific about, so the counts live under `summary`.
+  The nullable rule travels with the header: `forge.authenticated` is `null`
+  with no `gh` to ask and `false` when `gh` was asked and said no, `reflink.supported`
+  is `null` with nowhere to test, `repo` is `null` outside a git repo, and
+  `disk.bytes` is `null` when the walk failed. None of those are `false`.
+
+**Propose — 0.2.** Writing a `.scruff.toml` needs a per-repo config layer that
+does not exist: `internal/config` reads `~/.config/scruff/config.toml` and
+nothing else, so there is nothing for a proposal to be a proposal *of*, and
+§6.2's `run` key arrives gated on `scruff trust`. `--write` therefore refuses
+with exit 1 naming that, rather than writing a file scruff cannot read back.
+When it lands it detects: package manager and its heavy dirs; `.env*` files that
+are gitignored (candidates for `copy`/`secrets`); ports in
+`docker-compose.yml` / `vite.config` / `package.json` scripts; and
+direnv/mise/nix/devcontainer presence — the onboarding lever, because the
+alternative is reading a TOML reference.
 
 ### 6.4b Dead ends, `drop`, and the reap ledger
 
@@ -1059,7 +1099,7 @@ removed on completion, including on failure (behind `--keep` for debugging).
 | **Submodules** | not initialised in a new worktree — `git worktree add` doesn't recurse | detect `.gitmodules`; `bootstrap.submodules = "recursive" \| "none"`; default `none` with a `doctor` warning, because recursing can be minutes |
 | **LFS** | pointers, not files, unless a smudge runs | detect `.gitattributes` filter=lfs; offer `git lfs pull` as a bootstrap step; warn loudly rather than silently handing over pointer files |
 | **Sparse-checkout** | not inherited from the main checkout | copy the main checkout's sparse patterns into the new worktree by default (`--no-inherit-sparse` to opt out) — inheriting is nearly always what's meant |
-| **Disk accounting** | none | `scruff list --disk` / `doctor` reports per-lane and per-repo usage (`du`-equivalent, walked in Go); flag when reflink fell back to copy and the tree is >1 GB |
+| **Disk accounting** | ~~none~~ — `scruff doctor` reports per-repo usage in allocated blocks (§6.4) | `scruff list --disk` for the per-lane breakdown; flag when reflink fell back to copy and the tree is >1 GB |
 | **`python3` dependency** | `hook_field` shells out to python3 to parse hook JSON | gone — Go has `encoding/json` |
 | **Registry race** | whole-table temp-file rewrite | per-row files + `flock` (§2.1) |
 | **Windows** | not attempted | out of scope for 0.1; state it. Path handling should not gratuitously preclude it. |
