@@ -316,6 +316,15 @@ The bash version has exactly two (0 / 1-via-`die`). Consumers need more:
 `2` vs `1` is the one that matters: a wrapper script must be able to distinguish
 "you asked wrong" from "I declined to destroy something".
 
+And an argument a verb cannot explain is `1` — never a run of that verb with the
+argument dropped. `scruff reap --help` used to sweep: help was spelled only at
+the top level, `Reap` never looked at its arguments, and the flag you type to
+ask a question about an unfamiliar verb ran the one verb that deletes. The rule
+that fixes it belongs to every verb rather than to that flag, because the next
+typo is one nobody has thought of yet: each verb answers `-h`/`--help` with its
+own usage lines and does nothing else, and refuses anything it does not
+recognise. Invariant 1's failure direction is "nothing happened".
+
 ---
 
 ## 3. "Landed" — the merge-strategy matrix
