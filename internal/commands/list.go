@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hausfold/scruff/internal/gitx"
 	"github.com/hausfold/scruff/internal/ui"
@@ -370,6 +371,11 @@ func mergeRef(main, base string) string {
 // branch's OPEN PR, if it has one. Same one-query-per-repo shape, for the same
 // reason — the listing asks this of every row, and a per-branch query costs
 // ~0.5 s each.
+//
+// Deliberately NOT gated by `ownsPR`. An open PR's head ref is this branch's
+// name, so a push from this lane lands on that very PR — it covers this lane's
+// commits no matter which lane opened it. `reship`'s own `openPRFor` is the
+// same case and is left alone for the same reason.
 func (e *Env) openMapLookup(main, branch string) (headOID string, pr int) {
 	slug, err := gitx.RemoteSlug(main)
 	if err != nil || slug == "" {
@@ -411,6 +417,9 @@ func openMapKey(slug string) string { return "open-" + slug }
 // precise per-branch query: it decides whether a branch DIES, so it must not
 // inherit this one's 100-PR horizon. Missing a merge here costs an annotation;
 // missing it there would cost the work.
+//
+// The forge answers about a NAME, and a name is not a lane — `ownsPR` below is
+// why the newest PR wearing it is not automatically this lane's.
 func (e *Env) mergedMapLookup(main, branch string) (headOID string, pr int) {
 	slug, err := gitx.RemoteSlug(main)
 	if err != nil || slug == "" {
@@ -418,8 +427,8 @@ func (e *Env) mergedMapLookup(main, branch string) (headOID string, pr int) {
 	}
 	out := e.cachedForge("merged-"+slug,
 		"pr", "list", "-R", slug, "--state", "merged", "--limit", "100",
-		"--json", "number,headRefName,headRefOid",
-		"--jq", `.[] | "\(.headRefName)\t\(.headRefOid)\t\(.number)"`)
+		"--json", "number,headRefName,headRefOid,closedAt",
+		"--jq", `.[] | "\(.headRefName)\t\(.headRefOid)\t\(.number)\t\(.closedAt // "")"`)
 	for _, line := range gitx.Lines(out) {
 		f := strings.Split(line, "\t")
 		if len(f) < 3 {
@@ -432,12 +441,132 @@ func (e *Env) mergedMapLookup(main, branch string) (headOID string, pr int) {
 		if i := strings.LastIndex(name, ":"); i >= 0 {
 			name = name[i+1:]
 		}
-		if name == branch {
-			n, _ := strconv.Atoi(f[2])
-			return f[1], n
+		if name != branch {
+			continue
 		}
+		// `closedAt` is the newest field on this line, so it is the one a cache
+		// written by the PREVIOUS scruff does not carry. Reading it only when
+		// it is there leaves a 120 s-old cache merely uninformative rather than
+		// wrong: with no date the gate below cannot fire, which is exactly how
+		// this lookup behaved before it existed.
+		closedAt := ""
+		if len(f) > 3 {
+			closedAt = f[3]
+		}
+		if !ownsPR(main, branch, f[1], closedAt) {
+			// gh lists newest-first, so a PR on this name that predates the
+			// branch means every older one does too — there is nothing left to
+			// fall through to, and "no merged PR" is the whole answer.
+			return "", 0
+		}
+		n, _ := strconv.Atoi(f[2])
+		return f[1], n
 	}
 	return "", 0
+}
+
+// prClockGrace is how far a PR may appear to have closed BEFORE the branch it
+// belongs to was cut and still count as that branch's.
+//
+// The two stamps come off different clocks — the branch's from this machine,
+// the PR's from the forge — and a Mac resumed from a snapshot (a Tart guest,
+// routinely) runs ahead. Five minutes costs the stale case nothing: what the
+// gate separates there is days, not seconds.
+const prClockGrace = 5 * time.Minute
+
+// ownsPR reports whether a PR the forge returned for this branch NAME belongs
+// to the branch standing in front of us.
+//
+// The forge answers about names, and a name is not a lane. scruff coins lane
+// names from a small word list and a task name gets reused outright —
+// `worktree-continue-factory-docs` has carried seven PRs in one repo — so a
+// lane cut minutes ago inherited the last lane's merged PR. `postMergeAhead`
+// then saw a tip that differs from that PR's head, counted this lane's own
+// commits against it, and the listing said `live+3` about a PR nobody here
+// opened, with an orange `N^` in the bar to match.
+//
+// Two facts, in order, and every arm errs toward KEEPING the PR — a marker that
+// stays up is noise, a marker that never comes up is un-shipped work nobody is
+// told about:
+//
+//  1. ANCESTRY. The PR's head SHA reachable from this branch means this branch
+//     is what that PR was opened from, whatever the name has meant since.
+//  2. DATE. Otherwise, a PR that closed before this branch existed cannot be
+//     about it.
+//
+// Anything else is a real doubt and keeps the PR: no head SHA (a cache from an
+// older scruff), no closedAt (an OPEN PR has none — and a push to this name
+// lands on it, so it is this branch's anyway), or a branch git cannot date.
+func ownsPR(main, branch, headOID, closedAt string) bool {
+	if headOID != "" && gitx.IsAncestor(main, headOID, branch) {
+		return true
+	}
+	// Ancestry alone can't decide it because of the rebase. A lane that merged
+	// and then rebased onto the default branch — the house advice for a branch
+	// that has to catch up — no longer reaches its own merged SHA either, so it
+	// arrives here holding a PR that is genuinely its own.
+	ended, err := time.Parse(time.RFC3339, strings.TrimSpace(closedAt))
+	if err != nil {
+		return true
+	}
+	birth := branchBirth(main, branch)
+	if birth.IsZero() {
+		return true
+	}
+	return !ended.Add(prClockGrace).Before(birth)
+}
+
+// branchBirth dates the branch in front of us — this incarnation of the name,
+// not the name.
+//
+// The reflog's OLDEST entry is `branch: Created from …`, written when the lane
+// was cut. Git deletes a branch's reflog along with the branch, so a name worn
+// three times before still dates the branch you actually have. (`neverDiverged`
+// reads the same log, for the same reason.)
+//
+// Returns the zero time when it can't tell, which every caller reads as "keep".
+func branchBirth(main, branch string) time.Time {
+	if out, err := gitx.Run(main, "reflog", "show", "--date=unix", "--format=%gd", branch); err == nil {
+		if lines := gitx.Lines(out); len(lines) > 0 {
+			if t := selectorTime(lines[len(lines)-1]); !t.IsZero() {
+				return t
+			}
+		}
+	}
+	// Reflogs can be off (core.logAllRefUpdates=false) or aged out by gc. Then
+	// the oldest commit the branch carries of its OWN is the next-best "not
+	// before this". AUTHOR date, not committer: a rebase rewrites every
+	// committer date to now, which would date the rebased lane above AFTER its
+	// own merge and drop the PR that really is its own.
+	base := gitx.DefaultBranch(main)
+	out, err := gitx.Run(main, "log", "--format=%at", base+".."+branch)
+	if err != nil {
+		return time.Time{}
+	}
+	lines := gitx.Lines(out)
+	if len(lines) == 0 {
+		return time.Time{}
+	}
+	return unixTime(lines[len(lines)-1])
+}
+
+// selectorTime pulls the seconds out of a `--date=unix` reflog selector —
+// `worktree-foo@{1756900000}`. Branch names cannot contain `@{` (git forbids
+// it in a refname), so the last one is the selector's.
+func selectorTime(s string) time.Time {
+	i := strings.LastIndex(s, "@{")
+	if i < 0 || !strings.HasSuffix(s, "}") {
+		return time.Time{}
+	}
+	return unixTime(s[i+2 : len(s)-1])
+}
+
+func unixTime(s string) time.Time {
+	n, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
+	if err != nil || n <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(n, 0)
 }
 
 // ── rendering ────────────────────────────────────────────────────────────────

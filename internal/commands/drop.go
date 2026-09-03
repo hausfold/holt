@@ -183,6 +183,12 @@ func (e *Env) repoArchived(main string) bool {
 // too; the jq filter is what makes this mean what it says. A branch with both a
 // merged and a closed PR is not a dead end — the merged one landed something —
 // so the merged case is checked first by the caller.
+//
+// And the forge answers about the branch NAME, which a reaped lane's successor
+// wears too. `ownsPR` is what keeps a lane cut this morning from being called a
+// dead end because last week's lane of the same name had its PR closed — that
+// verdict reads as "drop this, nothing will ever land it", which is the worst
+// possible thing to say about work that has not been reviewed once.
 func (e *Env) closedPR(main, branch string) int {
 	slug, err := gitx.RemoteSlug(main)
 	if err != nil || slug == "" {
@@ -193,14 +199,31 @@ func (e *Env) closedPR(main, branch string) int {
 	}
 	out := e.cachedForge("closed-"+slug+"-"+branch,
 		"pr", "list", "-R", slug, "--head", branch, "--state", "closed", "--limit", "5",
-		"--json", "number,state",
-		"--jq", `[.[] | select(.state == "CLOSED") | .number] | first // empty`)
+		"--json", "number,state,headRefOid,closedAt",
+		"--jq", `[.[] | select(.state == "CLOSED")] | first // empty | "\(.number)\t\(.headRefOid // "")\t\(.closedAt // "")"`)
+	f := strings.Split(strings.TrimSpace(out), "\t")
 	n := 0
-	for _, r := range strings.TrimSpace(out) {
+	for _, r := range f[0] {
 		if r < '0' || r > '9' {
 			return 0
 		}
 		n = n*10 + int(r-'0')
+	}
+	if n == 0 {
+		return 0
+	}
+	// The two trailing fields are newer than this cache file may be; absent,
+	// `ownsPR` has nothing to fire on and answers yes, which is the behaviour
+	// this function had before the gate.
+	headOID, closedAt := "", ""
+	if len(f) > 1 {
+		headOID = f[1]
+	}
+	if len(f) > 2 {
+		closedAt = f[2]
+	}
+	if !ownsPR(main, branch, headOID, closedAt) {
+		return 0
 	}
 	return n
 }
