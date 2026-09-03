@@ -278,6 +278,24 @@ Contract points that matter:
   #60 the map behind this listed MERGED PRs only, so the follow-up PR `scruff
   reship` had just opened was invisible and the lane went on being told to
   reship, forever.
+- **A branch name is not a lane, and the forge only knows the name.** scruff
+  coins lane names from a small word list and a task name gets reused outright —
+  one repo's `worktree-continue-factory-docs` has carried seven PRs — so the
+  newest merged PR on a name may belong to a lane that was reaped weeks ago. A
+  PR counts as this branch's only when one of two facts says so: its
+  `headRefOid` is reachable from the tip (**ancestry**, asked first, and it
+  settles a rebase-and-merge or squash the SHAs alone cannot), or its `closedAt`
+  is not before the branch came into being (**date**). Everything else keeps the
+  PR — no OID, no `closedAt`, no datable branch — because a marker that stays up
+  is noise while a marker that never comes up is un-shipped work nobody is told
+  about. The branch's birth is the OLDEST reflog entry (`branch: Created from
+  …`; git deletes a branch's reflog with the branch, so it dates the incarnation
+  rather than the name), falling back to the oldest **author** date in
+  `base..branch` — never committer, which a rebase rewrites to now and which
+  would date a rebased lane after its own merge. Allow a few minutes of grace:
+  the two stamps come off different clocks. **OPEN PRs are exempt**: the head
+  ref *is* this name, so a push from this lane lands on that PR whoever opened
+  it.
 
 ### 2.3 Hook protocol
 
@@ -344,6 +362,7 @@ existing signal and close the remaining holes explicitly.
 | Merged, then more commits on the branch | ❌ | MERGED, `headRefOid` ≠ tip | `post_merge_ahead` → `+N`, `scruff reship` |
 | Merged, then the lane caught up on the default branch | ❌ | MERGED, `headRefOid` ≠ tip | `+N` counts `headRefOid..branch` **`--not` default** — a rebase onto, or a merge from, the default branch drags its already-landed commits past `headRefOid`, and billing those to the lane read `live+131` for two commits of its own |
 | Branch amended/rebased *after* its merge | ❌ | MERGED, `headRefOid` unreachable | count falls back to 1 — "at least one commit here didn't land" |
+| A previous lane wore this branch name | ❌ | MERGED, but the PR is somebody else's | **not a landing at all** — the PR is this branch's only if `headRefOid` is reachable from the tip, or it closed after the branch was born (§2.2). A fresh lane on a reused name otherwise inherits the old lane's merge and reads `+N` for nothing |
 | Merged into a release branch, later to default | eventually ✅ | maybe | ancestry, once it arrives |
 | Local `git merge --squash` + direct push, no PR | ❌ | none | **gap → merge-tree-empty (§3.2)** |
 | Cherry-picked commit-by-commit | ❌ | none | **gap → patch-equivalence (§3.1)** |

@@ -76,11 +76,18 @@ setup() {
   #   no --head        the repo-wide merged-PR map (merged_map — one call per
   #                    repo, feeds the +N annotations). Answers for the single
   #                    branch FAKE_GH_BRANCH, which is all any test needs.
+  #                    FAKE_GH_MERGED_AT is that PR's closedAt — the stamp that
+  #                    says whether it is THIS lane's or the last lane to wear
+  #                    the name. Unset is "the forge didn't say", which is what
+  #                    every test written before the gate relies on.
   #   --state open     two shapes, told apart by the fields asked for:
   #                    --json url  → "is a PR already open?" (reship) →
   #                    FAKE_GH_OPEN_URL. --json …headRefOid → the repo-wide
   #                    OPEN map (open_map, the other half of the +N answer) →
   #                    FAKE_GH_OPEN_BRANCH/_OID/_PR.
+  #   --state closed   the dead-end question → FAKE_GH_CLOSED_PR, with
+  #                    FAKE_GH_CLOSED_OID/_AT its head SHA and close date —
+  #                    same ownership gate as the merged map.
   #   pr create        opens one → FAKE_GH_PR_URL
   # Printing nothing is a real gh's answer when offline or unauthenticated.
   cat >"$BIN/gh" <<'EOF'
@@ -113,13 +120,16 @@ case " $* " in
         exit 0 ;;
     esac
     printf '%s' "${FAKE_GH_OPEN_URL:-}"; exit 0 ;;
-  *" --state closed "*) printf '%s' "${FAKE_GH_CLOSED_PR:-}"; exit 0 ;;
+  *" --state closed "*)
+    [ -n "${FAKE_GH_CLOSED_PR:-}" ] || exit 0
+    printf '%s\t%s\t%s\n' "$FAKE_GH_CLOSED_PR" "${FAKE_GH_CLOSED_OID:-}" "${FAKE_GH_CLOSED_AT:-}"
+    exit 0 ;;
   *" --head "*)
     [ "${FAKE_GH_MERGED:-0}" = 1 ] || exit 0
     printf 'MERGED %s %s\n' "${FAKE_GH_OID:-}" "${FAKE_GH_PR:-7}"; exit 0 ;;
 esac
 [ "${FAKE_GH_MERGED:-0}" = 1 ] && [ -n "${FAKE_GH_BRANCH:-}" ] || exit 0
-printf '%s\t%s\t%s\n' "$FAKE_GH_BRANCH" "${FAKE_GH_OID:-}" "${FAKE_GH_PR:-7}"
+printf '%s\t%s\t%s\t%s\n' "$FAKE_GH_BRANCH" "${FAKE_GH_OID:-}" "${FAKE_GH_PR:-7}" "${FAKE_GH_MERGED_AT:-}"
 EOF
 
   # ── shim: lsof ─────────────────────────────────────────────────────────────
@@ -1386,6 +1396,102 @@ hook_notify() { # hook_notify <json> — drive the notify hook
   cd "$TMP"; wt_run
   [[ "$output" == *"live+$listed"* ]] \
     || fail "the marker says something other than the $listed commit(s) reship would list: $output"
+}
+
+# ── the name is not the lane ─────────────────────────────────────────────────
+#
+# The forge answers about a branch NAME, and scruff coins lane names from a small
+# word list while a task name gets reused outright — one repo's
+# `worktree-continue-factory-docs` has carried seven PRs. So a lane cut this
+# morning inherited the reaped lane's merged PR, and every commit it made of its
+# own was counted against a merge nobody here performed.
+
+@test "list: a merged PR that closed before this lane existed is somebody else's" {
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" reused)"
+  # The previous lane's tip: an OID this checkout has never heard of (its
+  # objects went with it), merged long before this branch was cut.
+  export FAKE_GH_MERGED=1 FAKE_GH_PR=12 FAKE_GH_BRANCH=worktree-reused
+  export FAKE_GH_OID=0000000000000000000000000000000000000001
+  export FAKE_GH_MERGED_AT=2020-01-01T00:00:00Z
+  commit_in "$dir" post.txt "this lane's own work, covered by no PR of its own"
+  cd "$TMP"; wt_run
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"live+"* ]] || fail "a reaped lane's PR stuck to the lane wearing its name: $output"
+  [[ "$output" != *"live~"* ]] || fail "the same PR came back as a diverged tip: $output"
+  [[ "$output" == *"live"* ]] || fail "the row itself went missing: $output"
+}
+
+@test "list: a merged PR that closed AFTER the lane was cut is kept, unreachable SHA and all" {
+  # The direction that must not over-fire. A lane that merged and then rebased
+  # has a head SHA that is no longer reachable either, and that PR is very much
+  # its own — only a PR predating the branch belongs to somebody else.
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" mine)"
+  export FAKE_GH_MERGED=1 FAKE_GH_PR=12 FAKE_GH_BRANCH=worktree-mine
+  export FAKE_GH_OID=0000000000000000000000000000000000000001
+  export FAKE_GH_MERGED_AT=2099-01-01T00:00:00Z
+  cd "$TMP"; wt_run
+  # A marker at all is the assertion: a branch with no merged PR gets a bare
+  # `live` cell (see "an ordinary in-flight branch", below), so `+1` is the PR
+  # surviving the gate. Which marker it earns is the pre-existing outran /
+  # diverged question and is settled elsewhere.
+  [[ "$output" == *"live+1"* ]] || fail "this lane's own PR was dropped as somebody else's: $output"
+}
+
+@test "list: a lane with no reflog dates itself by its own oldest commit" {
+  # Reflogs can be off (core.logAllRefUpdates=false) or aged out by gc, and the
+  # gate still has to be able to fire: the commits a lane carries of its own are
+  # the next-best "this branch did not exist before then".
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" nolog)"
+  rm -f "$main/.git/logs/refs/heads/worktree-nolog"
+  export FAKE_GH_MERGED=1 FAKE_GH_PR=12 FAKE_GH_BRANCH=worktree-nolog
+  export FAKE_GH_OID=0000000000000000000000000000000000000001
+  export FAKE_GH_MERGED_AT=2020-01-01T00:00:00Z
+  cd "$TMP"; wt_run
+  [[ "$output" != *"live~"* ]] || fail "with no reflog the stale PR came back: $output"
+  [[ "$output" != *"live+"* ]] || fail "with no reflog the stale PR came back: $output"
+}
+
+@test "list: with no reflog, a lane that rebased after its merge keeps its own PR" {
+  # The no-reflog fallback's boundary, in the direction that costs something. A
+  # rebase rewrites every COMMITTER date to now, so dating the branch by those
+  # would put its birth after its own merge and drop the PR that is genuinely
+  # its own. Author dates survive the rebase, so they are what the fallback reads.
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" rebased)"
+  git -C "$dir" -c commit.gpgsign=false commit -q --amend --no-edit \
+    --date="2020-01-01T00:00:00Z"                        # author then, committer now
+  rm -f "$main/.git/logs/refs/heads/worktree-rebased"    # …after the amend rewrote it
+  export FAKE_GH_MERGED=1 FAKE_GH_PR=12 FAKE_GH_BRANCH=worktree-rebased
+  export FAKE_GH_OID=0000000000000000000000000000000000000001
+  export FAKE_GH_MERGED_AT=2020-06-01T00:00:00Z
+  cd "$TMP"; wt_run
+  [[ "$output" == *"live+1"* ]] || fail "the lane's own PR was dropped as somebody else's: $output"
+}
+
+@test "list: a merged PR reachable from the branch is this lane's, whatever the dates say" {
+  # Ancestry is asked FIRST and settles it alone: the PR's head SHA being
+  # reachable means this branch is what the PR was opened from. A forge clock
+  # that disagrees with this Mac's must never be able to override that.
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" ancestry)"
+  export FAKE_GH_MERGED=1 FAKE_GH_OID="$(git -C "$dir" rev-parse HEAD)" FAKE_GH_PR=12
+  export FAKE_GH_BRANCH=worktree-ancestry FAKE_GH_MERGED_AT=1999-01-01T00:00:00Z
+  commit_in "$dir" post.txt "after the merge"
+  cd "$TMP"; wt_run
+  [[ "$output" == *"live+1"* ]] || fail "an impossible date beat reachable ancestry: $output"
+}
+
+@test "reap: a PR closed unmerged before this lane existed is not its dead end" {
+  # The same defect on the other forge question. "Nothing is going to land these
+  # commits" is the worst thing scruff can say about work no one has reviewed
+  # once, and `scruff drop` is what it says next.
+  local main dir; main="$(mkrepo alpha)"; dir="$(mkwt "$main" innocent)"
+  export FAKE_GH_CLOSED_PR=43
+  export FAKE_GH_CLOSED_OID=0000000000000000000000000000000000000001
+  export FAKE_GH_CLOSED_AT=2020-01-01T00:00:00Z
+  cd "$TMP"; wt_run reap
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"closed unmerged"* ]] \
+    || fail "a fresh lane inherited the last lane's rejection: $output"
+  git -C "$main" show-ref -q --verify refs/heads/worktree-innocent
 }
 
 @test "list: an ordinary in-flight branch keeps a bare state column" {
