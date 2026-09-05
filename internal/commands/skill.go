@@ -176,9 +176,9 @@ func (e *Env) skillInstall(args []string, docs []skillDoc) error {
 			}
 			dir, i = args[i+1], i+1
 		case "--client":
-			// The same unset-variable trap as --dir. `dirs[""]` would answer
-			// an empty value with "unknown client" — true, and the wrong
-			// sentence for what the caller did.
+			// The same unset-variable trap as --dir. Let through, `dirs[""]`
+			// answers an empty value with "unknown client" — true, and the
+			// wrong sentence for what the caller did.
 			if i+1 >= len(args) || args[i+1] == "" {
 				return exitcode.Usagef("--client wants one of: %s", strings.Join(skillClientOrder, ", "))
 			}

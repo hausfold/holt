@@ -3550,8 +3550,9 @@ teardown() {
   wt_run skill install --client
   [ "$status" -eq 1 ] || fail "want exit 1, got $status: $output"
   [[ "$output" == *"--client wants one of"* ]] || fail "$output"
-  # An empty --client used to reach the table as `dirs[""]` and be refused as
-  # an "unknown client" — true, and not the sentence for what the caller did.
+  # An empty --client, let through, reaches the table as `dirs[""]` and is
+  # refused as an "unknown client" — true, and not the sentence for what the
+  # caller did.
   wt_run skill install --client ""
   [ "$status" -eq 1 ] || fail "want exit 1, got $status: $output"
   [[ "$output" == *"--client wants one of"* ]] || fail "$output"
